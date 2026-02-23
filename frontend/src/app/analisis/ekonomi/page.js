@@ -8,15 +8,56 @@ import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import HeaderBar from '@/components/layout/HeaderBar';
 
-// Konfigurasi Kategori Ekonomi - KONSISTEN WARNA
+// Konfigurasi Kategori Ekonomi
 const KATEGORI = {
-  MAJU: { warna: "#10b981", label: "MAJU", status: "BERKEMBANG PESAT" },           // HIJAU
-  BERKEMBANG: { warna: "#f59e0b", label: "BERKEMBANG", status: "MENUJU MAJU" },    // KUNING
-  TERTINGGAL: { warna: "#ef4444", label: "TERTINGGAL", status: "PERLU PERCEPATAN" } // MERAH
+  MAJU: { warna: "#10b981", label: "MAJU", status: "BERKEMBANG PESAT" },
+  BERKEMBANG: { warna: "#f59e0b", label: "BERKEMBANG", status: "MENUJU MAJU" },
+  TERTINGGAL: { warna: "#ef4444", label: "TERTINGGAL", status: "PERLU PERCEPATAN" }
 };
 
 const PUSAT_DEFAULT = [-2.5, 118];
 const ZOOM_DEFAULT = 5;
+
+// =====================================================================
+// HELPER: hitung warna & kategori berdasarkan indikator yang dipilih
+// =====================================================================
+function getWarnaByIndikator(fitur, indikatorTerpilih) {
+  if (indikatorTerpilih === 'SEMUA') {
+    return fitur.properties?.ekonomi_analysis?.warna || "#cbd5e1";
+  }
+  const nilai = fitur.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih];
+  if (nilai === null || nilai === undefined) return "#cbd5e1";
+
+  if (indikatorTerpilih === 'PDRB') {
+    return nilai > 75000 ? KATEGORI.MAJU.warna : nilai > 50000 ? KATEGORI.BERKEMBANG.warna : KATEGORI.TERTINGGAL.warna;
+  }
+  if (indikatorTerpilih === 'KEMISKINAN') {
+    return nilai < 7 ? KATEGORI.MAJU.warna : nilai < 12 ? KATEGORI.BERKEMBANG.warna : KATEGORI.TERTINGGAL.warna;
+  }
+  if (indikatorTerpilih === 'INVESTASI') {
+    return nilai > 10000 ? KATEGORI.MAJU.warna : nilai > 5000 ? KATEGORI.BERKEMBANG.warna : KATEGORI.TERTINGGAL.warna;
+  }
+  return fitur.properties?.ekonomi_analysis?.warna || "#cbd5e1";
+}
+
+function getKategoriByIndikator(fitur, indikatorTerpilih) {
+  if (indikatorTerpilih === 'SEMUA') {
+    return fitur.properties?.ekonomi_analysis?.kategori || null;
+  }
+  const nilai = fitur.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih];
+  if (nilai === null || nilai === undefined) return null;
+
+  if (indikatorTerpilih === 'PDRB') {
+    return nilai > 75000 ? 'MAJU' : nilai > 50000 ? 'BERKEMBANG' : 'TERTINGGAL';
+  }
+  if (indikatorTerpilih === 'KEMISKINAN') {
+    return nilai < 7 ? 'MAJU' : nilai < 12 ? 'BERKEMBANG' : 'TERTINGGAL';
+  }
+  if (indikatorTerpilih === 'INVESTASI') {
+    return nilai > 10000 ? 'MAJU' : nilai > 5000 ? 'BERKEMBANG' : 'TERTINGGAL';
+  }
+  return fitur.properties?.ekonomi_analysis?.kategori || null;
+}
 
 export default function EkonomiPage() {
   const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
@@ -104,12 +145,12 @@ export default function EkonomiPage() {
       .filter(f => f.properties?.ekonomi_analysis?.nama_provinsi?.toLowerCase().includes(searchQuery.toLowerCase()))
       .map(f => ({
         nama: f.properties.ekonomi_analysis.nama_provinsi,
-        kategori: f.properties.ekonomi_analysis.kategori,
-        warna: f.properties.ekonomi_analysis.warna
+        kategori: getKategoriByIndikator(f, indikatorTerpilih),
+        warna: getWarnaByIndikator(f, indikatorTerpilih)
       }))
       .slice(0, 5);
     setSearchSuggestions(suggestions);
-  }, [searchQuery, hasilAnalisis]);
+  }, [searchQuery, hasilAnalisis, indikatorTerpilih]);
 
   const handleSearch = (namaProvinsi) => {
     const provinsiNama = namaProvinsi || searchQuery;
@@ -150,7 +191,7 @@ export default function EkonomiPage() {
       setSearchQuery('');
       setSearchSuggestions([]);
     } else {
-      toast.error('❌ Provinsi tidak ditemukan');
+      toast.error('Provinsi tidak ditemukan');
     }
   };
 
@@ -168,7 +209,9 @@ export default function EkonomiPage() {
     setModalAnalisisTerbuka(false);
     setMenuPilihanIndikatorTerbuka(false);
     setSedangMenganalisis(true);
-    const petunjukMemuat = toast.loading(`🔄 Mengambil data dari BPS Web API...\nAnalisis: ${pilihan === 'ALL' ? 'Semua Indikator Ekonomi' : pilihan}`);
+    // Reset filter kategori setiap kali analisis baru dijalankan
+    setKategoriTerpilih('SEMUA');
+    const petunjukMemuat = toast.loading(`Mengambil data dari BPS Web API...\nAnalisis: ${pilihan === 'ALL' ? 'Semua Indikator Ekonomi' : pilihan}`);
 
     try {
       const respons = await axios.post('http://127.0.0.1:8000/api/analyze-ekonomi-bps/', {
@@ -182,14 +225,14 @@ export default function EkonomiPage() {
         setHasilAnalisis(respons.data);
         setIndikatorTerpilih(pilihan === 'ALL' ? 'SEMUA' : pilihan);
         setPernahAnalisis(true);
-        toast.success(`✅ Berhasil menganalisis ${respons.data.total_success} provinsi dari BPS!`, { duration: 5000 });
+        toast.success(`Berhasil menganalisis ${respons.data.total_success} provinsi dari BPS!`, { duration: 5000 });
       }
     } catch (galat) {
       toast.dismiss(petunjukMemuat);
       if (galat.response?.data?.error) {
-        toast.error(`❌ ${galat.response.data.error}`);
+        toast.error(galat.response.data.error);
       } else {
-        toast.error('❌ Gagal terhubung ke server. Pastikan Django running di http://127.0.0.1:8000');
+        toast.error('Gagal terhubung ke server. Pastikan Django running di http://127.0.0.1:8000');
       }
       console.error(galat);
     } finally {
@@ -208,19 +251,19 @@ export default function EkonomiPage() {
     setProvinsiDipilih(null);
     setPernahAnalisis(false);
     setModeBersih(false);
-    toast.success('✅ Analisis berhasil direset');
+    toast.success('Analisis berhasil direset');
   };
 
   const bukaModalSave = () => {
-    if (!hasilAnalisis) return toast.error("❌ Belum ada data untuk disimpan");
+    if (!hasilAnalisis) return toast.error("Belum ada data untuk disimpan");
     setNamaSimpan('');
     setModalSaveTerbuka(true);
   };
 
   const simpanAnalisis = async () => {
-    if (!namaSimpan.trim()) return toast.error("❌ Nama analisis tidak boleh kosong");
+    if (!namaSimpan.trim()) return toast.error("Nama analisis tidak boleh kosong");
     setSedangMenyimpan(true);
-    const petunjukMemuat = toast.loading('💾 Menyimpan analisis...');
+    const petunjukMemuat = toast.loading('Menyimpan analisis...');
 
     try {
       const respons = await axios.post('http://127.0.0.1:8000/api/save-ekonomi-analysis/', {
@@ -230,13 +273,13 @@ export default function EkonomiPage() {
 
       toast.dismiss(petunjukMemuat);
       if (respons.data.status === 'success') {
-        toast.success(`✅ Analisis "${namaSimpan}" berhasil disimpan!`);
+        toast.success(`Analisis "${namaSimpan}" berhasil disimpan!`);
         setModalSaveTerbuka(false);
         setNamaSimpan('');
       }
     } catch (galat) {
       toast.dismiss(petunjukMemuat);
-      toast.error('❌ Gagal menyimpan analisis');
+      toast.error('Gagal menyimpan analisis');
       console.error(galat);
     } finally {
       setSedangMenyimpan(false);
@@ -244,31 +287,21 @@ export default function EkonomiPage() {
   };
 
   const unduhDataset = (jenisDataset) => {
-    if (!hasilAnalisis?.raw_datasets) return toast.error("❌ Dataset tidak tersedia");
+    if (!hasilAnalisis?.raw_datasets) return toast.error("Dataset tidak tersedia");
     const datasets = hasilAnalisis.raw_datasets;
     const indikatorInfo = hasilAnalisis.indikator_info;
     setMenuDatasetTerbuka(false);
 
     if (jenisDataset === 'ALL') {
       const bukuKerja = XLSX.utils.book_new();
-      
-      const dataArrayPDRB = Object.entries(datasets.PDRB || {}).map(([provinsi, nilai]) => ({
-        'Provinsi': provinsi, 'PDRB (Milyar Rp)': nilai
-      }));
+      const dataArrayPDRB = Object.entries(datasets.PDRB || {}).map(([provinsi, nilai]) => ({ 'Provinsi': provinsi, 'PDRB (Milyar Rp)': nilai }));
       XLSX.utils.book_append_sheet(bukuKerja, XLSX.utils.json_to_sheet(dataArrayPDRB), "PDRB");
-      
-      const dataArrayKemiskinan = Object.entries(datasets.KEMISKINAN || {}).map(([provinsi, nilai]) => ({
-        'Provinsi': provinsi, 'Kemiskinan (%)': nilai
-      }));
+      const dataArrayKemiskinan = Object.entries(datasets.KEMISKINAN || {}).map(([provinsi, nilai]) => ({ 'Provinsi': provinsi, 'Kemiskinan (%)': nilai }));
       XLSX.utils.book_append_sheet(bukuKerja, XLSX.utils.json_to_sheet(dataArrayKemiskinan), "Kemiskinan");
-      
-      const dataArrayInvestasi = Object.entries(datasets.INVESTASI || {}).map(([provinsi, nilai]) => ({
-        'Provinsi': provinsi, 'Investasi PMDN (Milyar Rp)': nilai
-      }));
+      const dataArrayInvestasi = Object.entries(datasets.INVESTASI || {}).map(([provinsi, nilai]) => ({ 'Provinsi': provinsi, 'Investasi PMDN (Milyar Rp)': nilai }));
       XLSX.utils.book_append_sheet(bukuKerja, XLSX.utils.json_to_sheet(dataArrayInvestasi), "Investasi");
-      
       XLSX.writeFile(bukuKerja, "TERASEG_Semua_Dataset_Ekonomi_BPS.xlsx");
-      toast.success('✅ Semua dataset berhasil diunduh!');
+      toast.success('Semua dataset berhasil diunduh!');
     } else {
       const dataset = datasets[jenisDataset] || {};
       const info = indikatorInfo?.[jenisDataset];
@@ -280,12 +313,12 @@ export default function EkonomiPage() {
       const bukuKerja = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(bukuKerja, lembarKerja, jenisDataset);
       XLSX.writeFile(bukuKerja, `TERASEG_Dataset_${jenisDataset}_BPS.xlsx`);
-      toast.success(`✅ Dataset ${info?.nama || jenisDataset} berhasil diunduh!`);
+      toast.success(`Dataset ${info?.nama || jenisDataset} berhasil diunduh!`);
     }
   };
 
   const eksporData = (format) => {
-    if (!hasilAnalisis) return toast.error("❌ Data tidak tersedia");
+    if (!hasilAnalisis) return toast.error("Data tidak tersedia");
     const ringkasan = hasilAnalisis.analysis_summary;
     setMenuUnduhTerbuka(false);
 
@@ -302,26 +335,23 @@ export default function EkonomiPage() {
       const bukuKerja = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(bukuKerja, lembarKerja, "Analisis Ekonomi BPS");
       XLSX.writeFile(bukuKerja, "TERASEG_Ekonomi_BPS.xlsx");
-      toast.success('✅ File Excel berhasil diunduh');
+      toast.success('File Excel berhasil diunduh');
     } else if (format === 'JSON') {
       const gumpalan = new Blob([JSON.stringify(hasilAnalisis, null, 2)], { type: 'application/json' });
       unduhBerkas(gumpalan, 'TERASEG_Ekonomi_BPS.json');
-      toast.success('✅ File JSON berhasil diunduh');
+      toast.success('File JSON berhasil diunduh');
     } else if (format === 'CSV') {
       const barisCsv = [
         ["Provinsi", "Kategori", "Indeks Ekonomi", "PDRB", "Kemiskinan", "Investasi"].join(","),
-        ...ringkasan.map(s => [
-          s.provinsi, s.kategori, s.ekonomi_index,
-          s.pdrb || '-', s.kemiskinan || '-', s.investasi || '-'
-        ].join(","))
+        ...ringkasan.map(s => [s.provinsi, s.kategori, s.ekonomi_index, s.pdrb || '-', s.kemiskinan || '-', s.investasi || '-'].join(","))
       ].join("\n");
       const gumpalan = new Blob([barisCsv], { type: 'text/csv' });
       unduhBerkas(gumpalan, 'TERASEG_Ekonomi_BPS.csv');
-      toast.success('✅ File CSV berhasil diunduh');
+      toast.success('File CSV berhasil diunduh');
     } else if (format === 'GEOJSON') {
       const gumpalan = new Blob([JSON.stringify(hasilAnalisis.matched_features, null, 2)], { type: 'application/json' });
       unduhBerkas(gumpalan, 'TERASEG_Spasial_Ekonomi.geojson');
-      toast.success('✅ File GeoJSON berhasil diunduh');
+      toast.success('File GeoJSON berhasil diunduh');
     }
   };
 
@@ -334,48 +364,22 @@ export default function EkonomiPage() {
     URL.revokeObjectURL(tautan);
   };
 
-  const hitungWarnaIndikator = (fitur) => {
-    if (indikatorTerpilih === 'SEMUA') {
-      return fitur.properties?.ekonomi_analysis?.warna || "#cbd5e1";
-    }
-    const nilai = fitur.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih];
-    if (nilai === null || nilai === undefined) return "#cbd5e1";
-
-    if (indikatorTerpilih === 'PDRB') {
-      if (nilai > 75000) return KATEGORI.MAJU.warna;
-      if (nilai > 50000) return KATEGORI.BERKEMBANG.warna;
-      return KATEGORI.TERTINGGAL.warna;
-    } else if (indikatorTerpilih === 'KEMISKINAN') {
-      if (nilai < 7) return KATEGORI.MAJU.warna;
-      if (nilai < 12) return KATEGORI.BERKEMBANG.warna;
-      return KATEGORI.TERTINGGAL.warna;
-    } else if (indikatorTerpilih === 'INVESTASI') {
-      if (nilai > 10000) return KATEGORI.MAJU.warna;
-      if (nilai > 5000) return KATEGORI.BERKEMBANG.warna;
-      return KATEGORI.TERTINGGAL.warna;
-    }
-    return fitur.properties?.ekonomi_analysis?.warna || "#cbd5e1";
-  };
-
+  // ============================================================
+  // FIX: Gunakan helper getKategoriByIndikator untuk filter tabel
+  // ============================================================
   const ambilDataTabelTerfilter = () => {
     if (!hasilAnalisis?.matched_features?.features) return [];
     let fitur = hasilAnalisis.matched_features.features;
     
     if (kategoriTerpilih !== 'SEMUA') {
-      fitur = fitur.filter(f => f.properties?.ekonomi_analysis?.kategori === kategoriTerpilih);
+      fitur = fitur.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === kategoriTerpilih);
     }
     
+    // Hanya tampilkan data yang punya nilai untuk indikator yang dipilih
     if (indikatorTerpilih !== 'SEMUA') {
       fitur = fitur.filter(f => {
         const nilai = f.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih];
         return nilai !== null && nilai !== undefined;
-      });
-      
-      fitur = fitur.sort((a, b) => {
-        const nilaiA = a.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih] || 0;
-        const nilaiB = b.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih] || 0;
-        if (indikatorTerpilih === 'KEMISKINAN') return nilaiB - nilaiA;
-        return nilaiA - nilaiB;
       });
     }
     
@@ -395,13 +399,16 @@ export default function EkonomiPage() {
   const dataTerfilter = ambilDataTabelTerfilter();
   const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetodologiTerbuka || panelKebijakanTerbuka;
 
+  // ============================================================
+  // FIX: Hitung jumlah kategori berdasarkan indikator aktif
+  // ============================================================
   const hitungKategori = () => {
     if (!hasilAnalisis?.matched_features?.features) return { TERTINGGAL: 0, BERKEMBANG: 0, MAJU: 0 };
     const features = hasilAnalisis.matched_features.features;
     return {
-      TERTINGGAL: features.filter(f => f.properties?.ekonomi_analysis?.kategori === 'TERTINGGAL').length,
-      BERKEMBANG: features.filter(f => f.properties?.ekonomi_analysis?.kategori === 'BERKEMBANG').length,
-      MAJU: features.filter(f => f.properties?.ekonomi_analysis?.kategori === 'MAJU').length
+      TERTINGGAL: features.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === 'TERTINGGAL').length,
+      BERKEMBANG: features.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === 'BERKEMBANG').length,
+      MAJU: features.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === 'MAJU').length
     };
   };
 
@@ -428,122 +435,84 @@ export default function EkonomiPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
       {!modeBersih && <HeaderBar />}
 
-      {/* MODAL PILIHAN ANALISIS - 4 INDIKATOR */}
+      {/* MODAL PILIHAN ANALISIS */}
       {modalAnalisisTerbuka && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Pilih Indikator Analisis</h3>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Pilih Data Analisis</h3>
               <button onClick={() => setModalAnalisisTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                 <X size={20} className="text-slate-500" />
               </button>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-700 mb-5">
-              <div className="flex items-center gap-2">
-                <span className="text-base">ℹ️</span>
-                <div>
-                  <div className="text-xs font-black text-blue-900 dark:text-blue-100 uppercase">Data BPS Terkini</div>
-                  <div className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Pilih indikator untuk analisis pemetaan ekonomi daerah Indonesia</div>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Pilih indikator yang ingin dianalisis untuk pemetaan ekonomi daerah Indonesia
+            </p>
 
             <div className="space-y-3 mb-6">
-              {/* SEMUA */}
               <button
                 onClick={() => setPilihanIndikator('ALL')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  pilihanIndikator === 'ALL'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'ALL' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">📊</span>
-                    <div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">SEMUA INDIKATOR</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">PDRB + Kemiskinan + Investasi — Analisis komprehensi ekonomi</div>
-                    </div>
+                  <div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">📊 Semua Indikator</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">PDRB + Kemiskinan + Investasi — Analisis komprehensif ekonomi</div>
                   </div>
                   {pilihanIndikator === 'ALL' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-white"></div>
                     </div>
                   )}
                 </div>
               </button>
 
-              {/* PDRB */}
               <button
                 onClick={() => setPilihanIndikator('PDRB')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  pilihanIndikator === 'PDRB'
-                    ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-yellow-300'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'PDRB' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-yellow-300'}`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">💹</span>
-                    <div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">PDRB SAJA</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus output ekonomi daerah — PDRB Atas Dasar Harga Berlaku</div>
-                    </div>
+                  <div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">💹 PDRB Saja</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus output ekonomi daerah — PDRB Atas Dasar Harga Berlaku</div>
                   </div>
                   {pilihanIndikator === 'PDRB' && (
-                    <div className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center flex-shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-white"></div>
                     </div>
                   )}
                 </div>
               </button>
 
-              {/* KEMISKINAN */}
               <button
                 onClick={() => setPilihanIndikator('KEMISKINAN')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  pilihanIndikator === 'KEMISKINAN'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'KEMISKINAN' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">👥</span>
-                    <div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">KEMISKINAN SAJA</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus distribusi kesejahteraan — Persentase Penduduk Miskin</div>
-                    </div>
+                  <div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">👥 Kemiskinan Saja</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus distribusi kesejahteraan — Persentase Penduduk Miskin</div>
                   </div>
                   {pilihanIndikator === 'KEMISKINAN' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-white"></div>
                     </div>
                   )}
                 </div>
               </button>
 
-              {/* INVESTASI */}
               <button
                 onClick={() => setPilihanIndikator('INVESTASI')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  pilihanIndikator === 'INVESTASI'
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'INVESTASI' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'}`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">💰</span>
-                    <div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">INVESTASI SAJA</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus kepercayaan investor — Realisasi Investasi PMDN</div>
-                    </div>
+                  <div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">💰 Investasi Saja</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus kepercayaan investor — Realisasi Investasi PMDN</div>
                   </div>
                   {pilihanIndikator === 'INVESTASI' && (
-                    <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-white"></div>
                     </div>
                   )}
@@ -552,18 +521,11 @@ export default function EkonomiPage() {
             </div>
 
             <div className="flex gap-3">
-              <button
-                onClick={() => setModalAnalisisTerbuka(false)}
-                className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
+              <button onClick={() => setModalAnalisisTerbuka(false)} className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                 Batal
               </button>
-              <button
-                onClick={() => jalankanAnalisisBPS()}
-                disabled={sedangMenganalisis}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {sedangMenganalisis ? '⏳ Loading...' : '▶️ Mulai Analisis'}
+              <button onClick={() => jalankanAnalisisBPS()} disabled={sedangMenganalisis} className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                Mulai Analisis
               </button>
             </div>
           </div>
@@ -575,7 +537,7 @@ export default function EkonomiPage() {
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">💾 Simpan Analisis</h3>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Simpan Analisis</h3>
               <button onClick={() => setModalSaveTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                 <X size={20} className="text-slate-500" />
               </button>
@@ -595,28 +557,17 @@ export default function EkonomiPage() {
               <button onClick={() => setModalSaveTerbuka(false)} className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                 Batal
               </button>
-              <button
-                onClick={simpanAnalisis}
-                disabled={sedangMenyimpan || !namaSimpan.trim()}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {sedangMenyimpan ? '⏳ Menyimpan...' : '✅ Simpan'}
+              <button onClick={simpanAnalisis} disabled={sedangMenyimpan || !namaSimpan.trim()} className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                {sedangMenyimpan ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MAIN MAP */}
       <div className={`fixed inset-0 bg-white dark:bg-slate-900 ${modeBersih ? 'top-0' : 'top-16'}`}>
         {!petaSedangMemuat && KontainerPeta && (
-          <KontainerPeta
-            center={PUSAT_DEFAULT}
-            zoom={ZOOM_DEFAULT}
-            className="h-full w-full z-0"
-            zoomControl={false}
-            ref={petaRef}
-          >
+          <KontainerPeta center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
             <LapisanPeta
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -628,13 +579,16 @@ export default function EkonomiPage() {
                 data={{ type: "FeatureCollection", features: hasilAnalisis.matched_features.features }}
                 style={(fitur) => {
                   const analisis = fitur.properties?.ekonomi_analysis || {};
+                  // FIX: gunakan kategori yang dihitung berdasarkan indikator aktif
+                  const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                  const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+
                   let terlihat = true;
-                  if (kategoriTerpilih !== 'SEMUA' && analisis.kategori !== kategoriTerpilih) terlihat = false;
-                  if (indikatorTerpilih !== 'SEMUA') {
-                    const nilai = analisis.data_ekonomi?.[indikatorTerpilih];
-                    if (nilai === null || nilai === undefined) terlihat = false;
-                  }
-                  const warna = hitungWarnaIndikator(fitur);
+                  // Filter berdasarkan kategori yang relevan dengan indikator saat ini
+                  if (kategoriTerpilih !== 'SEMUA' && kategoriAktif !== kategoriTerpilih) terlihat = false;
+                  // Sembunyikan jika tidak ada data untuk indikator yang dipilih
+                  if (warna === "#cbd5e1") terlihat = false;
+
                   const isHighlighted = provinsiDipilih === analisis.nama_provinsi;
                   return {
                     fillColor: warna,
@@ -647,13 +601,14 @@ export default function EkonomiPage() {
                 onEachFeature={(fitur, lapisan) => {
                   const analisis = fitur.properties?.ekonomi_analysis || {};
                   const dataEkonomi = analisis.data_ekonomi || {};
-                  const wawasan = analisis.insights?.map(i => `<div style="margin-bottom:3px; padding-left:6px; border-left:2px solid ${analisis.warna}; font-weight: 600; font-size: 9px;">${i}</div>`).join('') || '';
-                  const warna = hitungWarnaIndikator(fitur);
+                  const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                  const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                  const wawasan = analisis.insights?.map(i => `<div style="margin-bottom:3px; padding-left:6px; border-left:2px solid ${warna}; font-weight: 600; font-size: 9px;">${i}</div>`).join('') || '';
 
                   lapisan.bindTooltip(`
                     <div style="font-family: inherit; padding: 4px;">
                       <div style="font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px;">${analisis.nama_provinsi}</div>
-                      <div style="font-size: 9px; font-weight: 800; color: ${warna}; margin-top:2px;">KATEGORI: ${analisis.kategori}</div>
+                      <div style="font-size: 9px; font-weight: 800; color: ${warna}; margin-top:2px;">STATUS: ${kategoriAktif || '-'}</div>
                       <div style="font-size: 8px; font-weight: 700; color: #64748b; margin-top:2px;">Indeks: ${analisis.ekonomi_index}</div>
                     </div>
                   `, { sticky: true, opacity: 0.95 });
@@ -698,7 +653,7 @@ export default function EkonomiPage() {
                   }
 
                   const isiPopup = `
-                    <div style="font-family: inherit; min-width: 300px; max-width: 300px; color: #1e293b; padding: 4px;">
+                    <div style="font-family: inherit; min-width: 280px; max-width: 280px; color: #1e293b; padding: 4px;">
                       <div style="background: linear-gradient(135deg, ${warna} 0%, ${warna}dd 100%); color: white; padding: 8px; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                         <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;">${analisis.nama_provinsi}</div>
                         <div style="background: rgba(255,255,255,0.2); border-radius: 5px; padding: 5px; margin-top: 5px;">
@@ -713,47 +668,43 @@ export default function EkonomiPage() {
                       <div style="padding: 0 2px;">
                         <div style="text-align: center; margin-bottom: 6px;">
                           <span style="background: ${warna}; color: white; padding: 4px 12px; border-radius: 10px; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            ${analisis.kategori}
+                            ${kategoriAktif || '-'}
                           </span>
                         </div>
                         <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">📊 INDIKATOR</div>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 4px; margin-bottom: 8px;">
-                          ${indikatorHTML}
-                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 4px; margin-bottom: 8px;">${indikatorHTML}</div>
                         <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">💡 WAWASAN</div>
                         <div style="font-size: 9px; color: #334155; line-height: 1.4; background: #f8fafc; padding: 6px; border-radius: 5px; border-left: 2px solid ${warna};">${wawasan}</div>
                       </div>
                     </div>
                   `;
-                  lapisan.bindPopup(isiPopup, { maxWidth: 320, maxHeight: 420 });
+                  lapisan.bindPopup(isiPopup, { maxWidth: 300, maxHeight: 400 });
                 }}
               />
             )}
           </KontainerPeta>
         )}
 
-        {/* TITLE */}
+        {/* JUDUL HALAMAN - KIRI ATAS */}
         {!modeBersih && (
           <div className="absolute top-6 left-6 z-[1000] bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 px-5 py-3 rounded-xl shadow-xl">
-            <div className="text-sm font-black text-white uppercase tracking-wider">
-              💼 Analisis Ekonomi Daerah
-            </div>
+            <div className="text-sm font-black text-white uppercase tracking-wider">💼 SDM Nasional Ekonomi</div>
           </div>
         )}
 
-        {/* ZOOM */}
+        {/* ZOOM CONTROLS */}
         {!modeBersih && (
           <div className="absolute top-20 left-6 z-[1000] flex flex-col gap-2">
             <button onClick={() => petaRef.current?.zoomIn()} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700">
-              <Plus size={16} />
+              <Plus size={16}/>
             </button>
             <button onClick={() => petaRef.current?.zoomOut()} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700">
-              <Minus size={16} />
+              <Minus size={16}/>
             </button>
           </div>
         )}
 
-        {/* CLEAN VIEW */}
+        {/* TOMBOL MODE BERSIH */}
         {hasilAnalisis && (
           <div className="absolute top-[170px] left-6 z-[1000]">
             <button
@@ -785,14 +736,16 @@ export default function EkonomiPage() {
                   <button onClick={() => handleSearch()} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-all">
                     <Search size={16} />
                   </button>
-                  <button onClick={() => { setSearchTerbuka(false); setSearchQuery(''); setSearchSuggestions([]); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
+                  <button onClick={() => { setSearchTerbuka(false); setSearchQuery(''); setSearchSuggestions([]); setProvinsiDipilih(null); }}
+                    className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
                     <X size={16} />
                   </button>
                 </div>
                 {searchSuggestions.length > 0 && (
                   <div className="border-t border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
                     {searchSuggestions.map((sug, idx) => (
-                      <button key={idx} onClick={() => handleSearch(sug.nama)} className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between group">
+                      <button key={idx} onClick={() => handleSearch(sug.nama)}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between group">
                         <span className="text-sm font-bold text-slate-900 dark:text-white">{sug.nama}</span>
                         <span className="text-[10px] font-bold px-2 py-1 rounded-lg" style={{ backgroundColor: sug.warna + '20', color: sug.warna }}>{sug.kategori}</span>
                       </button>
@@ -802,23 +755,21 @@ export default function EkonomiPage() {
               </div>
             ) : (
               <button onClick={() => setSearchTerbuka(true)} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700">
-                <Search size={16} />
+                <Search size={16}/>
               </button>
             )}
           </div>
         )}
 
-        {/* KOORDINAT, LEGEND, FILTER - RIGHT TOP */}
+        {/* KOORDINAT & SCALE - KANAN ATAS */}
         {!modeBersih && (
           <div className="absolute top-6 right-6 z-[1000] space-y-2">
-            {/* KOORDINAT */}
             <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
               <div className="text-xs font-bold text-slate-600 dark:text-slate-400">
                 <span className="text-blue-600 dark:text-blue-400">Lat:</span> {koordinatCursor.lat} | <span className="text-blue-600 dark:text-blue-400">Lng:</span> {koordinatCursor.lng}
               </div>
             </div>
 
-            {/* SCALE */}
             <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
               <div className="flex flex-col gap-1">
                 <div className="h-2 bg-slate-300 dark:bg-slate-600" style={{ width: '80px', borderLeft: '2px solid #64748b', borderRight: '2px solid #64748b', borderBottom: '2px solid #64748b' }}></div>
@@ -845,7 +796,7 @@ export default function EkonomiPage() {
               </div>
             </div>
 
-            {/* FILTER */}
+            {/* FILTER KATEGORI */}
             {hasilAnalisis && (
               <div className="relative">
                 <button
@@ -870,7 +821,7 @@ export default function EkonomiPage() {
           </div>
         )}
 
-        {/* BOTTOM BUTTONS */}
+        {/* BOTTOM ACTION BUTTONS */}
         {!modeBersih && (
           <div className={`absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-300 ${adaPanelTerbuka ? 'bottom-[380px]' : 'bottom-16'}`}>
             <div className="flex gap-3">
@@ -884,19 +835,18 @@ export default function EkonomiPage() {
                   {getButtonText()}
                 </button>
 
-                {/* DROPDOWN */}
                 {menuPilihanIndikatorTerbuka && (
                   <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1003] overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <button onClick={() => jalankanAnalisisBPS('ALL')} className="w-full text-left px-4 py-3 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                    <button onClick={() => jalankanAnalisisBPS('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
                       📊 Semua Indikator
                     </button>
-                    <button onClick={() => jalankanAnalisisBPS('PDRB')} className="w-full text-left px-4 py-3 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
+                    <button onClick={() => jalankanAnalisisBPS('PDRB')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
                       💹 PDRB Saja
                     </button>
-                    <button onClick={() => jalankanAnalisisBPS('KEMISKINAN')} className="w-full text-left px-4 py-3 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                    <button onClick={() => jalankanAnalisisBPS('KEMISKINAN')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
                       👥 Kemiskinan Saja
                     </button>
-                    <button onClick={() => jalankanAnalisisBPS('INVESTASI')} className="w-full text-left px-4 py-3 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">
+                    <button onClick={() => jalankanAnalisisBPS('INVESTASI')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">
                       💰 Investasi Saja
                     </button>
                   </div>
@@ -917,7 +867,7 @@ export default function EkonomiPage() {
           </div>
         )}
 
-        {/* PANELS */}
+        {/* BOTTOM PANELS */}
         {hasilAnalisis && !modeBersih && (
           <div className="absolute bottom-0 left-0 right-0 z-[1001]">
 
@@ -927,9 +877,7 @@ export default function EkonomiPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <Activity className="text-blue-500" size={24} />
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                      Ringkasan Analisis Ekonomi
-                    </h2>
+                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis Ekonomi</h2>
                   </div>
                   <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                     <X size={18} className="text-slate-500" />
@@ -942,26 +890,21 @@ export default function EkonomiPage() {
                   <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
                     <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
                     <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
-                    <div className="text-[9px] text-blue-500 mt-1">Teranalisis</div>
                   </div>
                   <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
                     <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Tertinggal</div>
                     <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori.TERTINGGAL}</div>
-                    <div className="text-[9px] text-red-500 mt-1">Perlu Percepatan</div>
                   </div>
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
                     <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Berkembang</div>
                     <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori.BERKEMBANG}</div>
-                    <div className="text-[9px] text-yellow-500 mt-1">Menuju Maju</div>
                   </div>
                   <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
                     <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Maju</div>
                     <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori.MAJU}</div>
-                    <div className="text-[9px] text-green-500 mt-1">Berkembang Pesat</div>
                   </div>
                 </div>
 
-                {/* Best & Worst */}
                 {hasilAnalisis.best_provinces?.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
@@ -993,9 +936,7 @@ export default function EkonomiPage() {
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Ekonomi Daerah</h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">
-                      {dataTerfilter.length} Wilayah | Indikator: {indikatorTerpilih}
-                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah | Indikator: {indikatorTerpilih}</p>
                   </div>
                   <div className="flex gap-2">
                     <div className="relative">
@@ -1029,15 +970,9 @@ export default function EkonomiPage() {
                         <th className="px-3 py-2 text-center">No</th>
                         <th className="px-3 py-2">Provinsi</th>
                         <th className="px-3 py-2 text-center">Indeks</th>
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
-                          <th className="px-3 py-2 text-center">PDRB</th>
-                        )}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
-                          <th className="px-3 py-2 text-center">Kemiskinan</th>
-                        )}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
-                          <th className="px-3 py-2 text-center">Investasi</th>
-                        )}
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && <th className="px-3 py-2 text-center">PDRB</th>}
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && <th className="px-3 py-2 text-center">Kemiskinan</th>}
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && <th className="px-3 py-2 text-center">Investasi</th>}
                         <th className="px-3 py-2">Status</th>
                       </tr>
                     </thead>
@@ -1045,7 +980,8 @@ export default function EkonomiPage() {
                       {dataTerfilter.map((fitur, indeks) => {
                         const data = fitur.properties.ekonomi_analysis;
                         const dataEkonomi = data.data_ekonomi || {};
-                        const warna = hitungWarnaIndikator(fitur);
+                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
                         return (
                           <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
                             <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
@@ -1070,7 +1006,7 @@ export default function EkonomiPage() {
                             )}
                             <td className="px-3 py-2">
                               <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
-                                {data.kategori}
+                                {kategoriAktif}
                               </span>
                             </td>
                           </tr>
@@ -1110,23 +1046,24 @@ export default function EkonomiPage() {
                       {dataTerfilter.map((fitur, indeks) => {
                         const data = fitur.properties.ekonomi_analysis;
                         const rekUtama = data.rekomendasi?.[0];
-                        const warna = hitungWarnaIndikator(fitur);
+                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
                         return (
                           <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
                             <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
                             <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
                             <td className="px-3 py-2">
                               <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
-                                {data.kategori}
+                                {kategoriAktif}
                               </span>
                             </td>
                             <td className="px-3 py-2">
                               <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                                data.kategori === 'TERTINGGAL' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                data.kategori === 'BERKEMBANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                kategoriAktif === 'TERTINGGAL' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                kategoriAktif === 'BERKEMBANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
                                 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                               }`}>
-                                {rekUtama?.priority || (data.kategori === 'MAJU' ? 'PEMELIHARAAN' : data.kategori === 'BERKEMBANG' ? 'TINGGI' : 'DARURAT')}
+                                {rekUtama?.priority || (kategoriAktif === 'MAJU' ? 'PEMELIHARAAN' : kategoriAktif === 'BERKEMBANG' ? 'TINGGI' : 'DARURAT')}
                               </span>
                             </td>
                             <td className="px-3 py-2 max-w-md">
@@ -1145,19 +1082,16 @@ export default function EkonomiPage() {
               </div>
             </div>
 
-            {/* METODOLOGI PANEL - LENGKAP DENGAN RUMUS */}
+            {/* METODOLOGI PANEL */}
             <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelMetodologiTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
               <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    📚 Metodologi Perhitungan IEK
+                    Metodologi Perhitungan Indeks Ekonomi Komposit (IEK)
                   </h3>
                   <div className="flex gap-2">
                     <div className="relative">
-                      <button
-                        onClick={() => { setMenuDatasetTerbuka(!menuDatasetTerbuka); }}
-                        className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
-                      >
+                      <button onClick={() => { setMenuDatasetTerbuka(!menuDatasetTerbuka); }} className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2">
                         <Download size={12} /> Dataset
                       </button>
                       {menuDatasetTerbuka && (
@@ -1183,91 +1117,134 @@ export default function EkonomiPage() {
                   </div>
                 </div>
 
-                {/* FORMULA UTAMA */}
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Indeks Ekonomi Komposit (IEK) menggabungkan 3 indikator kunci ekonomi dengan pembobotan berdasarkan dampak dan relevansi terhadap pembangunan daerah.
+                </p>
+
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 mb-3 uppercase">📐 Formula Indeks Ekonomi Komposit (IEK)</h4>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700 mb-3">
-                    <code className="text-xs font-mono font-bold text-slate-900 dark:text-white break-words">
+                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 mb-2 uppercase">Formula Perhitungan</h4>
+                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
+                    <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
                       IEK = (Skor_PDRB × 0.40) + (Skor_Kemiskinan × 0.40) + (Skor_Investasi × 0.20)
                     </code>
                   </div>
-                  <p className="text-xs text-blue-700 dark:text-blue-300">Hasil IEK berkisar 1.0 (terendah) sampai 3.0 (tertinggi)</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">Hasil IEK berkisar 1.0 (terendah) sampai 3.0 (tertinggi)</p>
                 </div>
 
-                {/* CARA HITUNG PDRB */}
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border-l-4 border-yellow-500">
-                  <h5 className="text-sm font-black text-yellow-900 dark:text-yellow-100 uppercase mb-2">💹 Cara Hitung PDRB</h5>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-yellow-300 dark:border-yellow-700 mb-2">
-                    <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 mb-1">Threshold Scoring:</div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                      <div>✓ Jika PDRB &gt; Rp75 miliar → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                      <div>◐ Jika PDRB 50-75 miliar → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                      <div>✗ Jika PDRB &lt; Rp50 miliar → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                <div className="space-y-3">
+                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border-l-4 border-yellow-500">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h5 className="text-sm font-black text-yellow-900 dark:text-yellow-100 uppercase">💹 PDRB</h5>
+                          <span className="inline-block mt-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold rounded">Bobot: 40%</span>
+                        </div>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-yellow-300 dark:border-yellow-700 mb-2">
+                        <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 mb-1">Threshold Scoring:</div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ PDRB &gt; Rp75 miliar → <span className="text-green-600">Skor 3 (MAJU)</span></div>
+                          <div>◐ PDRB 50-75 miliar → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
+                          <div>✗ PDRB &lt; Rp50 miliar → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-[10px] text-yellow-700 dark:text-yellow-300">Kontribusi ke IEK = Skor_PDRB × 0.40</p>
-                </div>
+                  )}
 
-                {/* CARA HITUNG KEMISKINAN */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
-                  <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-2">👥 Cara Hitung Kemiskinan (REVERSE)</h5>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-300 dark:border-blue-700 mb-2">
-                    <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 mb-1">Threshold Scoring:</div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                      <div>✓ Jika Kemiskinan &lt; 7% → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                      <div>◐ Jika Kemiskinan 7-12% → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                      <div>✗ Jika Kemiskinan &gt; 12% → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase">👥 Kemiskinan (REVERSE)</h5>
+                          <span className="inline-block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded">Bobot: 40%</span>
+                        </div>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-300 dark:border-blue-700 mb-2">
+                        <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 mb-1">Threshold Scoring:</div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ Kemiskinan &lt; 7% → <span className="text-green-600">Skor 3 (MAJU)</span></div>
+                          <div>◐ Kemiskinan 7-12% → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
+                          <div>✗ Kemiskinan &gt; 12% → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-blue-700 dark:text-blue-300"><strong>Catatan REVERSE:</strong> Semakin rendah kemiskinan semakin baik</p>
                     </div>
-                  </div>
-                  <p className="text-[10px] text-blue-700 dark:text-blue-300"><strong>Catatan REVERSE:</strong> Semakin rendah kemiskinan semakin baik (berbeda dengan PDRB)</p>
-                </div>
+                  )}
 
-                {/* CARA HITUNG INVESTASI */}
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border-l-4 border-indigo-500">
-                  <h5 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase mb-2">💰 Cara Hitung Investasi</h5>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-indigo-300 dark:border-indigo-700 mb-2">
-                    <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mb-1">Threshold Scoring:</div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                      <div>✓ Jika Investasi &gt; Rp10 triliun → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                      <div>◐ Jika Investasi 5-10 triliun → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                      <div>✗ Jika Investasi &lt; Rp5 triliun → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border-l-4 border-indigo-500">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h5 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase">💰 Investasi PMDN</h5>
+                          <span className="inline-block mt-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded">Bobot: 20%</span>
+                        </div>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-indigo-300 dark:border-indigo-700 mb-2">
+                        <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mb-1">Threshold Scoring:</div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ Investasi &gt; Rp10 triliun → <span className="text-green-600">Skor 3 (MAJU)</span></div>
+                          <div>◐ Investasi 5-10 triliun → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
+                          <div>✗ Investasi &lt; Rp5 triliun → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-[10px] text-indigo-700 dark:text-indigo-300">Kontribusi ke IEK = Skor_Investasi × 0.20</p>
+                  )}
                 </div>
 
-                {/* KATEGORI HASIL */}
                 <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">🎯 Kategori Hasil IEK</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-2 border-2 border-green-200 dark:border-green-700">
-                      <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">MAJU</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">IEK ≥ 2.4</div>
-                      <div className="text-[9px] text-green-600 dark:text-green-400">✓ Baik</div>
+                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Hasil Analisis</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-green-200 dark:border-green-700">
+                      <div className="text-xs font-black text-green-600 dark:text-green-400 uppercase">MAJU</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">IEK ≥ 2.4</div>
+                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Ekonomi berkembang pesat</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-2 border-2 border-yellow-200 dark:border-yellow-700">
-                      <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">BERKEMBANG</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">1.8-2.4</div>
-                      <div className="text-[9px] text-yellow-600 dark:text-yellow-400">◐ Sedang</div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-yellow-200 dark:border-yellow-700">
+                      <div className="text-xs font-black text-yellow-600 dark:text-yellow-400 uppercase">BERKEMBANG</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">1.8 ≤ IEK {'<'} 2.4</div>
+                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Menuju kemajuan ekonomi</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-2 border-2 border-red-200 dark:border-red-700">
-                      <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">TERTINGGAL</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">IEK &lt; 1.8</div>
-                      <div className="text-[9px] text-red-600 dark:text-red-400">✗ Rendah</div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-red-200 dark:border-red-700">
+                      <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase">TERTINGGAL</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">IEK {'<'} 1.8</div>
+                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Perlu percepatan pembangunan</div>
                     </div>
                   </div>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-2">Validitas Metodologi</h4>
+                  <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
+                    PDRB dan Kemiskinan mendapat bobot setara (40%) karena sama-sama krusial dalam mengukur kondisi ekonomi daerah. Investasi sebagai indikator prospektif mendapat 20%.
+                  </p>
+                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
+                    <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Catatan Penting</div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      Analisis memberikan gambaran holistik kondisi ekonomi dengan mempertimbangkan output (PDRB), kesejahteraan (Kemiskinan), dan daya tarik investasi secara berimbang.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Sumber Data</div>
+                  <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
+                    <li>• BPS Web API — PDRB Atas Dasar Harga Berlaku (Var: PDRB)</li>
+                    <li>• BPS Web API — Persentase Penduduk Miskin (Var: Kemiskinan)</li>
+                    <li>• BPS Web API — Realisasi Investasi PMDN (Var: Investasi)</li>
+                  </ul>
                 </div>
               </div>
             </div>
 
-            {/* CONTROL BUTTONS */}
+            {/* CONTROL BUTTONS BAR */}
             <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 p-3 shadow-2xl">
-              <div className="flex justify-center gap-2 flex-wrap">
+              <div className="flex justify-center gap-2">
                 <button
                   onClick={() => { setPanelInfoTerbuka(!panelInfoTerbuka); setPanelTabelTerbuka(false); setPanelMetodologiTerbuka(false); setPanelKebijakanTerbuka(false); }}
                   className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                 >
                   <Info size={14} /> Info
+                  {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
 
                 <button
@@ -1275,6 +1252,7 @@ export default function EkonomiPage() {
                   className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                 >
                   <Table size={14} /> Tabel
+                  {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
 
                 <button
@@ -1282,6 +1260,7 @@ export default function EkonomiPage() {
                   className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                 >
                   <ClipboardList size={14} /> Kebijakan
+                  {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
 
                 <button
@@ -1289,6 +1268,7 @@ export default function EkonomiPage() {
                   className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                 >
                   <FileText size={14} /> Metodologi
+                  {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
 
                 {adaPanelTerbuka && (
@@ -1296,12 +1276,11 @@ export default function EkonomiPage() {
                     onClick={toggleAllPanels}
                     className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
                   >
-                    <ChevronDown size={14} /> Tutup
+                    <ChevronDown size={14} /> Tutup Semua
                   </button>
                 )}
               </div>
             </div>
-
           </div>
         )}
       </div>
