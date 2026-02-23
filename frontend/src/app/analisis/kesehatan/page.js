@@ -116,6 +116,40 @@ export default function KesehatanPage() {
     return <MapEventsComponent />;
   };
 
+  // =============================================
+  // FUNGSI INTI: Hitung kategori berdasarkan indikator terpilih
+  // Ini adalah fix utama untuk bug filtering
+  // =============================================
+  const hitungKategoriDariIndikator = (fitur, indikator) => {
+    if (indikator === 'SEMUA') {
+      return fitur.properties?.health_analysis?.kategori || 'STABIL';
+    }
+
+    const nilai = fitur.properties?.health_analysis?.data_kesehatan?.[indikator];
+    if (nilai === null || nilai === undefined) return null;
+
+    if (indikator === 'AHH') {
+      if (nilai < 65) return 'KRITIS';
+      if (nilai < 70) return 'WASPADA';
+      return 'STABIL';
+    } else {
+      // IMUNISASI dan SANITASI - pakai threshold %
+      if (indikator === 'IMUNISASI') {
+        if (nilai < 80) return 'KRITIS';
+        if (nilai < 90) return 'WASPADA';
+        return 'STABIL';
+      } else if (indikator === 'SANITASI') {
+        if (nilai < 70) return 'KRITIS';
+        if (nilai < 85) return 'WASPADA';
+        return 'STABIL';
+      }
+      // fallback generic
+      if (nilai < 60) return 'KRITIS';
+      if (nilai < 80) return 'WASPADA';
+      return 'STABIL';
+    }
+  };
+
   // Update search suggestions saat mengetik
   useEffect(() => {
     if (!hasilAnalisis?.matched_features?.features || !searchQuery.trim()) {
@@ -123,17 +157,25 @@ export default function KesehatanPage() {
       return;
     }
     
-    const suggestions = hasilAnalisis.matched_features.features
+    const features = hasilAnalisis.matched_features.features;
+    const suggestions = features
       .filter(f => f.properties?.health_analysis?.nama_provinsi?.toLowerCase().includes(searchQuery.toLowerCase()))
-      .map(f => ({
-        nama: f.properties.health_analysis.nama_provinsi,
-        kategori: f.properties.health_analysis.kategori,
-        warna: f.properties.health_analysis.warna
-      }))
+      .map(f => {
+        const kategori = indikatorTerpilih === 'SEMUA'
+          ? f.properties.health_analysis.kategori
+          : hitungKategoriDariIndikator(f, indikatorTerpilih) || f.properties.health_analysis.kategori;
+        const warna = KATEGORI[kategori]?.warna || "#cbd5e1";
+        return {
+          nama: f.properties.health_analysis.nama_provinsi,
+          kategori,
+          warna
+        };
+      })
       .slice(0, 5);
     
     setSearchSuggestions(suggestions);
-  }, [searchQuery, hasilAnalisis]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, hasilAnalisis, indikatorTerpilih]);
 
   const handleSearch = (namaProvinsi) => {
     const provinsiNama = namaProvinsi || searchQuery;
@@ -216,6 +258,8 @@ export default function KesehatanPage() {
       if (respons.data.status === 'success') {
         setHasilAnalisis(respons.data);
         setIndikatorTerpilih(pilihan === 'ALL' ? 'SEMUA' : pilihan);
+        // Reset filter kategori saat analisis baru
+        setKategoriTerpilih('SEMUA');
         setPernahAnalisis(true);
         toast.success(`Berhasil menganalisis ${respons.data.total_success} provinsi dari BPS!`, {
           duration: 5000
@@ -418,40 +462,36 @@ export default function KesehatanPage() {
       return fitur.properties?.health_analysis?.warna || "#cbd5e1";
     }
     
-    const nilai = fitur.properties?.health_analysis?.data_kesehatan?.[indikatorTerpilih];
-    if (nilai === null || nilai === undefined) return "#cbd5e1";
-    
-    let thresholdKritis, thresholdWaspada;
-    
-    if (indikatorTerpilih === 'AHH') {
-      thresholdKritis = 65;
-      thresholdWaspada = 70;
-      if (nilai < thresholdKritis) return KATEGORI.KRITIS.warna;
-      if (nilai < thresholdWaspada) return KATEGORI.WASPADA.warna;
-      return KATEGORI.STABIL.warna;
-    } else {
-      thresholdKritis = 60;
-      thresholdWaspada = 80;
-      if (nilai < thresholdKritis) return KATEGORI.KRITIS.warna;
-      if (nilai < thresholdWaspada) return KATEGORI.WASPADA.warna;
-      return KATEGORI.STABIL.warna;
-    }
+    const kategori = hitungKategoriDariIndikator(fitur, indikatorTerpilih);
+    if (!kategori) return "#cbd5e1";
+    return KATEGORI[kategori]?.warna || "#cbd5e1";
   };
 
+  // =============================================
+  // FIX: ambilDataTabelTerfilter menggunakan hitungKategoriDariIndikator
+  // =============================================
   const ambilDataTabelTerfilter = () => {
     if (!hasilAnalisis?.matched_features?.features) return [];
     let fitur = hasilAnalisis.matched_features.features;
-    
-    if (kategoriTerpilih !== 'SEMUA') {
-      fitur = fitur.filter(f => f.properties?.health_analysis?.kategori === kategoriTerpilih);
-    }
-    
+
+    // Filter: hanya tampilkan fitur yang punya data untuk indikator terpilih
     if (indikatorTerpilih !== 'SEMUA') {
       fitur = fitur.filter(f => {
         const nilai = f.properties?.health_analysis?.data_kesehatan?.[indikatorTerpilih];
         return nilai !== null && nilai !== undefined;
       });
-      
+    }
+
+    // Filter kategori: gunakan kategori yang dihitung berdasarkan indikator terpilih
+    if (kategoriTerpilih !== 'SEMUA') {
+      fitur = fitur.filter(f => {
+        const kategori = hitungKategoriDariIndikator(f, indikatorTerpilih);
+        return kategori === kategoriTerpilih;
+      });
+    }
+
+    // Sort berdasarkan nilai indikator terpilih (ascending = terburuk di atas)
+    if (indikatorTerpilih !== 'SEMUA') {
       fitur = fitur.sort((a, b) => {
         const nilaiA = a.properties?.health_analysis?.data_kesehatan?.[indikatorTerpilih] || 0;
         const nilaiB = b.properties?.health_analysis?.data_kesehatan?.[indikatorTerpilih] || 0;
@@ -477,13 +517,26 @@ export default function KesehatanPage() {
   const dataTerfilter = ambilDataTabelTerfilter();
   const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetodologiTerbuka || panelKebijakanTerbuka;
 
+  // =============================================
+  // FIX: hitungKategori menggunakan hitungKategoriDariIndikator
+  // =============================================
   const hitungKategori = () => {
     if (!hasilAnalisis?.matched_features?.features) return { KRITIS: 0, WASPADA: 0, STABIL: 0 };
     const features = hasilAnalisis.matched_features.features;
+    
+    if (indikatorTerpilih === 'SEMUA') {
+      return {
+        KRITIS: features.filter(f => f.properties?.health_analysis?.kategori === 'KRITIS').length,
+        WASPADA: features.filter(f => f.properties?.health_analysis?.kategori === 'WASPADA').length,
+        STABIL: features.filter(f => f.properties?.health_analysis?.kategori === 'STABIL').length
+      };
+    }
+
+    // Hitung berdasarkan indikator terpilih
     return {
-      KRITIS: features.filter(f => f.properties?.health_analysis?.kategori === 'KRITIS').length,
-      WASPADA: features.filter(f => f.properties?.health_analysis?.kategori === 'WASPADA').length,
-      STABIL: features.filter(f => f.properties?.health_analysis?.kategori === 'STABIL').length
+      KRITIS: features.filter(f => hitungKategoriDariIndikator(f, indikatorTerpilih) === 'KRITIS').length,
+      WASPADA: features.filter(f => hitungKategoriDariIndikator(f, indikatorTerpilih) === 'WASPADA').length,
+      STABIL: features.filter(f => hitungKategoriDariIndikator(f, indikatorTerpilih) === 'STABIL').length
     };
   };
 
@@ -698,12 +751,18 @@ export default function KesehatanPage() {
                 data={{ type: "FeatureCollection", features: hasilAnalisis.matched_features.features }}
                 style={(fitur) => {
                   const analisis = fitur.properties?.health_analysis || {};
+
+                  // Hitung kategori berdasarkan indikator terpilih untuk filter peta
+                  const kategoriSaatIni = hitungKategoriDariIndikator(fitur, indikatorTerpilih);
+                  
                   let terlihat = true;
                   
-                  if (kategoriTerpilih !== 'SEMUA' && analisis.kategori !== kategoriTerpilih) {
-                    terlihat = false;
+                  // Filter kategori: gunakan kategori yang dihitung ulang per indikator
+                  if (kategoriTerpilih !== 'SEMUA') {
+                    terlihat = kategoriSaatIni === kategoriTerpilih;
                   }
                   
+                  // Jika indikator spesifik dipilih, sembunyikan provinsi tanpa data
                   if (indikatorTerpilih !== 'SEMUA') {
                     const nilai = analisis.data_kesehatan?.[indikatorTerpilih];
                     if (nilai === null || nilai === undefined) {
@@ -723,95 +782,96 @@ export default function KesehatanPage() {
                   };
                 }}
                 onEachFeature={(fitur, lapisan) => {
-  const analisis = fitur.properties?.health_analysis || {};
-  const dataKesehatan = analisis.data_kesehatan || {};
-  const wawasan = analisis.insights?.map(i => `<div style="margin-bottom:3px; padding-left:6px; border-left:2px solid ${analisis.warna}; font-weight: 600; font-size: 9px;">${i}</div>`).join('') || '';
-  
-  const warna = hitungWarnaIndikator(fitur);
-  
-  lapisan.bindTooltip(`
-    <div style="font-family: inherit; padding: 4px;">
-      <div style="font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px;">${analisis.nama_provinsi}</div>
-      <div style="font-size: 9px; font-weight: 800; color: ${warna}; margin-top:2px;">STATUS: ${indikatorTerpilih === 'SEMUA' ? analisis.kategori : indikatorTerpilih}</div>
-      <div style="font-size: 8px; font-weight: 700; color: #64748b; margin-top:2px;">Indeks: ${analisis.health_index}</div>
-    </div>
-  `, { sticky: true, opacity: 0.95 });
+                  const analisis = fitur.properties?.health_analysis || {};
+                  const dataKesehatan = analisis.data_kesehatan || {};
+                  const wawasan = analisis.insights?.map(i => `<div style="margin-bottom:3px; padding-left:6px; border-left:2px solid ${analisis.warna}; font-weight: 600; font-size: 9px;">${i}</div>`).join('') || '';
+                  
+                  const warna = hitungWarnaIndikator(fitur);
+                  const kategoriSaatIni = hitungKategoriDariIndikator(fitur, indikatorTerpilih) || analisis.kategori;
+                  
+                  lapisan.bindTooltip(`
+                    <div style="font-family: inherit; padding: 4px;">
+                      <div style="font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px;">${analisis.nama_provinsi}</div>
+                      <div style="font-size: 9px; font-weight: 800; color: ${warna}; margin-top:2px;">STATUS: ${kategoriSaatIni}</div>
+                      <div style="font-size: 8px; font-weight: 700; color: #64748b; margin-top:2px;">Indeks: ${analisis.health_index}</div>
+                    </div>
+                  `, { sticky: true, opacity: 0.95 });
 
-  // Build popup content dynamically based on selected indicator
-  let indikatorHTML = '';
-  
-  if (indikatorTerpilih === 'SEMUA') {
-    indikatorHTML = `
-      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #10b981;">
-        <div style="font-size: 7px; font-weight: 900; color: #14532d; text-transform: uppercase; margin-bottom: 1px;">📈 Harapan Hidup</div>
-        <div style="font-size: 11px; font-weight: 900; color: #16a34a;">${dataKesehatan.AHH ? dataKesehatan.AHH + ' th' : '-'}</div>
-      </div>
-      <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #3b82f6;">
-        <div style="font-size: 7px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; margin-bottom: 1px;">💉 Imunisasi</div>
-        <div style="font-size: 11px; font-weight: 900; color: #2563eb;">${dataKesehatan.IMUNISASI ? dataKesehatan.IMUNISASI + '%' : '-'}</div>
-      </div>
-      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #a855f7;">
-        <div style="font-size: 7px; font-weight: 900; color: #581c87; text-transform: uppercase; margin-bottom: 1px;">🚰 Sanitasi</div>
-        <div style="font-size: 11px; font-weight: 900; color: #9333ea;">${dataKesehatan.SANITASI ? dataKesehatan.SANITASI + '%' : '-'}</div>
-      </div>
-    `;
-  } else if (indikatorTerpilih === 'AHH') {
-    indikatorHTML = `
-      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #10b981;">
-        <div style="font-size: 8px; font-weight: 900; color: #14532d; text-transform: uppercase; margin-bottom: 2px;">📈 Angka Harapan Hidup</div>
-        <div style="font-size: 16px; font-weight: 900; color: #16a34a;">${dataKesehatan.AHH ? dataKesehatan.AHH + ' tahun' : '-'}</div>
-      </div>
-    `;
-  } else if (indikatorTerpilih === 'IMUNISASI') {
-    indikatorHTML = `
-      <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #3b82f6;">
-        <div style="font-size: 8px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; margin-bottom: 2px;">💉 Cakupan Imunisasi Dasar Lengkap</div>
-        <div style="font-size: 16px; font-weight: 900; color: #2563eb;">${dataKesehatan.IMUNISASI ? dataKesehatan.IMUNISASI + '%' : '-'}</div>
-      </div>
-    `;
-  } else if (indikatorTerpilih === 'SANITASI') {
-    indikatorHTML = `
-      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #a855f7;">
-        <div style="font-size: 8px; font-weight: 900; color: #581c87; text-transform: uppercase; margin-bottom: 2px;">🚰 Akses Sanitasi Layak</div>
-        <div style="font-size: 16px; font-weight: 900; color: #9333ea;">${dataKesehatan.SANITASI ? dataKesehatan.SANITASI + '%' : '-'}</div>
-      </div>
-    `;
-  }
+                  // Build popup content dynamically based on selected indicator
+                  let indikatorHTML = '';
+                  
+                  if (indikatorTerpilih === 'SEMUA') {
+                    indikatorHTML = `
+                      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #10b981;">
+                        <div style="font-size: 7px; font-weight: 900; color: #14532d; text-transform: uppercase; margin-bottom: 1px;">📈 Harapan Hidup</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #16a34a;">${dataKesehatan.AHH ? dataKesehatan.AHH + ' th' : '-'}</div>
+                      </div>
+                      <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #3b82f6;">
+                        <div style="font-size: 7px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; margin-bottom: 1px;">💉 Imunisasi</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #2563eb;">${dataKesehatan.IMUNISASI ? dataKesehatan.IMUNISASI + '%' : '-'}</div>
+                      </div>
+                      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 6px; border-radius: 6px; border-left: 2px solid #a855f7;">
+                        <div style="font-size: 7px; font-weight: 900; color: #581c87; text-transform: uppercase; margin-bottom: 1px;">🚰 Sanitasi</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #9333ea;">${dataKesehatan.SANITASI ? dataKesehatan.SANITASI + '%' : '-'}</div>
+                      </div>
+                    `;
+                  } else if (indikatorTerpilih === 'AHH') {
+                    indikatorHTML = `
+                      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #10b981;">
+                        <div style="font-size: 8px; font-weight: 900; color: #14532d; text-transform: uppercase; margin-bottom: 2px;">📈 Angka Harapan Hidup</div>
+                        <div style="font-size: 16px; font-weight: 900; color: #16a34a;">${dataKesehatan.AHH ? dataKesehatan.AHH + ' tahun' : '-'}</div>
+                      </div>
+                    `;
+                  } else if (indikatorTerpilih === 'IMUNISASI') {
+                    indikatorHTML = `
+                      <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                        <div style="font-size: 8px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; margin-bottom: 2px;">💉 Cakupan Imunisasi Dasar Lengkap</div>
+                        <div style="font-size: 16px; font-weight: 900; color: #2563eb;">${dataKesehatan.IMUNISASI ? dataKesehatan.IMUNISASI + '%' : '-'}</div>
+                      </div>
+                    `;
+                  } else if (indikatorTerpilih === 'SANITASI') {
+                    indikatorHTML = `
+                      <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); padding: 8px; border-radius: 8px; border-left: 3px solid #a855f7;">
+                        <div style="font-size: 8px; font-weight: 900; color: #581c87; text-transform: uppercase; margin-bottom: 2px;">🚰 Akses Sanitasi Layak</div>
+                        <div style="font-size: 16px; font-weight: 900; color: #9333ea;">${dataKesehatan.SANITASI ? dataKesehatan.SANITASI + '%' : '-'}</div>
+                      </div>
+                    `;
+                  }
 
-  const isiPopup = `
-    <div style="font-family: inherit; min-width: 280px; max-width: 280px; color: #1e293b; padding: 4px;">
-      <div style="background: linear-gradient(135deg, ${warna} 0%, ${warna}dd 100%); color: white; padding: 8px; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;">${analisis.nama_provinsi}</div>
-        
-        <div style="background: rgba(255,255,255,0.2); border-radius: 5px; padding: 5px; margin-top: 5px;">
-          <div style="font-size: 7px; font-weight: 800; opacity: 0.9; text-transform: uppercase; margin-bottom: 2px;">INDEKS BAHAYA</div>
-          <div style="background: rgba(255,255,255,0.3); height: 12px; border-radius: 6px; overflow: hidden; position: relative;">
-            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to right, #10b981 0%, #10b981 30%, #f59e0b 30%, #f59e0b 60%, #ef4444 60%, #ef4444 100%);"></div>
-            <div style="position: absolute; top: 50%; transform: translateY(-50%); left: ${analisis.health_index}%; width: 2px; height: 16px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
-          </div>
-          <div style="text-align: center; margin-top: 3px; font-size: 10px; font-weight: 900;">Nilai: ${analisis.health_index}</div>
-        </div>
-      </div>
+                  const isiPopup = `
+                    <div style="font-family: inherit; min-width: 280px; max-width: 280px; color: #1e293b; padding: 4px;">
+                      <div style="background: linear-gradient(135deg, ${warna} 0%, ${warna}dd 100%); color: white; padding: 8px; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;">${analisis.nama_provinsi}</div>
+                        
+                        <div style="background: rgba(255,255,255,0.2); border-radius: 5px; padding: 5px; margin-top: 5px;">
+                          <div style="font-size: 7px; font-weight: 800; opacity: 0.9; text-transform: uppercase; margin-bottom: 2px;">INDEKS BAHAYA</div>
+                          <div style="background: rgba(255,255,255,0.3); height: 12px; border-radius: 6px; overflow: hidden; position: relative;">
+                            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to right, #10b981 0%, #10b981 30%, #f59e0b 30%, #f59e0b 60%, #ef4444 60%, #ef4444 100%);"></div>
+                            <div style="position: absolute; top: 50%; transform: translateY(-50%); left: ${analisis.health_index}%; width: 2px; height: 16px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+                          </div>
+                          <div style="text-align: center; margin-top: 3px; font-size: 10px; font-weight: 900;">Nilai: ${analisis.health_index}</div>
+                        </div>
+                      </div>
 
-      <div style="padding: 0 2px;">
-        <div style="text-align: center; margin-bottom: 6px;">
-          <span style="background: ${warna}; color: white; padding: 4px 12px; border-radius: 10px; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            ${indikatorTerpilih === 'SEMUA' ? analisis.kategori : indikatorTerpilih}
-          </span>
-        </div>
+                      <div style="padding: 0 2px;">
+                        <div style="text-align: center; margin-bottom: 6px;">
+                          <span style="background: ${warna}; color: white; padding: 4px 12px; border-radius: 10px; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            ${kategoriSaatIni}
+                          </span>
+                        </div>
 
-        <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">📊 INDIKATOR</div>
-        <div style="display: grid; grid-template-columns: 1fr; gap: 4px; margin-bottom: 8px;">
-          ${indikatorHTML}
-        </div>
+                        <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">📊 INDIKATOR</div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 4px; margin-bottom: 8px;">
+                          ${indikatorHTML}
+                        </div>
 
-        <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">💡 ANALISIS</div>
-        <div style="font-size: 9px; color: #334155; line-height: 1.4; background: #f8fafc; padding: 6px; border-radius: 5px; border-left: 2px solid ${warna};">${wawasan}</div>
-      </div>
-    </div>
-  `;
-  lapisan.bindPopup(isiPopup, { maxWidth: 300, maxHeight: 400 });
-}}
+                        <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">💡 ANALISIS</div>
+                        <div style="font-size: 9px; color: #334155; line-height: 1.4; background: #f8fafc; padding: 6px; border-radius: 5px; border-left: 2px solid ${warna};">${wawasan}</div>
+                      </div>
+                    </div>
+                  `;
+                  lapisan.bindPopup(isiPopup, { maxWidth: 300, maxHeight: 400 });
+                }}
               />
             )}
           </KontainerPeta>
@@ -1104,114 +1164,114 @@ export default function KesehatanPage() {
             </div>
 
             {/* TABEL PANEL */}
-<div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelTabelTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-  <div className="p-6">
-    <div className="flex justify-between items-center mb-4">
-      <div>
-        <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Kesehatan</h3>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">
-          {dataTerfilter.length} Wilayah
-        </p>
-      </div>
-      
-      <div className="flex gap-2">
-        <div className="relative">
-          <button 
-            onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
-          >
-            <Download size={12} /> UNDUH
-          </button>
+            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelTabelTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Kesehatan</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">
+                      {dataTerfilter.length} Wilayah
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <button 
+                        onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
+                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
+                      >
+                        <Download size={12} /> UNDUH
+                      </button>
 
-          {menuUnduhTerbuka && (
-            <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-              {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
-                <button 
-                  key={format} 
-                  onClick={() => eksporData(format)}
-                  className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0"
-                >
-                  <Download size={12} className="inline mr-2 text-blue-500" /> {format}
-                </button>
-              ))}
+                      {menuUnduhTerbuka && (
+                        <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
+                          {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
+                            <button 
+                              key={format} 
+                              onClick={() => eksporData(format)}
+                              className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0"
+                            >
+                              <Download size={12} className="inline mr-2 text-blue-500" /> {format}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button 
+                      onClick={() => setPanelTabelTerbuka(false)}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <X size={18} className="text-slate-500" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[900px]">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
+                        <th className="px-3 py-2 text-center">No</th>
+                        <th className="px-3 py-2">Provinsi</th>
+                        <th className="px-3 py-2 text-center">Indeks</th>
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'AHH') && (
+                          <th className="px-3 py-2 text-center">AHH</th>
+                        )}
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'IMUNISASI') && (
+                          <th className="px-3 py-2 text-center">Imunisasi</th>
+                        )}
+                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'SANITASI') && (
+                          <th className="px-3 py-2 text-center">Sanitasi</th>
+                        )}
+                        <th className="px-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {dataTerfilter.map((fitur, indeks) => {
+                        const data = fitur.properties.health_analysis;
+                        const dataKesehatan = data.data_kesehatan || {};
+                        // Gunakan kategori yang dihitung berdasarkan indikator terpilih
+                        const kategoriSaatIni = hitungKategoriDariIndikator(fitur, indikatorTerpilih) || data.kategori;
+                        const warna = KATEGORI[kategoriSaatIni]?.warna || data.warna || "#cbd5e1";
+                        
+                        return (
+                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
+                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">
+                                {data.health_index}
+                              </span>
+                            </td>
+                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'AHH') && (
+                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                {dataKesehatan.AHH ? `${dataKesehatan.AHH} th` : '-'}
+                              </td>
+                            )}
+                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'IMUNISASI') && (
+                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                {dataKesehatan.IMUNISASI ? `${dataKesehatan.IMUNISASI}%` : '-'}
+                              </td>
+                            )}
+                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'SANITASI') && (
+                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                {dataKesehatan.SANITASI ? `${dataKesehatan.SANITASI}%` : '-'}
+                              </td>
+                            )}
+                            <td className="px-3 py-2">
+                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" 
+                                    style={{ borderColor: warna + '40', color: warna }}>
+                                {kategoriSaatIni}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-
-        <button 
-          onClick={() => setPanelTabelTerbuka(false)}
-          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-        >
-          <X size={18} className="text-slate-500" />
-        </button>
-      </div>
-    </div>
-
-    <div className="overflow-x-auto">
-      <table className="w-full text-left min-w-[900px]">
-        <thead>
-          <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-            <th className="px-3 py-2 text-center">No</th>
-            <th className="px-3 py-2">Provinsi</th>
-            <th className="px-3 py-2 text-center">Indeks</th>
-            {/* Tampilkan kolom berdasarkan indikator yang dipilih */}
-            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'AHH') && (
-              <th className="px-3 py-2 text-center">AHH</th>
-            )}
-            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'IMUNISASI') && (
-              <th className="px-3 py-2 text-center">Imunisasi</th>
-            )}
-            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'SANITASI') && (
-              <th className="px-3 py-2 text-center">Sanitasi</th>
-            )}
-            <th className="px-3 py-2">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {dataTerfilter.map((fitur, indeks) => {
-            const data = fitur.properties.health_analysis;
-            const dataKesehatan = data.data_kesehatan || {};
-            const warna = hitungWarnaIndikator(fitur);
-            
-            return (
-              <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                <td className="px-3 py-2 text-center">
-                  <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">
-                    {data.health_index}
-                  </span>
-                </td>
-                {/* Tampilkan data berdasarkan indikator yang dipilih */}
-                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'AHH') && (
-                  <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                    {dataKesehatan.AHH ? `${dataKesehatan.AHH} th` : '-'}
-                  </td>
-                )}
-                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'IMUNISASI') && (
-                  <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                    {dataKesehatan.IMUNISASI ? `${dataKesehatan.IMUNISASI}%` : '-'}
-                  </td>
-                )}
-                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'SANITASI') && (
-                  <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                    {dataKesehatan.SANITASI ? `${dataKesehatan.SANITASI}%` : '-'}
-                  </td>
-                )}
-                <td className="px-3 py-2">
-                  <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" 
-                        style={{ borderColor: warna + '40', color: warna }}>
-                    {data.kategori}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
 
             {/* KEBIJAKAN PANEL */}
             <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelKebijakanTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
@@ -1244,7 +1304,8 @@ export default function KesehatanPage() {
                       {dataTerfilter.map((fitur, indeks) => {
                         const data = fitur.properties.health_analysis;
                         const rekUtama = data.rekomendasi?.[0];
-                        const warna = hitungWarnaIndikator(fitur);
+                        const kategoriSaatIni = hitungKategoriDariIndikator(fitur, indikatorTerpilih) || data.kategori;
+                        const warna = KATEGORI[kategoriSaatIni]?.warna || data.warna || "#cbd5e1";
                         
                         return (
                           <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
@@ -1253,13 +1314,13 @@ export default function KesehatanPage() {
                             <td className="px-3 py-2">
                               <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" 
                                     style={{ borderColor: warna + '40', color: warna }}>
-                                {data.kategori}
+                                {kategoriSaatIni}
                               </span>
                             </td>
                             <td className="px-3 py-2">
                               <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                                data.kategori === 'KRITIS' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                data.kategori === 'WASPADA' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                kategoriSaatIni === 'KRITIS' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                kategoriSaatIni === 'WASPADA' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
                                 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                               }`}>
                                 {rekUtama?.title || "NORMAL"}
@@ -1399,16 +1460,16 @@ export default function KesehatanPage() {
                       </p>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}72 tahun (Skor: 100)</div>
+                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik (STABIL)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}70 tahun</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">68-72 tahun (Skor: 70)</div>
+                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang (WASPADA)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">65-70 tahun</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}68 tahun (Skor: 40)</div>
+                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah (KRITIS)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}65 tahun</div>
                         </div>
                       </div>
                     </div>
@@ -1428,16 +1489,16 @@ export default function KesehatanPage() {
                       </p>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}90% (Skor: 100)</div>
+                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik (STABIL)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}90%</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">80-90% (Skor: 70)</div>
+                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang (WASPADA)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">80-90%</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}80% (Skor: 40)</div>
+                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah (KRITIS)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}80%</div>
                         </div>
                       </div>
                     </div>
@@ -1457,16 +1518,16 @@ export default function KesehatanPage() {
                       </p>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}85% (Skor: 100)</div>
+                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Baik (STABIL)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}85%</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">70-85% (Skor: 70)</div>
+                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang (WASPADA)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">70-85%</div>
                         </div>
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}70% (Skor: 40)</div>
+                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah (KRITIS)</div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}70%</div>
                         </div>
                       </div>
                     </div>
