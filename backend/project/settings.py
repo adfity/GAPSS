@@ -151,8 +151,12 @@ STATIC_URL = 'static/'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',  # ← ubah jadi AllowAny
+    ),
 }
 
 SIMPLE_JWT = {
@@ -198,6 +202,8 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 # Halaman tujuan setelah login sosial berhasil
 LOGIN_REDIRECT_URL = '/accounts/social/callback/'
