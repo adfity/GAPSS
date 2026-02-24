@@ -18,36 +18,36 @@ client = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 
 
-# KONFIGURASI INDIKATOR KESEHATAN - MENGGUNAKAN DATA YANG DISEDIAKAN
+# KONFIGURASI INDIKATOR KESEHATAN
 INDIKATOR_KESEHATAN = {
     "AHH": {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/501/th/124/key/{key}/",
         "nama": "Angka Harapan Hidup",
         "satuan": "tahun",
-        "threshold_baik": 72,      # > 72 tahun = baik
-        "threshold_sedang": 68,    # 68-72 tahun = sedang
+        "threshold_baik": 72,
+        "threshold_sedang": 68,
         "bobot": 0.40,
-        "reverse": False,  # Higher is better
+        "reverse": False,
         "penjelasan": "Indikator utama kesehatan populasi yang mencerminkan kualitas layanan kesehatan, nutrisi, dan kondisi sanitasi"
     },
     "IMUNISASI": {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/2280/th/124/key/{key}/",
         "nama": "Cakupan Imunisasi Dasar Lengkap",
         "satuan": "%",
-        "threshold_baik": 90,      # > 90% = baik
-        "threshold_sedang": 80,    # 80-90% = sedang
+        "threshold_baik": 90,
+        "threshold_sedang": 80,
         "bobot": 0.35,
-        "reverse": False,  # Higher is better
+        "reverse": False,
         "penjelasan": "Mencerminkan efektivitas program preventif kesehatan, terutama untuk melindungi bayi dan anak dari penyakit menular"
     },
     "SANITASI": {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/847/th/125/key/{key}/",
         "nama": "Akses Sanitasi Layak",
         "satuan": "%",
-        "threshold_baik": 85,      # > 85% = baik
-        "threshold_sedang": 70,    # 70-85% = sedang
+        "threshold_baik": 85,
+        "threshold_sedang": 70,
         "bobot": 0.25,
-        "reverse": False,  # Higher is better
+        "reverse": False,
         "penjelasan": "Indikator infrastruktur dasar kesehatan lingkungan yang berdampak langsung pada pencegahan penyakit"
     }
 }
@@ -58,9 +58,9 @@ class KesehatanAnalytics:
     
     def __init__(self):
         self.colors = {
-            "KRITIS": "#ef4444",     # Merah - kondisi buruk
-            "WASPADA": "#f59e0b",    # Kuning - perlu perhatian
-            "STABIL": "#10b981"      # Hijau - kondisi baik
+            "KRITIS": "#ef4444",
+            "WASPADA": "#f59e0b",
+            "STABIL": "#10b981"
         }
     
     def fetch_all_data(self):
@@ -91,29 +91,12 @@ class KesehatanAnalytics:
     def parse_province_data(self, raw_data, indikator_key):
         """Parse data per provinsi dari response BPS"""
         province_values = {}
-        province_details = {}  # Menyimpan detail per gender untuk AHH
+        province_details = {} 
         
         if not raw_data:
             return province_values, province_details
         
         try:
-            # Format response BPS:
-            # {
-            #   "datacontent": {
-            #     "15005012121240": 74.09,   # format: vervar_code + var + turvar + tahun + 0
-            #     "12005012121240": 72.3,
-            #     ...
-            #   },
-            #   "vervar": [
-            #     {"val": 1500, "label": "JAMBI"},
-            #     {"val": 1200, "label": "SUMATERA UTARA"},
-            #     ...
-            #   ],
-            #   "turvar": [
-            #     {"val": 1, "label": "Laki-laki"},
-            #     {"val": 2, "label": "Perempuan"}
-            #   ]
-            # }
             
             datacontent = raw_data.get("datacontent", {})
             vervar_list = raw_data.get("vervar", [])
@@ -136,11 +119,6 @@ class KesehatanAnalytics:
             
             # Temporary storage untuk menampung data per gender
             temp_data = {}
-            
-            # Parse datacontent
-            # Key format contoh: "15005012121240" 
-            # - 4 digit pertama = kode provinsi (1500)
-            # - sisanya = var + turvar + tahun + 0
             
             for key, value in datacontent.items():
                 try:
@@ -536,7 +514,6 @@ def analyze_health_bps(request):
             # Update counts
             kategori_counts[kategori] += 1
             
-            # Tambahkan ke feature
             feature_copy = matched_feature.copy()
             props = feature_copy.get('properties', {})
             
@@ -553,7 +530,6 @@ def analyze_health_bps(request):
             feature_copy['properties'] = props
             matched_features.append(feature_copy)
             
-            # Tambahkan ke summary
             analysis_summary.append({
                 'provinsi': prov_name,
                 'kategori': kategori,
@@ -598,7 +574,7 @@ def analyze_health_bps(request):
         sorted_by_index = sorted(
             [s for s in analysis_summary if s['health_index'] is not None],
             key=lambda x: x['health_index']
-        )[:5]  # Top 5 terburuk
+        )[:5]
         
         # Dokumentasi metodologi
         metodologi = {
@@ -683,7 +659,7 @@ def analyze_health_bps(request):
             'source': 'BPS Web API - Direct Endpoints',
             'total_provinces': len(all_provinces),
             'total_matched': len(matched_features),
-            'total_success': len(matched_features),  # Untuk kompatibilitas dengan frontend
+            'total_success': len(matched_features),
             'kategori_distribusi': kategori_counts,
             'matched_features': {
                 "type": "FeatureCollection",
@@ -708,7 +684,7 @@ def analyze_health_bps(request):
                 'SANITASI': parsed_data.get('SANITASI', {})
             },
             'raw_datasets_detail': {
-                'AHH_breakdown': parsed_details.get('AHH', {}),  # Include gender breakdown
+                'AHH_breakdown': parsed_details.get('AHH', {}),
                 'IMUNISASI': parsed_data.get('IMUNISASI', {}),
                 'SANITASI': parsed_data.get('SANITASI', {})
             }

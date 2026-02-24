@@ -27,9 +27,7 @@ client = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 mongo_collection = mongo_db["ai_features"]
 
-# ============================================================================
 # HELPER FUNCTIONS
-# ============================================================================
 
 def calculate_polygon_area(coords):
     """
@@ -63,8 +61,6 @@ def calculate_pixel_polygon_area(segmentation_pixels, lat, lng, capture_size):
     if len(segmentation_pixels) < 3:
         return 0
     
-    # Estimasi meter per pixel berdasarkan latitude dan zoom
-    # Asumsi zoom 18-20 (typical untuk deteksi)
     avg_zoom = 19
     meters_per_pixel = (40075016.686 * abs(math.cos(lat * math.pi / 180))) / (256 * pow(2, avg_zoom))
     
@@ -139,7 +135,7 @@ def get_province_from_coords(lat, lng, boundary_data=None):
 
 def calculate_centroid(coords_list):
     """
-    ✅ NEW FUNCTION
+    NEW FUNCTION
     Hitung titik tengah (centroid) dari polygon koordinat
     
     Args:
@@ -163,9 +159,7 @@ def calculate_centroid(coords_list):
         print(f"Error calculating centroid: {str(e)}")
         return None
 
-# ============================================================================
 # API ENDPOINTS - AI DETECTION & FEATURES
-# ============================================================================
 
 @api_view(['GET'])
 def feature_list(request):
@@ -268,10 +262,6 @@ def run_detection(request):
 
 @api_view(['POST'])
 def save_detection(request):
-    """
-    ✅ MODIFIED: Tambah provinsi otomatis ke detection
-    Simpan hasil deteksi ke MongoDB dengan informasi provinsi
-    """
     try:
         features = request.data.get('features', [])
 
@@ -285,19 +275,15 @@ def save_detection(request):
                     if len(c) == 2:
                         coords_list.append([float(c[0]), float(c[1])])
                 
-                # Pastikan polygon tertutup (point pertama = point terakhir)
                 if coords_list and coords_list[0] != coords_list[-1]:
                     coords_list.append(coords_list[0])
                     
             except Exception:
                 return Response({"error": "Format koordinat salah"}, status=400)
-
-            # ===== BAGIAN BARU: HITUNG LUAS DAN PROVINSI =====
             
             # Hitung luas dari koordinat geografis
             luas_m2 = calculate_polygon_area(coords_list)
 
-            # Cari provinsi dari centroid polygon ✅ NEW
             provinsi = None
             centroid = calculate_centroid(coords_list)
             if centroid:
@@ -305,18 +291,15 @@ def save_detection(request):
                 provinsi = get_province_from_coords(avg_lat, avg_lng)
                 print(f"✓ Deteksi di ({avg_lat:.4f}, {avg_lng:.4f}) → Provinsi: {provinsi}")
 
-            # ===== AKHIR BAGIAN BARU =====
-
             feature_uuid = str(uuid.uuid4())
 
-            # Siapkan document untuk MongoDB ✅ DENGAN PROVINSI
             mongo_document = {
                 "feature_id": feature_uuid,
                 "user_id": request.user.id if request.user.is_authenticated else None,
                 "nama": item.get('nama'),
                 "kategori": item.get('kategori'),
                 "confidence_score": item.get('confidence_score'),
-                "provinsi": provinsi,  # ✅ FIELD BARU - Top Level
+                "provinsi": provinsi,
                 "location": {
                     "type": "Polygon",
                     "coordinates": [coords_list]
@@ -325,9 +308,9 @@ def save_detection(request):
                     **item.get('metadata', {}),
                     "luas_estimasi": round(luas_m2, 2),
                     "satuan": "m2",
-                    "provinsi": provinsi,  # ✅ FIELD BARU - Di Metadata
-                    "centroid_lat": centroid[0] if centroid else None,  # ✅ OPTIONAL
-                    "centroid_lng": centroid[1] if centroid else None,  # ✅ OPTIONAL
+                    "provinsi": provinsi,
+                    "centroid_lat": centroid[0] if centroid else None,
+                    "centroid_lng": centroid[1] if centroid else None,
                 },
                 "created_at": datetime.now().isoformat()
             }
@@ -349,7 +332,6 @@ def save_detection(request):
 
 @api_view(['DELETE'])
 def delete_feature(request, feature_id):
-    """Hapus feature dari database (ORIGINAL)"""
     try:
         result = mongo_collection.delete_one({"feature_id": feature_id})
         
@@ -381,18 +363,10 @@ def update_feature_mongo(request, feature_id):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-# ============================================================================
-# OPTIONAL: NEW ENDPOINTS FOR PROVINCE FEATURES
-# ============================================================================
+# OPTIONAL: ENDPOINTS FOR PROVINCE FEATURES
 
 @api_view(['GET'])
 def features_by_province(request):
-    """
-    ✅ NEW ENDPOINT
-    Ambil semua feature yang terdeteksi di provinsi tertentu
-    
-    Usage: /api/features-by-province/?provinsi=DKI%20Jakarta
-    """
     try:
         provinsi = request.query_params.get('provinsi')
         
@@ -418,12 +392,6 @@ def features_by_province(request):
 
 @api_view(['GET'])
 def provinces_summary(request):
-    """
-    ✅ NEW ENDPOINT
-    Dapatkan ringkasan semua deteksi per provinsi
-    
-    Usage: /api/provinces-summary/
-    """
     try:
         # Aggregate deteksi per provinsi
         pipeline = [
@@ -454,13 +422,10 @@ def provinces_summary(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-# ============================================================================
 # RBI DATA ENDPOINTS (ORIGINAL)
-# ============================================================================
 
 @api_view(['GET'])
 def rbi_pendidikan_list(request):
-    """List RBI Pendidikan (ORIGINAL)"""
     wilayah_query = request.query_params.get('wilayah', None)
     
     query = {}
@@ -492,13 +457,10 @@ def rbi_kesehatan_list(request):
         "features": features
     })
 
-# ============================================================================
 # BOUNDARY DATA ENDPOINTS (ORIGINAL)
-# ============================================================================
 
 @api_view(['GET'])
 def batas_provinsi(request):
-    """Get boundary provinsi data (ORIGINAL)"""
     try:
         cursor = mongo_db["batas_provinsi"].find({}, {'_id': 0})
         features = list(cursor)
@@ -511,7 +473,6 @@ def batas_provinsi(request):
     
 @api_view(['GET'])
 def batas_kabupaten(request):
-    """Get boundary kabupaten data (ORIGINAL)"""
     try:
         cursor = mongo_db["batas_kabupaten"].find({}, {'_id': 0})
         features = list(cursor)

@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 
-# ✅ TAMBAHAN IMPORT UNTUK DOWNLOAD XLSX
+# download xlsx
 import io
 from django.http import HttpResponse
 from openpyxl import Workbook
@@ -61,10 +61,7 @@ INDIKATOR_PENDIDIKAN = {
 }
 
 
-# ============================================================
 # ✅ HELPER: STYLE OPENPYXL
-# ============================================================
-
 def _style_header(ws, row_num, col_count, title, subtitle=None):
     """Tambah header biru dengan judul dan subtitle opsional"""
     COLOR_HEADER = "1F4E79"
@@ -90,7 +87,7 @@ def _style_header(ws, row_num, col_count, title, subtitle=None):
     else:
         row_num += 1
 
-    return row_num  # row berikutnya setelah header
+    return row_num
 
 
 def _style_col_headers(ws, row_num, headers, col_widths=None):
@@ -117,9 +114,9 @@ def _style_col_headers(ws, row_num, headers, col_widths=None):
 
 def _write_data_rows(ws, start_row, data_rows, number_cols=None, highlight_last=True):
     """Tulis baris data dengan alternating row color"""
-    COLOR_EVEN = "DEEAF1"   # Biru muda
-    COLOR_ODD = "FFFFFF"    # Putih
-    COLOR_TOTAL = "FFF2CC"  # Kuning untuk baris total/terakhir
+    COLOR_EVEN = "DEEAF1" 
+    COLOR_ODD = "FFFFFF"
+    COLOR_TOTAL = "FFF2CC"
 
     thin = Side(style="thin", color="CCCCCC")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -173,10 +170,7 @@ def _add_source_footer(ws, row_num, col_count, source_text, timestamp=None):
     ws.row_dimensions[row_num].height = 16
 
 
-# ============================================================
-# ✅ ENDPOINT: DOWNLOAD XLSX RLS
-# ============================================================
-
+# ENDPOINT: DOWNLOAD XLSX RLS
 @api_view(['POST'])
 def download_rls_xlsx(request):
     """Download dataset RLS (Rata-rata Lama Sekolah) sebagai file XLSX berformat bagus"""
@@ -244,11 +238,7 @@ def download_rls_xlsx(request):
         traceback.print_exc()
         return Response({"error": str(e)}, status=500)
 
-
-# ============================================================
-# ✅ ENDPOINT: DOWNLOAD XLSX APS
-# ============================================================
-
+# ENDPOINT: DOWNLOAD XLSX APS
 @api_view(['POST'])
 def download_aps_xlsx(request):
     """Download dataset APS (Angka Partisipasi Sekolah) per kelompok umur sebagai XLSX"""
@@ -311,10 +301,7 @@ def download_aps_xlsx(request):
         return Response({"error": str(e)}, status=500)
 
 
-# ============================================================
-# ✅ ENDPOINT: DOWNLOAD XLSX RASIO (SD, SMP, SMA, SMK — 4 sheet)
-# ============================================================
-
+# ENDPOINT: DOWNLOAD XLSX RASIO (SD, SMP, SMA, SMK — 4 sheet)
 @api_view(['POST'])
 def download_rasio_xlsx(request):
     """Download dataset Rasio Murid-Guru (SD, SMP, SMA, SMK) dalam 1 file XLSX dengan 4 sheet"""
@@ -333,7 +320,7 @@ def download_rasio_xlsx(request):
         ]
 
         wb = Workbook()
-        wb.remove(wb.active)  # hapus sheet default kosong
+        wb.remove(wb.active)
 
         for sheet_name, data_dict, label_panjang in JENJANG_CONFIG:
             ws = wb.create_sheet(title=sheet_name)
@@ -385,10 +372,7 @@ def download_rasio_xlsx(request):
         return Response({"error": str(e)}, status=500)
 
 
-# ============================================================
 # CLASS & FUNGSI YANG SUDAH ADA (TIDAK DIUBAH)
-# ============================================================
-
 class PendidikanAnalytics:
     """Model analisis pendidikan dengan data BPS - RUMUS VALIDATED"""
     

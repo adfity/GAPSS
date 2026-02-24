@@ -18,16 +18,16 @@ client = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 
 
-# KONFIGURASI INDIKATOR EKONOMI - MENGGUNAKAN DATA YANG DISEDIAKAN
+# KONFIGURASI INDIKATOR EKONOMI
 INDIKATOR_EKONOMI = {
     "PDRB": {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/534/th/125/key/{key}/",
         "nama": "PDRB Atas Dasar Harga Berlaku Menurut Pengeluaran",
         "satuan": "Milyar Rupiah",
-        "threshold_tinggi": 75000,      # > Rp75 miliar = tinggi
-        "threshold_sedang": 50000,      # Rp50-75 miliar = sedang
+        "threshold_tinggi": 75000,
+        "threshold_sedang": 50000,
         "bobot": 0.40,
-        "reverse": False,  # Higher is better
+        "reverse": False,
         "penjelasan": "Produk Domestik Regional Bruto yang mencerminkan kapasitas ekonomi daerah dan output ekonomi total",
         "definisi_lengkap": "PDRB adalah nilai tambah yang dihasilkan oleh semua kegiatan ekonomi di sebuah daerah. Ini mencakup pengeluaran untuk konsumsi rumah tangga, investasi, pengeluaran pemerintah, dan net ekspor. PDRB menunjukkan kekuatan ekonomi daerah secara keseluruhan.",
         "alasan_pemilihan": "PDRB dipilih karena merupakan indikator output ekonomi yang paling komprehensif. Semakin besar PDRB menunjukkan ekonomi daerah lebih kuat, terintegrasi dengan baik, dan memiliki daya saing yang tinggi di pasar nasional maupun global.",
@@ -57,10 +57,10 @@ INDIKATOR_EKONOMI = {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/192/th/125/key/{key}/",
         "nama": "Persentase Penduduk Miskin",
         "satuan": "%",
-        "threshold_rendah": 7,          # < 7% = rendah (baik)
-        "threshold_sedang": 12,         # 7-12% = sedang
+        "threshold_rendah": 7,
+        "threshold_sedang": 12,
         "bobot": 0.40,
-        "reverse": True,  # Lower is better
+        "reverse": True,
         "penjelasan": "Persentase penduduk yang hidup di bawah garis kemiskinan yang mencerminkan tingkat kesejahteraan masyarakat",
         "definisi_lengkap": "Kemiskinan diukur sebagai persentase penduduk yang konsumsi per bulannya di bawah garis kemiskinan yang ditetapkan BPS. Indikator ini mencerminkan keberhasilan pemerintah dalam meningkatkan kesejahteraan masyarakat dan distribusi manfaat pertumbuhan ekonomi.",
         "alasan_pemilihan": "Kemiskinan dipilih karena menunjukkan tingkat kesejahteraan dan inklusivitas pertumbuhan ekonomi. Pertumbuhan ekonomi yang tinggi hanya bermakna jika manfaatnya terdistribusi kepada masyarakat luas.",
@@ -91,10 +91,10 @@ INDIKATOR_EKONOMI = {
         "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/793/th/123/key/{key}/",
         "nama": "Realisasi Investasi PMDN",
         "satuan": "Milyar Rupiah",
-        "threshold_tinggi": 10000,      # > Rp10 triliun = tinggi
-        "threshold_sedang": 5000,       # Rp5-10 triliun = sedang
+        "threshold_tinggi": 10000,
+        "threshold_sedang": 5000,
         "bobot": 0.20,
-        "reverse": False,  # Higher is better
+        "reverse": False,
         "penjelasan": "Investasi Penanaman Modal Dalam Negeri yang menunjukkan kepercayaan investor dan aktivitas ekonomi",
         "definisi_lengkap": "Investasi PMDN adalah realisasi investasi yang dilakukan oleh pengusaha domestik Indonesia. Investasi ini mencakup pembangunan pabrik, infrastruktur, teknologi, dan modal kerja. Investasi mencerminkan ekspektasi investor tentang prospek ekonomi daerah di masa depan.",
         "alasan_pemilihan": "Investasi dipilih karena merupakan leading indicator (indikator terdepan) dari pertumbuhan PDRB. Investasi tinggi hari ini akan menghasilkan PDRB lebih tinggi di masa depan. Selain itu, investasi mencerminkan kepercayaan investor terhadap iklim bisnis, stabilitas sosial, dan kebijakan pemerintah.",
@@ -129,9 +129,9 @@ class EkonomiAnalytics:
     
     def __init__(self):
         self.colors = {
-            "MAJU": "#10b981",           # Hijau - kondisi baik
-            "BERKEMBANG": "#f59e0b",     # Kuning - kondisi menengah
-            "TERTINGGAL": "#ef4444"      # Merah - kondisi tertinggal
+            "MAJU": "#10b981",
+            "BERKEMBANG": "#f59e0b",
+            "TERTINGGAL": "#ef4444"
         }
     
     def fetch_all_data(self):
@@ -175,7 +175,7 @@ class EkonomiAnalytics:
             for item in vervar_list:
                 code = str(item.get("val", ""))
                 label = item.get("label", "")
-                if code and label and code != "9999":  # Skip INDONESIA
+                if code and label and code != "9999":
                     province_code_map[code] = label
             
             # Parse datacontent
@@ -317,7 +317,7 @@ class EkonomiAnalytics:
         """Generate rekomendasi kebijakan ekonomi LENGKAP dan COMPREHENSIVE"""
         recommendations = []
         
-        # ========== REKOMENDASI KATEGORI UTAMA ==========
+        # REKOMENDASI KATEGORI UTAMA
         if kategori == "TERTINGGAL":
             recommendations.append({
                 'priority': 'DARURAT',
@@ -516,7 +516,7 @@ class EkonomiAnalytics:
                 ]
             })
         
-        # ========== REKOMENDASI SPESIFIK PER INDIKATOR ==========
+        # REKOMENDASI SPESIFIK PER INDIKATOR
         
         # PDRB RENDAH
         pdrb = data_ekonomi.get("PDRB")
@@ -747,7 +747,7 @@ def normalize_province_name(name):
         'KEP. RIAU': 'KEPULAUAN RIAU',
     }
     
-    # Cek mapping khusus terlebih dahulu
+    # Cek mapping khusus
     for key, value in special_mappings.items():
         if key in name:
             return value
