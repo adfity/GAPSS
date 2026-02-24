@@ -221,7 +221,8 @@ export default function GeoDetectionPanel({
           metadata: {
             capture_size: obj.capture_size,
             zoom_level: zoomLevel,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            luas_m2: obj.luas_m2  // ✅ BARU: Mengirim luas langsung dari deteksi
           }
         };
       });
@@ -266,7 +267,7 @@ export default function GeoDetectionPanel({
           <h3 className="font-black text-lg uppercase tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Scan size={22}/> GeoAI Detection
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">AI-powered object detection</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">AI-powered object detection dengan provinsi otomatis</p>
         </div>
 
         {/* CONTENT */}
