@@ -22,14 +22,11 @@ class RegisterView(generics.CreateAPIView):
 class LoginView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
-# INI HARUS DI LUAR CLASS (sejajar dengan kata 'class')
 def social_login_callback(request):
     if request.user.is_authenticated:
         refresh = RefreshToken.for_user(request.user)
-        # Ambil first_name, jika kosong gunakan username
         name = request.user.first_name or request.user.username
         
-        # Tambahkan parameter &name= ke URL
         url = f"http://localhost:3000/callback/?access={str(refresh.access_token)}&refresh={str(refresh)}&name={name}"
         return redirect(url)
     return redirect("http://localhost:3000/login?error=failed")

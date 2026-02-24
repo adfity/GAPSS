@@ -8,7 +8,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        # HAPUS 'role' dari sini agar tidak muncul di form/input API
         fields = ('first_name', 'last_name', 'email', 'password')
 
     def create(self, validated_data):
@@ -26,7 +25,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Tambahkan data kustom ke respon login
         data['email'] = self.user.email
         data['role'] = self.user.role
         data['first_name'] = self.user.first_name
