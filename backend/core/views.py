@@ -10,6 +10,8 @@ import uuid
 from dotenv import load_dotenv
 from datetime import datetime
 import math
+from shapely.geometry import Point, shape
+from shapely.ops import unary_union
 
 load_dotenv()
 
@@ -24,6 +26,10 @@ model = YOLO(MODEL_PATH)
 client = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 mongo_collection = mongo_db["ai_features"]
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
 def calculate_polygon_area(coords):
     """
@@ -76,8 +82,94 @@ def calculate_pixel_polygon_area(segmentation_pixels, lat, lng, capture_size):
     
     return round(area_m2, 2)
 
+def get_province_from_coords(lat, lng, boundary_data=None):
+    """
+    ✅ NEW FUNCTION - CORRECTED
+    Menentukan provinsi dari koordinat lat/lng menggunakan data boundary polygon
+    
+    ⚠️ PERHATIAN: Field nama provinsi adalah 'name' (bukan 'Propinsi')
+    
+    Args:
+        lat (float): Latitude (-90 to 90)
+        lng (float): Longitude (-180 to 180)
+        boundary_data (list, optional): GeoJSON features list dari MongoDB
+    
+    Returns:
+        str: Nama provinsi atau None jika koordinat tidak ditemukan dalam boundary
+    """
+    try:
+        # Jika tidak ada boundary data, ambil dari MongoDB
+        if boundary_data is None:
+            provinsi_collection = mongo_db["batas_provinsi"]
+            boundary_data = list(provinsi_collection.find({}, {'_id': 0}))
+            
+            if not boundary_data:
+                print("⚠️  Warning: Collection batas_provinsi kosong")
+                return None
+        
+        # Buat point dari koordinat (GeoJSON format: [lng, lat])
+        point = Point(lng, lat)
+        
+        # Iterasi setiap feature (provinsi) di boundary data
+        for feature in boundary_data:
+            try:
+                geometry = feature.get('geometry', {})
+                geom_type = geometry.get('type')
+                
+                if geom_type in ['Polygon', 'MultiPolygon']:
+                    # Konversi GeoJSON geometry ke Shapely shape
+                    geom = shape(geometry)
+                    
+                    # Cek apakah point berada dalam polygon
+                    if geom.contains(point):
+                        # ✅ PENTING: Field adalah 'name' bukan 'Propinsi'
+                        provinsi_name = feature.get('properties', {}).get('name', 'Unknown')
+                        return provinsi_name
+                        
+            except Exception as e:
+                print(f"Error processing feature: {str(e)}")
+                continue
+        
+        print(f"⚠️  Koordinat ({lat}, {lng}) tidak ditemukan dalam boundary apapun")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Error in get_province_from_coords: {str(e)}")
+        return None
+
+def calculate_centroid(coords_list):
+    """
+    ✅ NEW FUNCTION
+    Hitung titik tengah (centroid) dari polygon koordinat
+    
+    Args:
+        coords_list (list): List koordinat [[lng1, lat1], [lng2, lat2], ...]
+    
+    Returns:
+        tuple: (lat, lng) centroid atau None jika list kosong
+    """
+    if not coords_list or len(coords_list) < 3:
+        return None
+    
+    try:
+        # Jangan hitung point terakhir jika itu duplikat dari point pertama
+        coords_to_calc = coords_list[:-1] if coords_list[0] == coords_list[-1] else coords_list
+        
+        avg_lng = sum(c[0] for c in coords_to_calc) / len(coords_to_calc)
+        avg_lat = sum(c[1] for c in coords_to_calc) / len(coords_to_calc)
+        
+        return (avg_lat, avg_lng)
+    except Exception as e:
+        print(f"Error calculating centroid: {str(e)}")
+        return None
+
+# ============================================================================
+# API ENDPOINTS - AI DETECTION & FEATURES
+# ============================================================================
+
 @api_view(['GET'])
 def feature_list(request):
+    """List semua features yang terdeteksi (ORIGINAL)"""
     try:
         cursor = mongo_collection.find({}, {'_id': 0}).sort('created_at', -1)
         return Response(list(cursor))
@@ -86,6 +178,7 @@ def feature_list(request):
 
 @api_view(['POST'])
 def run_detection(request):
+    """Jalankan YOLO detection (ORIGINAL)"""
     image_file = request.FILES.get('image')
     lat = float(request.data.get('lat'))
     lng = float(request.data.get('lng'))
@@ -175,11 +268,15 @@ def run_detection(request):
 
 @api_view(['POST'])
 def save_detection(request):
+    """
+    ✅ MODIFIED: Tambah provinsi otomatis ke detection
+    Simpan hasil deteksi ke MongoDB dengan informasi provinsi
+    """
     try:
         features = request.data.get('features', [])
 
         for item in features:
-            raw_coords = item.get('polygon_coords') 
+            raw_coords = item.get('polygon_coords')
             
             try:
                 coords_list = []
@@ -188,42 +285,71 @@ def save_detection(request):
                     if len(c) == 2:
                         coords_list.append([float(c[0]), float(c[1])])
                 
+                # Pastikan polygon tertutup (point pertama = point terakhir)
                 if coords_list and coords_list[0] != coords_list[-1]:
                     coords_list.append(coords_list[0])
+                    
             except Exception:
                 return Response({"error": "Format koordinat salah"}, status=400)
 
+            # ===== BAGIAN BARU: HITUNG LUAS DAN PROVINSI =====
+            
             # Hitung luas dari koordinat geografis
             luas_m2 = calculate_polygon_area(coords_list)
 
+            # Cari provinsi dari centroid polygon ✅ NEW
+            provinsi = None
+            centroid = calculate_centroid(coords_list)
+            if centroid:
+                avg_lat, avg_lng = centroid
+                provinsi = get_province_from_coords(avg_lat, avg_lng)
+                print(f"✓ Deteksi di ({avg_lat:.4f}, {avg_lng:.4f}) → Provinsi: {provinsi}")
+
+            # ===== AKHIR BAGIAN BARU =====
+
             feature_uuid = str(uuid.uuid4())
 
+            # Siapkan document untuk MongoDB ✅ DENGAN PROVINSI
             mongo_document = {
                 "feature_id": feature_uuid,
                 "user_id": request.user.id if request.user.is_authenticated else None,
                 "nama": item.get('nama'),
                 "kategori": item.get('kategori'),
                 "confidence_score": item.get('confidence_score'),
+                "provinsi": provinsi,  # ✅ FIELD BARU - Top Level
                 "location": {
                     "type": "Polygon",
-                    "coordinates": [coords_list] 
+                    "coordinates": [coords_list]
                 },
                 "metadata": {
                     **item.get('metadata', {}),
                     "luas_estimasi": round(luas_m2, 2),
-                    "satuan": "m2"
+                    "satuan": "m2",
+                    "provinsi": provinsi,  # ✅ FIELD BARU - Di Metadata
+                    "centroid_lat": centroid[0] if centroid else None,  # ✅ OPTIONAL
+                    "centroid_lng": centroid[1] if centroid else None,  # ✅ OPTIONAL
                 },
                 "created_at": datetime.now().isoformat()
             }
+            
+            # Insert ke MongoDB
             mongo_collection.insert_one(mongo_document)
+            print(f"✓ Data {item.get('kategori')} di {provinsi} berhasil disimpan")
 
-        return Response({"status": "success", "message": f"{len(features)} objek berhasil disimpan"}, status=201)
+        message = f"{len(features)} objek berhasil disimpan"
+        return Response({
+            "status": "success", 
+            "message": message
+        }, status=201)
+        
     except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
+        error_msg = str(e)
+        print(f"❌ Error in save_detection: {error_msg}")
+        return Response({"error": error_msg}, status=500)
 
 @api_view(['DELETE'])
 def delete_feature(request, feature_id):
+    """Hapus feature dari database (ORIGINAL)"""
     try:
         result = mongo_collection.delete_one({"feature_id": feature_id})
         
@@ -235,6 +361,7 @@ def delete_feature(request, feature_id):
 
 @api_view(['PUT', 'PATCH'])
 def update_feature_mongo(request, feature_id):
+    """Update feature di MongoDB (ORIGINAL)"""
     try:
         new_nama = request.data.get('nama')
         new_kategori = request.data.get('kategori')
@@ -254,9 +381,86 @@ def update_feature_mongo(request, feature_id):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-# RBI DATA
+# ============================================================================
+# OPTIONAL: NEW ENDPOINTS FOR PROVINCE FEATURES
+# ============================================================================
+
+@api_view(['GET'])
+def features_by_province(request):
+    """
+    ✅ NEW ENDPOINT
+    Ambil semua feature yang terdeteksi di provinsi tertentu
+    
+    Usage: /api/features-by-province/?provinsi=DKI%20Jakarta
+    """
+    try:
+        provinsi = request.query_params.get('provinsi')
+        
+        if not provinsi:
+            return Response({"error": "Parameter 'provinsi' diperlukan"}, status=400)
+        
+        # Query MongoDB
+        cursor = mongo_collection.find(
+            {"provinsi": provinsi},
+            {'_id': 0}
+        ).sort('created_at', -1)
+        
+        results = list(cursor)
+        
+        return Response({
+            "provinsi": provinsi,
+            "total": len(results),
+            "features": results
+        })
+        
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+def provinces_summary(request):
+    """
+    ✅ NEW ENDPOINT
+    Dapatkan ringkasan semua deteksi per provinsi
+    
+    Usage: /api/provinces-summary/
+    """
+    try:
+        # Aggregate deteksi per provinsi
+        pipeline = [
+            {
+                "$group": {
+                    "_id": "$provinsi",
+                    "total_deteksi": {"$sum": 1},
+                    "total_luas": {
+                        "$sum": "$metadata.luas_estimasi"
+                    },
+                    "kategori": {"$push": "$kategori"},
+                    "confidence_avg": {
+                        "$avg": "$confidence_score"
+                    }
+                }
+            },
+            {"$sort": {"total_deteksi": -1}}
+        ]
+        
+        results = list(mongo_collection.aggregate(pipeline))
+        
+        return Response({
+            "summary": results,
+            "total_provinsi": len(results),
+            "total_deteksi_overall": sum(r["total_deteksi"] for r in results)
+        })
+        
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+# ============================================================================
+# RBI DATA ENDPOINTS (ORIGINAL)
+# ============================================================================
+
 @api_view(['GET'])
 def rbi_pendidikan_list(request):
+    """List RBI Pendidikan (ORIGINAL)"""
     wilayah_query = request.query_params.get('wilayah', None)
     
     query = {}
@@ -273,6 +477,7 @@ def rbi_pendidikan_list(request):
 
 @api_view(['GET'])
 def rbi_kesehatan_list(request):
+    """List RBI Kesehatan (ORIGINAL)"""
     wilayah_query = request.query_params.get('wilayah', None)
     
     query = {}
@@ -287,9 +492,13 @@ def rbi_kesehatan_list(request):
         "features": features
     })
 
-# BOUNDARY DATA
+# ============================================================================
+# BOUNDARY DATA ENDPOINTS (ORIGINAL)
+# ============================================================================
+
 @api_view(['GET'])
 def batas_provinsi(request):
+    """Get boundary provinsi data (ORIGINAL)"""
     try:
         cursor = mongo_db["batas_provinsi"].find({}, {'_id': 0})
         features = list(cursor)
@@ -302,6 +511,7 @@ def batas_provinsi(request):
     
 @api_view(['GET'])
 def batas_kabupaten(request):
+    """Get boundary kabupaten data (ORIGINAL)"""
     try:
         cursor = mongo_db["batas_kabupaten"].find({}, {'_id': 0})
         features = list(cursor)

@@ -206,7 +206,7 @@ export function SearchLocation({ boundaryData, modeBersih }) {
   );
 }
 
-// TOMBOL MODE BERSIH - REPOSITIONED
+// TOMBOL MODE BERSIH
 export function CleanModeButton({ modeBersih, setModeBersih }) {
   return (
     <div className="absolute top-[170px] left-6 z-[1000]">
@@ -423,7 +423,7 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
   );
 }
 
-// SAVED DATA LAYER - Popup dengan LUAS
+// ✅ SAVED DATA LAYER - DENGAN PROVINSI & INFO LENGKAP
 export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   const handleDelete = async (feature_id) => {
     toast.custom((t) => (
@@ -478,18 +478,70 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
           })}
         >
           <Popup>
-            <div className="p-1 text-center">
-              <p className="font-bold text-sm uppercase text-blue-700">{item.kategori}</p>
-              {item.metadata?.luas_estimasi && (
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  Luas: <span className="font-bold text-green-600">{item.metadata.luas_estimasi} m²</span>
-                </p>
+            <div className="p-2 text-left max-w-xs">
+              {/* KATEGORI */}
+              <p className="font-bold text-sm uppercase text-blue-700 mb-3">
+                {item.kategori}
+              </p>
+
+              {/* ✅ NEW: PROVINSI */}
+              {item.provinsi && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-slate-50 dark:bg-slate-700 rounded">
+                  <span className="text-lg">📍</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-600 dark:text-slate-300 block">
+                      Provinsi
+                    </span>
+                    <span className="text-slate-700 dark:text-slate-200 font-semibold">
+                      {item.provinsi}
+                    </span>
+                  </div>
+                </div>
               )}
+
+              {/* LUAS */}
+              {item.metadata?.luas_estimasi && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                  <span className="text-lg">📏</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-green-600 dark:text-green-400 block">
+                      Luas Estimasi
+                    </span>
+                    <span className="text-green-700 dark:text-green-300 font-bold">
+                      {item.metadata.luas_estimasi} m²
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ NEW: CONFIDENCE SCORE */}
+              {item.confidence_score && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 dark:bg-orange-900/20 rounded">
+                  <span className="text-lg">⭐</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-orange-600 dark:text-orange-400 block">
+                      Akurasi
+                    </span>
+                    <span className="text-orange-700 dark:text-orange-300 font-bold">
+                      {(item.confidence_score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ NEW: CREATED DATE */}
+              {item.created_at && (
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">
+                  {new Date(item.created_at).toLocaleString('id-ID')}
+                </div>
+              )}
+
+              {/* TOMBOL HAPUS */}
               <button 
                 onClick={() => handleDelete(item.feature_id)} 
-                className="mt-2 text-red-500 text-[10px] font-bold hover:text-red-700"
+                className="mt-3 w-full text-red-600 dark:text-red-400 text-xs font-bold hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 py-1.5 rounded transition-colors"
               >
-                HAPUS
+                🗑️ HAPUS
               </button>
             </div>
           </Popup>
@@ -642,7 +694,7 @@ export default function MapStuff(props) {
         getCategoryColor={props.getCategoryColor}
       />
       
-      {/* 5. Persistence Layer (Data dari MongoDB) */}
+      {/* 5. Persistence Layer (Data dari MongoDB) - DENGAN PROVINSI */}
       <SavedDataLayer 
         data={props.data}
         onRefreshData={props.onRefreshData}

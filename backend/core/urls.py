@@ -6,7 +6,7 @@ from . import economy_views
 from core import pangan_views
 
 urlpatterns = [
-    # ============ AI DETECTION & FEATURES ============+
+    # ============ AI DETECTION & FEATURES ============
     path('features/', views.feature_list, name='feature-list'),
     path('run-detection/', views.run_detection, name='run-detection'),
     path('save-detection/', views.save_detection, name='save-detection'),
