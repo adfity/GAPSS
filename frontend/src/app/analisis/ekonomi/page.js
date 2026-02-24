@@ -1,8 +1,8 @@
 "use client";
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
-  Play, Download, AlertCircle, Plus, Minus, ChevronDown, Filter, Save, X, Activity, RotateCcw, Database, ChevronUp, Info, Table, FileText, ClipboardList, Search, Eye, EyeOff
+  Play, Download, AlertCircle, Plus, Minus, ChevronDown, Filter, Save, X, Activity, RotateCcw, Database, ChevronUp, Info, Table, FileText, ClipboardList, Search, Eye, EyeOff, Map
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -15,8 +15,51 @@ const KATEGORI = {
   TERTINGGAL: { warna: "#ef4444", label: "TERTINGGAL", status: "PERLU PERCEPATAN" }
 };
 
+// Konfigurasi Basemap
+const BASEMAPS = {
+  CARTO_LIGHT: {
+    label: "Carto Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-slate-100"
+  },
+  CARTO_DARK: {
+    label: "Carto Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-slate-800"
+  },
+  OSM: {
+    label: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    preview: "bg-green-100"
+  },
+  ESRI_SATELLITE: {
+    label: "Satelit",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: 'Tiles &copy; Esri',
+    preview: "bg-stone-700"
+  },
+  TOPO: {
+    label: "Topografi",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+    preview: "bg-amber-100"
+  },
+  CARTO_VOYAGER: {
+    label: "Voyager",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-blue-50"
+  }
+};
+
 const PUSAT_DEFAULT = [-2.5, 118];
 const ZOOM_DEFAULT = 5;
+const PANEL_HEIGHT_DEFAULT = 340;
+const PANEL_HEIGHT_MIN = 48; // hanya tab bar
+const PANEL_HEIGHT_MAX = 520;
 
 // =====================================================================
 // HELPER: hitung warna & kategori berdasarkan indikator yang dipilih
@@ -71,12 +114,21 @@ export default function EkonomiPage() {
   const [menuFilterTerbuka, setMenuFilterTerbuka] = useState(false);
   const [menuDatasetTerbuka, setMenuDatasetTerbuka] = useState(false);
   const [menuPilihanIndikatorTerbuka, setMenuPilihanIndikatorTerbuka] = useState(false);
+  const [menuBasemapTerbuka, setMenuBasemapTerbuka] = useState(false);
+  const [basemapTerpilih, setBasemapTerpilih] = useState('CARTO_LIGHT');
   
   const [panelInfoTerbuka, setPanelInfoTerbuka] = useState(false);
   const [panelTabelTerbuka, setPanelTabelTerbuka] = useState(false);
   const [panelMetodologiTerbuka, setPanelMetodologiTerbuka] = useState(false);
   const [panelKebijakanTerbuka, setPanelKebijakanTerbuka] = useState(false);
-  
+
+  // --- Drag State untuk bottom panel ---
+  const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT_DEFAULT);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(null);
+  const dragStartHeight = useRef(null);
+  const panelRef = useRef(null);
+
   const [koordinatCursor, setKoordinatCursor] = useState({ lat: 0, lng: 0 });
   const [currentZoom, setCurrentZoom] = useState(ZOOM_DEFAULT);
   
@@ -116,6 +168,62 @@ export default function EkonomiPage() {
     });
     import('leaflet/dist/leaflet.css');
   }, []);
+
+  // =====================================================================
+  // DRAG HANDLER untuk bottom panel
+  // =====================================================================
+  const handleDragStart = useCallback((e) => {
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    dragStartHeight.current = panelHeight;
+    setIsDragging(true);
+  }, [panelHeight]);
+
+  const handleDragMove = useCallback((e) => {
+    if (!isDragging || dragStartY.current === null) return;
+    const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+    const delta = dragStartY.current - clientY; // drag up = positive
+    const newHeight = Math.max(PANEL_HEIGHT_MIN, Math.min(PANEL_HEIGHT_MAX, dragStartHeight.current + delta));
+    setPanelHeight(newHeight);
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    dragStartY.current = null;
+    // Snap: kalau terlalu kecil, tutup panel aktif; kalau cukup besar, buka
+    if (panelHeight < 100) {
+      setPanelInfoTerbuka(false);
+      setPanelTabelTerbuka(false);
+      setPanelMetodologiTerbuka(false);
+      setPanelKebijakanTerbuka(false);
+    }
+  }, [isDragging, panelHeight]);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDragMove, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  // Reset panel height ke default kalau panel baru dibuka
+  const bukaPanel = (setter) => {
+    setPanelInfoTerbuka(false);
+    setPanelTabelTerbuka(false);
+    setPanelMetodologiTerbuka(false);
+    setPanelKebijakanTerbuka(false);
+    setter(true);
+    if (panelHeight < 200) setPanelHeight(PANEL_HEIGHT_DEFAULT);
+  };
 
   const hitungScaleKm = (zoom) => {
     const scales = { 5: 1000, 6: 500, 7: 200, 8: 100, 9: 50, 10: 25 };
@@ -209,7 +317,6 @@ export default function EkonomiPage() {
     setModalAnalisisTerbuka(false);
     setMenuPilihanIndikatorTerbuka(false);
     setSedangMenganalisis(true);
-    // Reset filter kategori setiap kali analisis baru dijalankan
     setKategoriTerpilih('SEMUA');
     const petunjukMemuat = toast.loading(`Mengambil data dari BPS Web API...\nAnalisis: ${pilihan === 'ALL' ? 'Semua Indikator Ekonomi' : pilihan}`);
 
@@ -364,9 +471,6 @@ export default function EkonomiPage() {
     URL.revokeObjectURL(tautan);
   };
 
-  // ============================================================
-  // FIX: Gunakan helper getKategoriByIndikator untuk filter tabel
-  // ============================================================
   const ambilDataTabelTerfilter = () => {
     if (!hasilAnalisis?.matched_features?.features) return [];
     let fitur = hasilAnalisis.matched_features.features;
@@ -375,7 +479,6 @@ export default function EkonomiPage() {
       fitur = fitur.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === kategoriTerpilih);
     }
     
-    // Hanya tampilkan data yang punya nilai untuk indikator yang dipilih
     if (indikatorTerpilih !== 'SEMUA') {
       fitur = fitur.filter(f => {
         const nilai = f.properties?.ekonomi_analysis?.data_ekonomi?.[indikatorTerpilih];
@@ -399,9 +502,6 @@ export default function EkonomiPage() {
   const dataTerfilter = ambilDataTabelTerfilter();
   const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetodologiTerbuka || panelKebijakanTerbuka;
 
-  // ============================================================
-  // FIX: Hitung jumlah kategori berdasarkan indikator aktif
-  // ============================================================
   const hitungKategori = () => {
     if (!hasilAnalisis?.matched_features?.features) return { TERTINGGAL: 0, BERKEMBANG: 0, MAJU: 0 };
     const features = hasilAnalisis.matched_features.features;
@@ -429,7 +529,13 @@ export default function EkonomiPage() {
     return 'linear-gradient(135deg, #64748b 0%, #475569 100%)';
   };
 
+  // Hitung posisi bottom action buttons
+  const bottomPanelEffectiveHeight = adaPanelTerbuka ? panelHeight : 48; // 48 = tab bar
+  const actionButtonBottom = bottomPanelEffectiveHeight + 16;
+
   if (!adalahClient) return null;
+
+  const basemapConfig = BASEMAPS[basemapTerpilih];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
@@ -451,73 +557,30 @@ export default function EkonomiPage() {
             </p>
 
             <div className="space-y-3 mb-6">
-              <button
-                onClick={() => setPilihanIndikator('ALL')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'ALL' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">📊 Semua Indikator</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">PDRB + Kemiskinan + Investasi — Analisis komprehensif ekonomi</div>
-                  </div>
-                  {pilihanIndikator === 'ALL' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
+              {[
+                { key: 'ALL', label: '📊 Semua Indikator', desc: 'PDRB + Kemiskinan + Investasi — Analisis komprehensif ekonomi', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', dot: 'bg-blue-500' },
+                { key: 'PDRB', label: '💹 PDRB Saja', desc: 'Fokus output ekonomi daerah — PDRB Atas Dasar Harga Berlaku', border: 'border-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20', dot: 'bg-yellow-500' },
+                { key: 'KEMISKINAN', label: '👥 Kemiskinan Saja', desc: 'Fokus distribusi kesejahteraan — Persentase Penduduk Miskin', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', dot: 'bg-blue-500' },
+                { key: 'INVESTASI', label: '💰 Investasi Saja', desc: 'Fokus kepercayaan investor — Realisasi Investasi PMDN', border: 'border-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', dot: 'bg-indigo-500' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setPilihanIndikator(opt.key)}
+                  className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === opt.key ? `${opt.border} ${opt.bg}` : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">{opt.label}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{opt.desc}</div>
                     </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('PDRB')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'PDRB' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-yellow-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">💹 PDRB Saja</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus output ekonomi daerah — PDRB Atas Dasar Harga Berlaku</div>
+                    {pilihanIndikator === opt.key && (
+                      <div className={`w-5 h-5 rounded-full ${opt.dot} flex items-center justify-center`}>
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      </div>
+                    )}
                   </div>
-                  {pilihanIndikator === 'PDRB' && (
-                    <div className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('KEMISKINAN')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'KEMISKINAN' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">👥 Kemiskinan Saja</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus distribusi kesejahteraan — Persentase Penduduk Miskin</div>
-                  </div>
-                  {pilihanIndikator === 'KEMISKINAN' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('INVESTASI')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'INVESTASI' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">💰 Investasi Saja</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus kepercayaan investor — Realisasi Investasi PMDN</div>
-                  </div>
-                  {pilihanIndikator === 'INVESTASI' && (
-                    <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
+                </button>
+              ))}
             </div>
 
             <div className="flex gap-3">
@@ -569,8 +632,9 @@ export default function EkonomiPage() {
         {!petaSedangMemuat && KontainerPeta && (
           <KontainerPeta center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
             <LapisanPeta
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              key={basemapTerpilih}
+              url={basemapConfig.url}
+              attribution={basemapConfig.attribution}
             />
             <MouseTracker />
             {hasilAnalisis?.matched_features?.features && (
@@ -579,14 +643,11 @@ export default function EkonomiPage() {
                 data={{ type: "FeatureCollection", features: hasilAnalisis.matched_features.features }}
                 style={(fitur) => {
                   const analisis = fitur.properties?.ekonomi_analysis || {};
-                  // FIX: gunakan kategori yang dihitung berdasarkan indikator aktif
                   const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
                   const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
 
                   let terlihat = true;
-                  // Filter berdasarkan kategori yang relevan dengan indikator saat ini
                   if (kategoriTerpilih !== 'SEMUA' && kategoriAktif !== kategoriTerpilih) terlihat = false;
-                  // Sembunyikan jika tidak ada data untuk indikator yang dipilih
                   if (warna === "#cbd5e1") terlihat = false;
 
                   const isHighlighted = provinsiDipilih === analisis.nama_provinsi;
@@ -718,9 +779,67 @@ export default function EkonomiPage() {
           </div>
         )}
 
+        {/* =====================================================================
+            TOMBOL PILIH BASEMAP (di atas tombol mode bersih kalau ada analisis,
+            atau di posisi mode bersih kalau belum ada analisis)
+        ===================================================================== */}
+        {!modeBersih && (
+          <div className={`absolute left-6 z-[1001] ${hasilAnalisis ? 'top-[215px]' : 'top-[170px]'}`}>
+            <div className="relative">
+              <button
+                onClick={() => setMenuBasemapTerbuka(!menuBasemapTerbuka)}
+                className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5"
+                title="Pilih Basemap"
+              >
+                <Map size={16} />
+              </button>
+
+              {menuBasemapTerbuka && (
+                <div className="absolute left-full ml-2 top-0 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl dark:shadow-slate-900/60 z-[1002] border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <div className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Pilih Basemap</div>
+                  </div>
+                  <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
+                    {Object.entries(BASEMAPS).map(([key, bm]) => (
+                      <button
+                        key={key}
+                        onClick={() => { setBasemapTerpilih(key); setMenuBasemapTerbuka(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group ${
+                          basemapTerpilih === key
+                            ? 'bg-blue-500 text-white shadow-md'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {/* Preview warna */}
+                        <div className={`w-8 h-8 rounded-lg flex-shrink-0 border-2 ${basemapTerpilih === key ? 'border-white/50' : 'border-slate-200 dark:border-slate-600'} ${bm.preview} overflow-hidden relative`}>
+                          {/* Mini grid untuk ilustrasi map */}
+                          <div className="absolute inset-0 opacity-30" style={{
+                            backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                            backgroundSize: '4px 4px'
+                          }}></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[11px] font-black uppercase tracking-wider truncate ${basemapTerpilih === key ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                            {bm.label}
+                          </div>
+                        </div>
+                        {basemapTerpilih === key && (
+                          <div className="w-4 h-4 rounded-full bg-white/30 flex items-center justify-center flex-shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-white"></div>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* SEARCH */}
         {hasilAnalisis && !modeBersih && (
-          <div className="absolute top-[215px] left-6 z-[1000]">
+          <div className="absolute top-[263px] left-6 z-[1000]">
             {searchTerbuka ? (
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
                 <div className="p-2 flex gap-2">
@@ -821,9 +940,12 @@ export default function EkonomiPage() {
           </div>
         )}
 
-        {/* BOTTOM ACTION BUTTONS */}
+        {/* BOTTOM ACTION BUTTONS — posisi dinamis mengikuti tinggi panel */}
         {!modeBersih && (
-          <div className={`absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-300 ${adaPanelTerbuka ? 'bottom-[380px]' : 'bottom-16'}`}>
+          <div
+            className="absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-200"
+            style={{ bottom: `${actionButtonBottom + (adaPanelTerbuka ? 0 : 0)}px` }}
+          >
             <div className="flex gap-3">
               <div className="relative">
                 <button
@@ -837,18 +959,17 @@ export default function EkonomiPage() {
 
                 {menuPilihanIndikatorTerbuka && (
                   <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1003] overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <button onClick={() => jalankanAnalisisBPS('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                      📊 Semua Indikator
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('PDRB')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20">
-                      💹 PDRB Saja
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('KEMISKINAN')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                      👥 Kemiskinan Saja
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('INVESTASI')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">
-                      💰 Investasi Saja
-                    </button>
+                    {[
+                      { key: 'ALL', label: '📊 Semua Indikator' },
+                      { key: 'PDRB', label: '💹 PDRB Saja' },
+                      { key: 'KEMISKINAN', label: '👥 Kemiskinan Saja' },
+                      { key: 'INVESTASI', label: '💰 Investasi Saja' },
+                    ].map((opt, i, arr) => (
+                      <button key={opt.key} onClick={() => jalankanAnalisisBPS(opt.key)}
+                        className={`w-full text-left px-4 py-2 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 ${i < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-700' : ''}`}>
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -867,418 +988,401 @@ export default function EkonomiPage() {
           </div>
         )}
 
-        {/* BOTTOM PANELS */}
+        {/* =====================================================================
+            BOTTOM PANELS — dapat di-drag naik/turun
+        ===================================================================== */}
         {hasilAnalisis && !modeBersih && (
-          <div className="absolute bottom-0 left-0 right-0 z-[1001]">
-
+          <div
+            ref={panelRef}
+            className="absolute bottom-0 left-0 right-0 z-[1001] flex flex-col"
+            style={{ height: adaPanelTerbuka ? `${panelHeight}px` : 'auto' }}
+          >
             {/* INFO PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelInfoTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Activity className="text-blue-500" size={24} />
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis Ekonomi</h2>
+            {panelInfoTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Activity className="text-blue-500" size={24} />
+                      <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis Ekonomi</h2>
+                    </div>
+                    <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                      <X size={18} className="text-slate-500" />
+                    </button>
                   </div>
-                  <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
-                  Analisis data ekonomi nasional menggunakan BPS Web API — Indikator: {indikatorTerpilih} | Total: {hasilAnalisis.total_success} provinsi
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
-                    <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
-                    <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
+                    Analisis data ekonomi nasional menggunakan BPS Web API — Indikator: {indikatorTerpilih} | Total: {hasilAnalisis.total_success} provinsi
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
+                      <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
+                      <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
+                      <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Tertinggal</div>
+                      <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori.TERTINGGAL}</div>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
+                      <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Berkembang</div>
+                      <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori.BERKEMBANG}</div>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
+                      <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Maju</div>
+                      <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori.MAJU}</div>
+                    </div>
                   </div>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
-                    <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Tertinggal</div>
-                    <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori.TERTINGGAL}</div>
-                  </div>
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
-                    <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Berkembang</div>
-                    <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori.BERKEMBANG}</div>
-                  </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
-                    <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Maju</div>
-                    <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori.MAJU}</div>
-                  </div>
-                </div>
 
-                {hasilAnalisis.best_provinces?.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">🏆 5 Ekonomi Terkuat</div>
-                      {hasilAnalisis.best_provinces.map((p, idx) => (
-                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{idx + 1}. {p.provinsi}</span>
-                          <span className="text-[10px] font-black text-green-600 dark:text-green-400">IEK: {p.ekonomi_index}</span>
-                        </div>
-                      ))}
+                  {hasilAnalisis.best_provinces?.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">🏆 5 Ekonomi Terkuat</div>
+                        {hasilAnalisis.best_provinces.map((p, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{idx + 1}. {p.provinsi}</span>
+                            <span className="text-[10px] font-black text-green-600 dark:text-green-400">IEK: {p.ekonomi_index}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider mb-2">⚠️ 5 Perlu Percepatan</div>
+                        {hasilAnalisis.worst_provinces.map((p, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{idx + 1}. {p.provinsi}</span>
+                            <span className="text-[10px] font-black text-red-600 dark:text-red-400">IEK: {p.ekonomi_index}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider mb-2">⚠️ 5 Perlu Percepatan</div>
-                      {hasilAnalisis.worst_provinces.map((p, idx) => (
-                        <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{idx + 1}. {p.provinsi}</span>
-                          <span className="text-[10px] font-black text-red-600 dark:text-red-400">IEK: {p.ekonomi_index}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* TABEL PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelTabelTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Ekonomi Daerah</h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah | Indikator: {indikatorTerpilih}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <button
-                        onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
-                      >
-                        <Download size={12} /> UNDUH
-                      </button>
-                      {menuUnduhTerbuka && (
-                        <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                          {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
-                            <button key={format} onClick={() => eksporData(format)}
-                              className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
-                              <Download size={12} className="inline mr-2 text-blue-500" /> {format}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+            {panelTabelTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Ekonomi Daerah</h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah | Indikator: {indikatorTerpilih}</p>
                     </div>
-                    <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                      <X size={18} className="text-slate-500" />
-                    </button>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <button
+                          onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
+                        >
+                          <Download size={12} /> UNDUH
+                        </button>
+                        {menuUnduhTerbuka && (
+                          <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
+                            {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
+                              <button key={format} onClick={() => eksporData(format)}
+                                className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
+                                <Download size={12} className="inline mr-2 text-blue-500" /> {format}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <X size={18} className="text-slate-500" />
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[900px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2 text-center">Indeks</th>
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && <th className="px-3 py-2 text-center">PDRB</th>}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && <th className="px-3 py-2 text-center">Kemiskinan</th>}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && <th className="px-3 py-2 text-center">Investasi</th>}
-                        <th className="px-3 py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.ekonomi_analysis;
-                        const dataEkonomi = data.data_ekonomi || {};
-                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
-                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">{data.ekonomi_index}</span>
-                            </td>
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
-                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                                Rp{dataEkonomi.PDRB ? (dataEkonomi.PDRB / 1000).toFixed(1) : '-'} T
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
+                          <th className="px-3 py-2 text-center">No</th>
+                          <th className="px-3 py-2">Provinsi</th>
+                          <th className="px-3 py-2 text-center">Indeks</th>
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && <th className="px-3 py-2 text-center">PDRB</th>}
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && <th className="px-3 py-2 text-center">Kemiskinan</th>}
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && <th className="px-3 py-2 text-center">Investasi</th>}
+                          <th className="px-3 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {dataTerfilter.map((fitur, indeks) => {
+                          const data = fitur.properties.ekonomi_analysis;
+                          const dataEkonomi = data.data_ekonomi || {};
+                          const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                          const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                          return (
+                            <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                              <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
+                              <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
+                              <td className="px-3 py-2 text-center">
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">{data.ekonomi_index}</span>
                               </td>
-                            )}
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
-                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                                {dataEkonomi.KEMISKINAN ? dataEkonomi.KEMISKINAN.toFixed(2) + '%' : '-'}
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
+                                <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                  Rp{dataEkonomi.PDRB ? (dataEkonomi.PDRB / 1000).toFixed(1) : '-'} T
+                                </td>
+                              )}
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
+                                <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                  {dataEkonomi.KEMISKINAN ? dataEkonomi.KEMISKINAN.toFixed(2) + '%' : '-'}
+                                </td>
+                              )}
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
+                                <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
+                                  Rp{dataEkonomi.INVESTASI ? (dataEkonomi.INVESTASI / 1000).toFixed(2) : '-'} T
+                                </td>
+                              )}
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
+                                  {kategoriAktif}
+                                </span>
                               </td>
-                            )}
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
-                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                                Rp{dataEkonomi.INVESTASI ? (dataEkonomi.INVESTASI / 1000).toFixed(2) : '-'} T
-                              </td>
-                            )}
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
-                                {kategoriAktif}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* KEBIJAKAN PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelKebijakanTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <ClipboardList className="text-blue-500" size={24} />
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Rekomendasi Kebijakan Ekonomi</h3>
-                  </div>
-                  <button onClick={() => setPanelKebijakanTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[900px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2">Kategori</th>
-                        <th className="px-3 py-2">Prioritas</th>
-                        <th className="px-3 py-2">Rekomendasi Utama</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.ekonomi_analysis;
-                        const rekUtama = data.rekomendasi?.[0];
-                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
-                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
-                                {kategoriAktif}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                                kategoriAktif === 'TERTINGGAL' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                kategoriAktif === 'BERKEMBANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                                'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                              }`}>
-                                {rekUtama?.priority || (kategoriAktif === 'MAJU' ? 'PEMELIHARAAN' : kategoriAktif === 'BERKEMBANG' ? 'TINGGI' : 'DARURAT')}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 max-w-md">
-                              <ul className="space-y-1 text-[10px]">
-                                {rekUtama?.actions?.slice(0, 3).map((action, idx) => (
-                                  <li key={idx} className="text-slate-600 dark:text-slate-300 font-medium">• {action.aksi || action}</li>
-                                )) || <li className="text-slate-400">Pertahankan dan tingkatkan pertumbuhan ekonomi</li>}
-                              </ul>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* METODOLOGI PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelMetodologiTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Metodologi Perhitungan Indeks Ekonomi Komposit (IEK)
-                  </h3>
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <button onClick={() => { setMenuDatasetTerbuka(!menuDatasetTerbuka); }} className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2">
-                        <Download size={12} /> Dataset
-                      </button>
-                      {menuDatasetTerbuka && (
-                        <div className="absolute top-full mt-2 right-0 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                          <button onClick={() => unduhDataset('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            <Database size={14} className="inline mr-2 text-purple-600" /> Semua Dataset
-                          </button>
-                          <button onClick={() => unduhDataset('PDRB')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            💹 Dataset PDRB
-                          </button>
-                          <button onClick={() => unduhDataset('KEMISKINAN')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            👥 Dataset Kemiskinan
-                          </button>
-                          <button onClick={() => unduhDataset('INVESTASI')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
-                            💰 Dataset Investasi
-                          </button>
-                        </div>
-                      )}
+            {panelKebijakanTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <ClipboardList className="text-blue-500" size={24} />
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Rekomendasi Kebijakan Ekonomi</h3>
                     </div>
-                    <button onClick={() => setPanelMetodologiTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                    <button onClick={() => setPanelKebijakanTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                       <X size={18} className="text-slate-500" />
                     </button>
                   </div>
-                </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Indeks Ekonomi Komposit (IEK) menggabungkan 3 indikator kunci ekonomi dengan pembobotan berdasarkan dampak dan relevansi terhadap pembangunan daerah.
-                </p>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 mb-2 uppercase">Formula Perhitungan</h4>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
-                    <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                      IEK = (Skor_PDRB × 0.40) + (Skor_Kemiskinan × 0.40) + (Skor_Investasi × 0.20)
-                    </code>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
+                          <th className="px-3 py-2 text-center">No</th>
+                          <th className="px-3 py-2">Provinsi</th>
+                          <th className="px-3 py-2">Kategori</th>
+                          <th className="px-3 py-2">Prioritas</th>
+                          <th className="px-3 py-2">Rekomendasi Utama</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {dataTerfilter.map((fitur, indeks) => {
+                          const data = fitur.properties.ekonomi_analysis;
+                          const rekUtama = data.rekomendasi?.[0];
+                          const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                          const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                          return (
+                            <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                              <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
+                              <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>
+                                  {kategoriAktif}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                                  kategoriAktif === 'TERTINGGAL' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                  kategoriAktif === 'BERKEMBANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                }`}>
+                                  {rekUtama?.priority || (kategoriAktif === 'MAJU' ? 'PEMELIHARAAN' : kategoriAktif === 'BERKEMBANG' ? 'TINGGI' : 'DARURAT')}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 max-w-md">
+                                <ul className="space-y-1 text-[10px]">
+                                  {rekUtama?.actions?.slice(0, 3).map((action, idx) => (
+                                    <li key={idx} className="text-slate-600 dark:text-slate-300 font-medium">• {action.aksi || action}</li>
+                                  )) || <li className="text-slate-400">Pertahankan dan tingkatkan pertumbuhan ekonomi</li>}
+                                </ul>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">Hasil IEK berkisar 1.0 (terendah) sampai 3.0 (tertinggi)</p>
-                </div>
-
-                <div className="space-y-3">
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border-l-4 border-yellow-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-yellow-900 dark:text-yellow-100 uppercase">💹 PDRB</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold rounded">Bobot: 40%</span>
-                        </div>
-                      </div>
-                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-yellow-300 dark:border-yellow-700 mb-2">
-                        <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 mb-1">Threshold Scoring:</div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                          <div>✓ PDRB &gt; Rp75 miliar → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                          <div>◐ PDRB 50-75 miliar → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                          <div>✗ PDRB &lt; Rp50 miliar → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase">👥 Kemiskinan (REVERSE)</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded">Bobot: 40%</span>
-                        </div>
-                      </div>
-                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-300 dark:border-blue-700 mb-2">
-                        <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 mb-1">Threshold Scoring:</div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                          <div>✓ Kemiskinan &lt; 7% → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                          <div>◐ Kemiskinan 7-12% → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                          <div>✗ Kemiskinan &gt; 12% → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-blue-700 dark:text-blue-300"><strong>Catatan REVERSE:</strong> Semakin rendah kemiskinan semakin baik</p>
-                    </div>
-                  )}
-
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
-                    <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border-l-4 border-indigo-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase">💰 Investasi PMDN</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded">Bobot: 20%</span>
-                        </div>
-                      </div>
-                      <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-indigo-300 dark:border-indigo-700 mb-2">
-                        <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mb-1">Threshold Scoring:</div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
-                          <div>✓ Investasi &gt; Rp10 triliun → <span className="text-green-600">Skor 3 (MAJU)</span></div>
-                          <div>◐ Investasi 5-10 triliun → <span className="text-yellow-600">Skor 2 (BERKEMBANG)</span></div>
-                          <div>✗ Investasi &lt; Rp5 triliun → <span className="text-red-600">Skor 1 (TERTINGGAL)</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Hasil Analisis</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-green-200 dark:border-green-700">
-                      <div className="text-xs font-black text-green-600 dark:text-green-400 uppercase">MAJU</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">IEK ≥ 2.4</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Ekonomi berkembang pesat</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-yellow-200 dark:border-yellow-700">
-                      <div className="text-xs font-black text-yellow-600 dark:text-yellow-400 uppercase">BERKEMBANG</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">1.8 ≤ IEK {'<'} 2.4</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Menuju kemajuan ekonomi</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-red-200 dark:border-red-700">
-                      <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase">TERTINGGAL</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">IEK {'<'} 1.8</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Perlu percepatan pembangunan</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-2">Validitas Metodologi</h4>
-                  <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
-                    PDRB dan Kemiskinan mendapat bobot setara (40%) karena sama-sama krusial dalam mengukur kondisi ekonomi daerah. Investasi sebagai indikator prospektif mendapat 20%.
-                  </p>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
-                    <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Catatan Penting</div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      Analisis memberikan gambaran holistik kondisi ekonomi dengan mempertimbangkan output (PDRB), kesejahteraan (Kemiskinan), dan daya tarik investasi secara berimbang.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Sumber Data</div>
-                  <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
-                    <li>• BPS Web API — PDRB Atas Dasar Harga Berlaku (Var: PDRB)</li>
-                    <li>• BPS Web API — Persentase Penduduk Miskin (Var: Kemiskinan)</li>
-                    <li>• BPS Web API — Realisasi Investasi PMDN (Var: Investasi)</li>
-                  </ul>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* CONTROL BUTTONS BAR */}
-            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 p-3 shadow-2xl">
-              <div className="flex justify-center gap-2">
-                <button
-                  onClick={() => { setPanelInfoTerbuka(!panelInfoTerbuka); setPanelTabelTerbuka(false); setPanelMetodologiTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            {/* METODOLOGI PANEL */}
+            {panelMetodologiTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                      Metodologi IEK
+                    </h3>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <button onClick={() => { setMenuDatasetTerbuka(!menuDatasetTerbuka); }} className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2">
+                          <Download size={12} /> Dataset
+                        </button>
+                        {menuDatasetTerbuka && (
+                          <div className="absolute top-full mt-2 right-0 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
+                            {[
+                              { key: 'ALL', label: 'Semua Dataset', icon: <Database size={14} className="inline mr-2 text-purple-600" /> },
+                              { key: 'PDRB', label: '💹 Dataset PDRB' },
+                              { key: 'KEMISKINAN', label: '👥 Dataset Kemiskinan' },
+                              { key: 'INVESTASI', label: '💰 Dataset Investasi' },
+                            ].map(opt => (
+                              <button key={opt.key} onClick={() => unduhDataset(opt.key)} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
+                                {opt.icon}{opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => setPanelMetodologiTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <X size={18} className="text-slate-500" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+                    <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 mb-2 uppercase">Formula Perhitungan</h4>
+                    <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
+                      <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                        IEK = (Skor_PDRB × 0.40) + (Skor_Kemiskinan × 0.40) + (Skor_Investasi × 0.20)
+                      </code>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'PDRB') && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border-l-4 border-yellow-500">
+                        <h5 className="text-sm font-black text-yellow-900 dark:text-yellow-100 uppercase mb-1">💹 PDRB — Bobot: 40%</h5>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ &gt; Rp75 miliar → <span className="text-green-600">MAJU</span></div>
+                          <div>◐ 50–75 miliar → <span className="text-yellow-600">BERKEMBANG</span></div>
+                          <div>✗ &lt; Rp50 miliar → <span className="text-red-600">TERTINGGAL</span></div>
+                        </div>
+                      </div>
+                    )}
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'KEMISKINAN') && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
+                        <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-1">👥 Kemiskinan (REVERSE) — Bobot: 40%</h5>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ &lt; 7% → <span className="text-green-600">MAJU</span></div>
+                          <div>◐ 7–12% → <span className="text-yellow-600">BERKEMBANG</span></div>
+                          <div>✗ &gt; 12% → <span className="text-red-600">TERTINGGAL</span></div>
+                        </div>
+                      </div>
+                    )}
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'INVESTASI') && (
+                      <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border-l-4 border-indigo-500">
+                        <h5 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase mb-1">💰 Investasi PMDN — Bobot: 20%</h5>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white space-y-1">
+                          <div>✓ &gt; Rp10 triliun → <span className="text-green-600">MAJU</span></div>
+                          <div>◐ 5–10 triliun → <span className="text-yellow-600">BERKEMBANG</span></div>
+                          <div>✗ &lt; Rp5 triliun → <span className="text-red-600">TERTINGGAL</span></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
+                    <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Hasil</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {[
+                        { label: 'MAJU', range: 'IEK ≥ 2.4', color: 'border-green-200 dark:border-green-700', textColor: 'text-green-600 dark:text-green-400', desc: 'Ekonomi berkembang pesat' },
+                        { label: 'BERKEMBANG', range: '1.8 ≤ IEK < 2.4', color: 'border-yellow-200 dark:border-yellow-700', textColor: 'text-yellow-600 dark:text-yellow-400', desc: 'Menuju kemajuan ekonomi' },
+                        { label: 'TERTINGGAL', range: 'IEK < 1.8', color: 'border-red-200 dark:border-red-700', textColor: 'text-red-600 dark:text-red-400', desc: 'Perlu percepatan pembangunan' },
+                      ].map(cat => (
+                        <div key={cat.label} className={`bg-white dark:bg-slate-900 rounded-xl p-3 border ${cat.color}`}>
+                          <div className={`text-xs font-black uppercase ${cat.textColor}`}>{cat.label}</div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">{cat.range}</div>
+                          <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">{cat.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                    <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Sumber Data</div>
+                    <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
+                      <li>• BPS Web API — PDRB Atas Dasar Harga Berlaku</li>
+                      <li>• BPS Web API — Persentase Penduduk Miskin</li>
+                      <li>• BPS Web API — Realisasi Investasi PMDN</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================
+                TAB BAR + DRAG HANDLE
+            ============================================================ */}
+            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 shadow-2xl flex-shrink-0">
+              {/* DRAG HANDLE */}
+              {adaPanelTerbuka && (
+                <div
+                  className={`flex items-center justify-center py-1.5 cursor-row-resize select-none group ${isDragging ? 'bg-blue-50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'} transition-colors`}
+                  onMouseDown={handleDragStart}
+                  onTouchStart={handleDragStart}
+                  title="Drag untuk mengubah tinggi panel"
                 >
-                  <Info size={14} /> Info
-                  {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
+                  <div className={`flex flex-col gap-0.5 transition-opacity ${isDragging ? 'opacity-100' : 'opacity-40 group-hover:opacity-80'}`}>
+                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>
+                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>
+                    <div className="w-5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600 mx-auto"></div>
+                  </div>
+                </div>
+              )}
 
-                <button
-                  onClick={() => { setPanelTabelTerbuka(!panelTabelTerbuka); setPanelInfoTerbuka(false); setPanelMetodologiTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <Table size={14} /> Tabel
-                  {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                <button
-                  onClick={() => { setPanelKebijakanTerbuka(!panelKebijakanTerbuka); setPanelInfoTerbuka(false); setPanelTabelTerbuka(false); setPanelMetodologiTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <ClipboardList size={14} /> Kebijakan
-                  {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                <button
-                  onClick={() => { setPanelMetodologiTerbuka(!panelMetodologiTerbuka); setPanelInfoTerbuka(false); setPanelTabelTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <FileText size={14} /> Metodologi
-                  {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                {adaPanelTerbuka && (
+              {/* TAB BUTTONS */}
+              <div className="p-3 pt-1">
+                <div className="flex justify-center gap-2">
                   <button
-                    onClick={toggleAllPanels}
-                    className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                    onClick={() => { adaPanelTerbuka && panelInfoTerbuka ? setPanelInfoTerbuka(false) : bukaPanel(setPanelInfoTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                   >
-                    <ChevronDown size={14} /> Tutup Semua
+                    <Info size={14} /> Info
+                    {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                   </button>
-                )}
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelTabelTerbuka ? setPanelTabelTerbuka(false) : bukaPanel(setPanelTabelTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <Table size={14} /> Tabel
+                    {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelKebijakanTerbuka ? setPanelKebijakanTerbuka(false) : bukaPanel(setPanelKebijakanTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <ClipboardList size={14} /> Kebijakan
+                    {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelMetodologiTerbuka ? setPanelMetodologiTerbuka(false) : bukaPanel(setPanelMetodologiTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <FileText size={14} /> Metodologi
+                    {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  {adaPanelTerbuka && (
+                    <button
+                      onClick={toggleAllPanels}
+                      className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                    >
+                      <ChevronDown size={14} /> Tutup Semua
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
