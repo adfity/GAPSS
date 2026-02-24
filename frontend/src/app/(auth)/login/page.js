@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { useRouter } from "next/navigation";
 import { User, Lock } from "lucide-react";
