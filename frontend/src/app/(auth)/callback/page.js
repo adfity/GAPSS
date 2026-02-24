@@ -1,35 +1,50 @@
 'use client';
 import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
- // Di dalam useEffect file callback/page.js
   useEffect(() => {
-      const accessToken = searchParams.get('access');
-      const refreshToken = searchParams.get('refresh');
-      const name = searchParams.get('name'); // Ambil nama dari URL
+    const accessToken = searchParams.get('access');
+    const refreshToken = searchParams.get('refresh');
+    const name = searchParams.get('name');
+    const role = searchParams.get('role');
+    const error = searchParams.get('error');
 
-      if (accessToken) {
-          localStorage.setItem('access_token', accessToken);
-          localStorage.setItem('refresh_token', refreshToken);
-          
-          // Simpan nama asli dari Django, bukan tulisan "Google User" lagi
-          if (name) {
-              localStorage.setItem('user_name', name);
-          }
+    if (error) {
+      toast.error('Login Google gagal. Silakan coba lagi.');
+      router.push('/login');
+      return;
+    }
 
-          window.location.href = '/map'; 
+    if (accessToken) {
+      localStorage.setItem('access_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+      localStorage.setItem('user_name', name || '');
+      localStorage.setItem('user_role', role || 'user');
+
+      toast.success(`Selamat datang, ${name || 'Pengguna'}!`);
+
+      // Redirect sesuai role
+      if (role === 'admin') {
+        window.location.href = '/admin/dashboard';
+      } else {
+        window.location.href = '/beranda';
       }
-  }, [searchParams]);
+    } else {
+      toast.error('Token tidak ditemukan.');
+      router.push('/login');
+    }
+  }, [searchParams, router]);
 
   return (
     <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500 mx-auto mb-4"></div>
-        <p>Menghubungkan akun...</p>
+      <div className="text-center space-y-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500 mx-auto" />
+        <p className="text-slate-300">Menghubungkan akun Google...</p>
       </div>
     </div>
   );
@@ -37,7 +52,11 @@ function CallbackContent() {
 
 export default function AuthCallback() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500" />
+      </div>
+    }>
       <CallbackContent />
     </Suspense>
   );

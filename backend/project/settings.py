@@ -42,8 +42,8 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'allauth.socialaccount.providers.google', # Provider Google
-    'allauth.socialaccount.providers.github', # Provider GitHub
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.github',
     'accounts',
 ]
 
@@ -178,15 +178,29 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 
-# Tambahkan ini di settings.py
 REST_USE_JWT = True
-JWT_AUTH_COOKIE = 'auth'  # Nama cookie untuk menyimpan token (opsional)
-# Tambahkan ini agar login sosial otomatis bikin JWT
-SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
+JWT_AUTH_COOKIE = 'auth'
+SOCIALACCOUNT_ADAPTER = 'accounts.adapter.CustomSocialAccountAdapter'
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.getenv('GOOGLE_CLIENT_ID'),
+            'secret': os.getenv('GOOGLE_SECRET'),
+            'key': ''
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        }
+    }
+}
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
 # Halaman tujuan setelah login sosial berhasil
-LOGIN_REDIRECT_URL = '/accounts/social/success/'
+LOGIN_REDIRECT_URL = '/accounts/social/callback/'
 
 # Halaman tujuan setelah logout (jika lewat Django)
 LOGOUT_REDIRECT_URL = 'http://localhost:3000/'
@@ -197,7 +211,6 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 
-# Ini penting agar cookie CSRF bisa dikirim antar origin saat development
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_ALL_ORIGINS = True
