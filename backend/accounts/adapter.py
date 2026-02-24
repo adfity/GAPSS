@@ -3,6 +3,7 @@ from django.conf import settings
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def get_app(self, request, provider, client_id=None, **kwargs):
+        
         try:
             return super().get_app(request, provider, client_id=client_id, **kwargs)
         except Exception:
