@@ -29,7 +29,7 @@ docker-compose up -d
 
 ### 2. Setup Backend (Django)
 
-Buka terminal baru, masuk ke folder backend, dan siapkan environment:
+Buka terminal baru, masuk ke folder utama (root) `TerraSeg/`, dan siapkan environment:
 
 ```bash
 # Membuat Virtual Environment
