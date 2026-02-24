@@ -1,4 +1,5 @@
 # TerraSeg - Project Magang
+TerraSeg berasal dari penggabungan dua kata: Terra (Bumi) dan Seg (Segmentation). Secara filosofis, TerraSeg berarti "Segmentasi Bumi", sebuah platform yang dirancang untuk memetakan dan membagi data geografis menjadi segmen-segmen wilayah yang bermakna untuk analisis mendalam.
 
 TerraSeg adalah platform Sistem Informasi Geografis (GIS) terintegrasi yang menggunakan Django (Backend), Next.js (Frontend), serta dukungan database PostgreSQL dan NoSQL.
 
@@ -40,6 +41,9 @@ python -m venv venv
 
 # Install semua library yang dibutuhkan
 pip install -r requirements.txt
+
+# mengunggah batas Provinsi dan Kabupaten ke MongoDB.
+python backend/core/scripts/migrate_boundary.py
 
 # Masuk ke folder backend
 cd backend
