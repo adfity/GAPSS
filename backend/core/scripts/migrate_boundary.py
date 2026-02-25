@@ -25,7 +25,7 @@ def migrate_data():
         },
         {
             "collection": "batas_provinsi", 
-            "file": "gabungan_38_wilayah_batas_provinsi.geojson"
+            "file": "gabungan_38_wilayah_batas_provinsi(update).geojson"
         }
     ]
 
