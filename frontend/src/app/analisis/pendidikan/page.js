@@ -1,10 +1,10 @@
 "use client";
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
   Play, Download, AlertCircle, Plus, Minus, ChevronDown, Filter, Save, X,
   GraduationCap, RotateCcw, Database, ChevronUp, Info, Table, FileText,
-  ClipboardList, Search, Eye, EyeOff, Activity
+  ClipboardList, Search, Eye, EyeOff, Activity, Map
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -17,8 +17,51 @@ const KATEGORI = {
   BAIK:   { warna: "#10b981", label: "BAIK",   status: "KONDISI SANGAT BAIK" }
 };
 
+// Konfigurasi Basemap
+const BASEMAPS = {
+  CARTO_LIGHT: {
+    label: "Carto Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-slate-100"
+  },
+  CARTO_DARK: {
+    label: "Carto Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-slate-800"
+  },
+  OSM: {
+    label: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    preview: "bg-green-100"
+  },
+  ESRI_SATELLITE: {
+    label: "Satelit",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: 'Tiles &copy; Esri',
+    preview: "bg-stone-700"
+  },
+  TOPO: {
+    label: "Topografi",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+    preview: "bg-amber-100"
+  },
+  CARTO_VOYAGER: {
+    label: "Voyager",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    preview: "bg-blue-50"
+  }
+};
+
 const PUSAT_DEFAULT = [-2.5, 118];
 const ZOOM_DEFAULT = 5;
+const PANEL_HEIGHT_DEFAULT = 340;
+const PANEL_HEIGHT_MIN = 48;
+const PANEL_HEIGHT_MAX = 520;
 
 // =====================================================================
 // HELPER: hitung warna & kategori berdasarkan indikator yang dipilih
@@ -81,11 +124,20 @@ export default function PendidikanPage() {
   const [menuFilterTerbuka, setMenuFilterTerbuka] = useState(false);
   const [menuDatasetTerbuka, setMenuDatasetTerbuka] = useState(false);
   const [menuPilihanIndikatorTerbuka, setMenuPilihanIndikatorTerbuka] = useState(false);
+  const [menuBasemapTerbuka, setMenuBasemapTerbuka] = useState(false);
+  const [basemapTerpilih, setBasemapTerpilih] = useState('CARTO_LIGHT');
 
   const [panelInfoTerbuka, setPanelInfoTerbuka] = useState(false);
   const [panelTabelTerbuka, setPanelTabelTerbuka] = useState(false);
   const [panelMetodologiTerbuka, setPanelMetodologiTerbuka] = useState(false);
   const [panelKebijakanTerbuka, setPanelKebijakanTerbuka] = useState(false);
+
+  // --- Drag State untuk bottom panel ---
+  const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT_DEFAULT);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(null);
+  const dragStartHeight = useRef(null);
+  const panelRef = useRef(null);
 
   const [koordinatCursor, setKoordinatCursor] = useState({ lat: 0, lng: 0 });
   const [currentZoom, setCurrentZoom] = useState(ZOOM_DEFAULT);
@@ -128,6 +180,60 @@ export default function PendidikanPage() {
     });
     import('leaflet/dist/leaflet.css');
   }, []);
+
+  // =====================================================================
+  // DRAG HANDLER untuk bottom panel
+  // =====================================================================
+  const handleDragStart = useCallback((e) => {
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    dragStartHeight.current = panelHeight;
+    setIsDragging(true);
+  }, [panelHeight]);
+
+  const handleDragMove = useCallback((e) => {
+    if (!isDragging || dragStartY.current === null) return;
+    const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+    const delta = dragStartY.current - clientY;
+    const newHeight = Math.max(PANEL_HEIGHT_MIN, Math.min(PANEL_HEIGHT_MAX, dragStartHeight.current + delta));
+    setPanelHeight(newHeight);
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    dragStartY.current = null;
+    if (panelHeight < 100) {
+      setPanelInfoTerbuka(false);
+      setPanelTabelTerbuka(false);
+      setPanelMetodologiTerbuka(false);
+      setPanelKebijakanTerbuka(false);
+    }
+  }, [isDragging, panelHeight]);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDragMove, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  const bukaPanel = (setter) => {
+    setPanelInfoTerbuka(false);
+    setPanelTabelTerbuka(false);
+    setPanelMetodologiTerbuka(false);
+    setPanelKebijakanTerbuka(false);
+    setter(true);
+    if (panelHeight < 200) setPanelHeight(PANEL_HEIGHT_DEFAULT);
+  };
 
   const hitungScaleKm = (zoom) => {
     const scales = { 5: 1000, 6: 500, 7: 200, 8: 100, 9: 50, 10: 25 };
@@ -218,7 +324,6 @@ export default function PendidikanPage() {
     setModalAnalisisTerbuka(false);
     setMenuPilihanIndikatorTerbuka(false);
     setSedangMenganalisis(true);
-    // Reset filter kategori setiap kali analisis baru dijalankan
     setKategoriTerpilih('SEMUA');
     const petunjukMemuat = toast.loading(`Mengambil data dari BPS Web API...\nAnalisis: ${pilihan === 'ALL' ? 'Semua Indikator' : pilihan}`);
 
@@ -422,9 +527,6 @@ export default function PendidikanPage() {
     URL.revokeObjectURL(tautan);
   };
 
-  // ============================================================
-  // FIX: Gunakan helper getKategoriByIndikator untuk filter tabel
-  // ============================================================
   const ambilDataTabelTerfilter = () => {
     if (!hasilAnalisis?.matched_features?.features) return [];
     let fitur = hasilAnalisis.matched_features.features;
@@ -433,7 +535,6 @@ export default function PendidikanPage() {
       fitur = fitur.filter(f => getKategoriByIndikator(f, indikatorTerpilih) === kategoriTerpilih);
     }
 
-    // Hanya tampilkan data yang punya nilai untuk indikator yang dipilih
     if (indikatorTerpilih !== 'SEMUA') {
       fitur = fitur.filter(f => {
         const dp = f.properties?.education_analysis?.data_pendidikan || {};
@@ -468,9 +569,6 @@ export default function PendidikanPage() {
   const dataTerfilter = ambilDataTabelTerfilter();
   const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetodologiTerbuka || panelKebijakanTerbuka;
 
-  // ============================================================
-  // FIX: Hitung jumlah kategori berdasarkan indikator aktif
-  // ============================================================
   const hitungKategori = () => {
     if (!hasilAnalisis?.matched_features?.features) return { KRITIS: 0, SEDANG: 0, BAIK: 0 };
     const f = hasilAnalisis.matched_features.features;
@@ -489,7 +587,13 @@ export default function PendidikanPage() {
     setPanelKebijakanTerbuka(false);
   };
 
+  // Hitung posisi bottom action buttons
+  const bottomPanelEffectiveHeight = adaPanelTerbuka ? panelHeight : 48;
+  const actionButtonBottom = bottomPanelEffectiveHeight + 16;
+
   if (!adalahClient) return null;
+
+  const basemapConfig = BASEMAPS[basemapTerpilih];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
@@ -511,73 +615,30 @@ export default function PendidikanPage() {
             </p>
 
             <div className="space-y-3 mb-6">
-              <button
-                onClick={() => setPilihanIndikator('ALL')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'ALL' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">📊 Semua Indikator</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Analisis komprehensif seluruh data pendidikan</div>
-                  </div>
-                  {pilihanIndikator === 'ALL' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
+              {[
+                { key: 'ALL', label: '📊 Semua Indikator', desc: 'Analisis komprehensif seluruh data pendidikan', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', dot: 'bg-blue-500' },
+                { key: 'RLS', label: '📚 Rata-rata Lama Sekolah', desc: 'Fokus analisis pada pencapaian lama sekolah per provinsi', border: 'border-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', dot: 'bg-purple-500' },
+                { key: 'APS', label: '🎓 Angka Partisipasi Sekolah', desc: 'Fokus 4 kelompok umur: 7–12, 13–15, 16–18, 19–23 tahun', border: 'border-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', dot: 'bg-blue-500' },
+                { key: 'RASIO', label: '👥 Rasio Murid-Guru', desc: 'Fokus beban mengajar guru SD, SMP, SMA, SMK', border: 'border-green-500', bg: 'bg-green-50 dark:bg-green-900/20', dot: 'bg-green-500' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setPilihanIndikator(opt.key)}
+                  className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === opt.key ? `${opt.border} ${opt.bg}` : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-slate-900 dark:text-white uppercase">{opt.label}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{opt.desc}</div>
                     </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('RLS')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'RLS' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">📚 Rata-rata Lama Sekolah</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus analisis pada pencapaian lama sekolah per provinsi</div>
+                    {pilihanIndikator === opt.key && (
+                      <div className={`w-5 h-5 rounded-full ${opt.dot} flex items-center justify-center`}>
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      </div>
+                    )}
                   </div>
-                  {pilihanIndikator === 'RLS' && (
-                    <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('APS')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'APS' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">🎓 Angka Partisipasi Sekolah</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus 4 kelompok umur: 7–12, 13–15, 16–18, 19–23 tahun</div>
-                  </div>
-                  {pilihanIndikator === 'APS' && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={() => setPilihanIndikator('RASIO')}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${pilihanIndikator === 'RASIO' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-green-300'}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase">👥 Rasio Murid-Guru</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Fokus beban mengajar guru SD, SMP, SMA, SMK</div>
-                  </div>
-                  {pilihanIndikator === 'RASIO' && (
-                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                    </div>
-                  )}
-                </div>
-              </button>
+                </button>
+              ))}
             </div>
 
             <div className="flex gap-3">
@@ -631,8 +692,9 @@ export default function PendidikanPage() {
         {!petaSedangMemuat && KontainerPeta && (
           <KontainerPeta center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
             <LapisanPeta
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              key={basemapTerpilih}
+              url={basemapConfig.url}
+              attribution={basemapConfig.attribution}
             />
             <MouseTracker />
             {hasilAnalisis?.matched_features?.features && (
@@ -641,14 +703,11 @@ export default function PendidikanPage() {
                 data={{ type: "FeatureCollection", features: hasilAnalisis.matched_features.features }}
                 style={(fitur) => {
                   const analisis = fitur.properties?.education_analysis || {};
-                  // FIX: gunakan kategori yang dihitung berdasarkan indikator aktif
                   const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
                   const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
 
                   let terlihat = true;
-                  // Filter berdasarkan kategori yang relevan dengan indikator saat ini
                   if (kategoriTerpilih !== 'SEMUA' && kategoriAktif !== kategoriTerpilih) terlihat = false;
-                  // Sembunyikan jika tidak ada data untuk indikator yang dipilih
                   if (warna === "#cbd5e1") terlihat = false;
 
                   const isHighlighted = provinsiDipilih === analisis.nama_provinsi;
@@ -750,9 +809,7 @@ export default function PendidikanPage() {
         {/* JUDUL HALAMAN - KIRI ATAS */}
         {!modeBersih && (
           <div className="absolute top-6 left-6 z-[1000] bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 px-5 py-3 rounded-xl shadow-xl">
-            <div className="text-sm font-black text-white uppercase tracking-wider">
-              🎓 SDM Nasional Pendidikan
-            </div>
+            <div className="text-sm font-black text-white uppercase tracking-wider">🎓 SDM Nasional Pendidikan</div>
           </div>
         )}
 
@@ -782,9 +839,62 @@ export default function PendidikanPage() {
           </div>
         )}
 
+        {/* TOMBOL PILIH BASEMAP */}
+        {!modeBersih && (
+          <div className={`absolute left-6 z-[1001] ${hasilAnalisis ? 'top-[215px]' : 'top-[170px]'}`}>
+            <div className="relative">
+              <button
+                onClick={() => setMenuBasemapTerbuka(!menuBasemapTerbuka)}
+                className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5"
+                title="Pilih Basemap"
+              >
+                <Map size={16} />
+              </button>
+
+              {menuBasemapTerbuka && (
+                <div className="absolute left-full ml-2 top-0 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl dark:shadow-slate-900/60 z-[1002] border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <div className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Pilih Basemap</div>
+                  </div>
+                  <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
+                    {Object.entries(BASEMAPS).map(([key, bm]) => (
+                      <button
+                        key={key}
+                        onClick={() => { setBasemapTerpilih(key); setMenuBasemapTerbuka(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group ${
+                          basemapTerpilih === key
+                            ? 'bg-blue-500 text-white shadow-md'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex-shrink-0 border-2 ${basemapTerpilih === key ? 'border-white/50' : 'border-slate-200 dark:border-slate-600'} ${bm.preview} overflow-hidden relative`}>
+                          <div className="absolute inset-0 opacity-30" style={{
+                            backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                            backgroundSize: '4px 4px'
+                          }}></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[11px] font-black uppercase tracking-wider truncate ${basemapTerpilih === key ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                            {bm.label}
+                          </div>
+                        </div>
+                        {basemapTerpilih === key && (
+                          <div className="w-4 h-4 rounded-full bg-white/30 flex items-center justify-center flex-shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-white"></div>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* SEARCH */}
         {hasilAnalisis && !modeBersih && (
-          <div className="absolute top-[215px] left-6 z-[1000]">
+          <div className="absolute top-[263px] left-6 z-[1000]">
             {searchTerbuka ? (
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
                 <div className="p-2 flex gap-2">
@@ -886,9 +996,12 @@ export default function PendidikanPage() {
           </div>
         )}
 
-        {/* BOTTOM ACTION BUTTONS */}
+        {/* BOTTOM ACTION BUTTONS — posisi dinamis mengikuti tinggi panel */}
         {!modeBersih && (
-          <div className={`absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-300 ${adaPanelTerbuka ? 'bottom-[380px]' : 'bottom-16'}`}>
+          <div
+            className="absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-200"
+            style={{ bottom: `${actionButtonBottom}px` }}
+          >
             <div className="flex gap-3">
               <div className="relative">
                 <button
@@ -902,18 +1015,17 @@ export default function PendidikanPage() {
 
                 {menuPilihanIndikatorTerbuka && (
                   <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1003] overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <button onClick={() => jalankanAnalisisBPS('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                      📊 Semua Indikator
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('RLS')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20">
-                      📚 Rata-rata Lama Sekolah
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('APS')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                      🎓 Angka Partisipasi Sekolah
-                    </button>
-                    <button onClick={() => jalankanAnalisisBPS('RASIO')} className="w-full text-left px-4 py-2 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-green-50 dark:hover:bg-green-900/20">
-                      👥 Rasio Murid-Guru
-                    </button>
+                    {[
+                      { key: 'ALL', label: '📊 Semua Indikator' },
+                      { key: 'RLS', label: '📚 Rata-rata Lama Sekolah' },
+                      { key: 'APS', label: '🎓 Angka Partisipasi Sekolah' },
+                      { key: 'RASIO', label: '👥 Rasio Murid-Guru' },
+                    ].map((opt, i, arr) => (
+                      <button key={opt.key} onClick={() => jalankanAnalisisBPS(opt.key)}
+                        className={`w-full text-left px-4 py-2 text-[10px] font-bold transition-all text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 ${i < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-700' : ''}`}>
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -932,440 +1044,470 @@ export default function PendidikanPage() {
           </div>
         )}
 
-        {/* BOTTOM PANELS */}
+        {/* BOTTOM PANELS — dapat di-drag naik/turun */}
         {hasilAnalisis && !modeBersih && (
-          <div className="absolute bottom-0 left-0 right-0 z-[1001]">
-
+          <div
+            ref={panelRef}
+            className="absolute bottom-0 left-0 right-0 z-[1001] flex flex-col"
+            style={{ height: adaPanelTerbuka ? `${panelHeight}px` : 'auto' }}
+          >
             {/* INFO PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelInfoTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Activity className="text-blue-500" size={24} />
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis</h2>
+            {panelInfoTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Activity className="text-blue-500" size={24} />
+                      <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis</h2>
+                    </div>
+                    <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                      <X size={18} className="text-slate-500" />
+                    </button>
                   </div>
-                  <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
-                  Analisis data pendidikan nasional menggunakan BPS Web API dengan 3 indikator utama: RLS, APS, dan Rasio Murid-Guru
-                </p>
-                {hasilAnalisis.timestamp && (
-                  <div className="mb-4 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    📅 Waktu Pengambilan Data: {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
-                    <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
-                    <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
-                  </div>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
-                    <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Kritis</div>
-                    <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori.KRITIS}</div>
-                  </div>
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
-                    <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Sedang</div>
-                    <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori.SEDANG}</div>
-                  </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
-                    <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Baik</div>
-                    <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori.BAIK}</div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
+                    Analisis data pendidikan nasional menggunakan BPS Web API dengan 3 indikator utama: RLS, APS, dan Rasio Murid-Guru
+                  </p>
+                  {hasilAnalisis.timestamp && (
+                    <div className="mb-4 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400">
+                      📅 Waktu Pengambilan Data: {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
+                      <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
+                      <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
+                      <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Kritis</div>
+                      <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori.KRITIS}</div>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
+                      <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Sedang</div>
+                      <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori.SEDANG}</div>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
+                      <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Baik</div>
+                      <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori.BAIK}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* TABEL PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelTabelTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Pendidikan</h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <button
-                        onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
-                      >
-                        <Download size={12} /> UNDUH
-                      </button>
-                      {menuUnduhTerbuka && (
-                        <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                          {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
-                            <button key={format} onClick={() => eksporData(format)}
-                              className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
-                              <Download size={12} className="inline mr-2 text-blue-500" /> {format}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+            {panelTabelTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Pendidikan</h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah | Indikator: {indikatorTerpilih}</p>
                     </div>
-                    <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                      <X size={18} className="text-slate-500" />
-                    </button>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <button
+                          onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
+                        >
+                          <Download size={12} /> UNDUH
+                        </button>
+                        {menuUnduhTerbuka && (
+                          <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
+                            {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
+                              <button key={format} onClick={() => eksporData(format)}
+                                className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
+                                <Download size={12} className="inline mr-2 text-blue-500" /> {format}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <X size={18} className="text-slate-500" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[900px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2 text-center">Skor</th>
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && <th className="px-3 py-2 text-center">RLS</th>}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && <th className="px-3 py-2 text-center">Skor APS</th>}
-                        {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && <th className="px-3 py-2 text-center">Rasio</th>}
-                        <th className="px-3 py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.education_analysis;
-                        const dp = data.data_pendidikan || {};
-                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
-                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">{data.skor_total}</span>
-                            </td>
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && (
-                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">{dp.RLS ? `${dp.RLS} th` : '-'}</td>
-                            )}
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
-                              <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">{dp.SKOR_APS || '-'}</td>
-                            )}
-                            {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
+                          <th className="px-3 py-2 text-center">No</th>
+                          <th className="px-3 py-2">Provinsi</th>
+                          <th className="px-3 py-2 text-center">Skor</th>
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && <th className="px-3 py-2 text-center">RLS</th>}
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && <th className="px-3 py-2 text-center">Skor APS</th>}
+                          {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && <th className="px-3 py-2 text-center">Rasio</th>}
+                          <th className="px-3 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {dataTerfilter.map((fitur, indeks) => {
+                          const data = fitur.properties.education_analysis;
+                          const dp = data.data_pendidikan || {};
+                          const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                          const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                          return (
+                            <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                              <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
+                              <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
                               <td className="px-3 py-2 text-center">
-                                <div className="text-xs font-bold text-slate-900 dark:text-white">{dp.RASIO_RATA || '-'}</div>
-                                {dp.RASIO_SD && (
-                                  <div className="flex flex-wrap gap-1 justify-center mt-1">
-                                    {[['SD', dp.RASIO_SD, 'blue'], ['SMP', dp.RASIO_SMP, 'green'], ['SMA', dp.RASIO_SMA, 'yellow'], ['SMK', dp.RASIO_SMK, 'purple']].map(([j, v, c]) => (
-                                      <span key={j} className={`px-1.5 py-0.5 bg-${c}-100 dark:bg-${c}-900/30 text-${c}-700 dark:text-${c}-300 text-[9px] font-bold rounded`}>{j}:{v || '-'}</span>
-                                    ))}
-                                  </div>
-                                )}
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">{data.skor_total}</span>
                               </td>
-                            )}
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>{kategoriAktif}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && (
+                                <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">{dp.RLS ? `${dp.RLS} th` : '-'}</td>
+                              )}
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
+                                <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">{dp.SKOR_APS || '-'}</td>
+                              )}
+                              {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && (
+                                <td className="px-3 py-2 text-center">
+                                  <div className="text-xs font-bold text-slate-900 dark:text-white">{dp.RASIO_RATA || '-'}</div>
+                                  {dp.RASIO_SD && (
+                                    <div className="flex flex-wrap gap-1 justify-center mt-1">
+                                      {[['SD', dp.RASIO_SD, 'blue'], ['SMP', dp.RASIO_SMP, 'green'], ['SMA', dp.RASIO_SMA, 'yellow'], ['SMK', dp.RASIO_SMK, 'purple']].map(([j, v, c]) => (
+                                        <span key={j} className={`px-1.5 py-0.5 bg-${c}-100 dark:bg-${c}-900/30 text-${c}-700 dark:text-${c}-300 text-[9px] font-bold rounded`}>{j}:{v || '-'}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              )}
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>{kategoriAktif}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* KEBIJAKAN PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelKebijakanTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <ClipboardList className="text-blue-500" size={24} />
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Rekomendasi Kebijakan</h3>
-                  </div>
-                  <button onClick={() => setPanelKebijakanTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[900px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Prioritas</th>
-                        <th className="px-3 py-2">Rekomendasi Kebijakan</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.education_analysis;
-                        const rekUtama = data.rekomendasi?.[0];
-                        const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
-                        const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>{kategoriAktif}</span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                                kategoriAktif === 'KRITIS' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                kategoriAktif === 'SEDANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                                'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                              }`}>
-                                {rekUtama?.title || "NORMAL"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 max-w-md">
-                              <ul className="space-y-1 text-[10px]">
-                                {rekUtama?.actions?.map((action, idx) => (
-                                  <li key={idx} className="text-slate-600 dark:text-slate-300 font-medium">• {action}</li>
-                                )) || <li className="text-slate-400">Pertahankan kondisi saat ini</li>}
-                              </ul>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* METODOLOGI PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelMetodologiTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Metodologi Perhitungan Skor Pendidikan Terintegrasi (SPT)
-                  </h3>
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <button
-                        onClick={() => setMenuDatasetTerbuka(!menuDatasetTerbuka)}
-                        className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
-                      >
-                        <Download size={12} /> Dataset
-                      </button>
-                      {menuDatasetTerbuka && (
-                        <div className="absolute top-full mt-2 right-0 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                          <button onClick={() => unduhDataset('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            <Database size={14} className="inline mr-2 text-purple-600" /> Semua Dataset
-                          </button>
-                          <button onClick={() => unduhDataset('RLS')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            {loadingDataset.RLS ? '⏳' : '📚'} Dataset RLS {loadingDataset.RLS && '(Memproses...)'}
-                          </button>
-                          <button onClick={() => unduhDataset('APS')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
-                            {loadingDataset.APS ? '⏳' : '🎓'} Dataset APS {loadingDataset.APS && '(Memproses...)'}
-                          </button>
-                          <button onClick={() => unduhDataset('RASIO')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
-                            {loadingDataset.RASIO ? '⏳' : '👥'} Dataset Rasio Murid-Guru {loadingDataset.RASIO && '(Memproses...)'}
-                          </button>
-                        </div>
-                      )}
+            {panelKebijakanTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <ClipboardList className="text-blue-500" size={24} />
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Rekomendasi Kebijakan</h3>
                     </div>
-                    <button onClick={() => setPanelMetodologiTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                    <button onClick={() => setPanelKebijakanTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                       <X size={18} className="text-slate-500" />
                     </button>
                   </div>
-                </div>
-
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Skor Pendidikan Terintegrasi (SPT) menggabungkan 3 indikator kunci pendidikan dengan pembobotan berdasarkan dampak dan relevansi terhadap kualitas SDM nasional.
-                </p>
-
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
-                  <h4 className="text-sm font-black text-purple-900 dark:text-purple-100 mb-2 uppercase">Formula Perhitungan</h4>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-300 dark:border-purple-700">
-                    <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                      SPT = (Skor_RLS × 0.30) + (Skor_APS_Gabungan × 0.50) + (Skor_Rasio × 0.20)
-                    </code>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[900px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
+                          <th className="px-3 py-2 text-center">No</th>
+                          <th className="px-3 py-2">Provinsi</th>
+                          <th className="px-3 py-2">Status</th>
+                          <th className="px-3 py-2">Prioritas</th>
+                          <th className="px-3 py-2">Rekomendasi Kebijakan</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {dataTerfilter.map((fitur, indeks) => {
+                          const data = fitur.properties.education_analysis;
+                          const rekUtama = data.rekomendasi?.[0];
+                          const warna = getWarnaByIndikator(fitur, indikatorTerpilih);
+                          const kategoriAktif = getKategoriByIndikator(fitur, indikatorTerpilih);
+                          return (
+                            <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
+                              <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
+                              <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: warna + '40', color: warna }}>{kategoriAktif}</span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                                  kategoriAktif === 'KRITIS' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                  kategoriAktif === 'SEDANG' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                  'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                }`}>
+                                  {rekUtama?.title || "NORMAL"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 max-w-md">
+                                <ul className="space-y-1 text-[10px]">
+                                  {rekUtama?.actions?.map((action, idx) => (
+                                    <li key={idx} className="text-slate-600 dark:text-slate-300 font-medium">• {action}</li>
+                                  )) || <li className="text-slate-400">Pertahankan kondisi saat ini</li>}
+                                </ul>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-
-                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
-                  <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-xl p-4 border-2 border-cyan-200 dark:border-cyan-800">
-                    <h4 className="text-sm font-black text-cyan-900 dark:text-cyan-100 mb-2 uppercase flex items-center gap-2">
-                      <span>📊</span> Catatan: Angka Partisipasi Sekolah (APS)
-                    </h4>
-                    <div className="text-xs text-cyan-800 dark:text-cyan-200 font-semibold mb-2">
-                      <strong>Metode:</strong> Rata-rata skor dari 4 kelompok umur
-                    </div>
-                    <p className="text-xs text-cyan-700 dark:text-cyan-300 mb-3 leading-relaxed">
-                      Skor APS Gabungan dihitung dengan merata-ratakan skor dari 4 kelompok umur: 7–12 tahun (SD), 13–15 tahun (SMP), 16–18 tahun (SMA/K), dan 19–23 tahun (Perguruan Tinggi).
-                    </p>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-cyan-300 dark:border-cyan-700 mb-3">
-                      <div className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase mb-1">Formula</div>
-                      <code className="text-xs font-mono font-bold text-cyan-900 dark:text-cyan-100">
-                        Skor_APS = (Skor_7-12 + Skor_13-15 + Skor_16-18 + Skor_19-23) / 4
-                      </code>
-                    </div>
-                    <div className="bg-cyan-100 dark:bg-cyan-950/30 rounded-lg p-3 border border-cyan-300 dark:border-cyan-700">
-                      <div className="text-[10px] font-black text-cyan-700 dark:text-cyan-300 uppercase mb-1">Aturan Skor per Kelompok</div>
-                      <code className="text-xs font-mono font-semibold text-cyan-900 dark:text-cyan-100">{'>'}80% → Skor 3 | 70–80% → Skor 2 | {'<'}70% → Skor 1</code>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && (
-                    <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border-l-4 border-purple-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-purple-900 dark:text-purple-100 uppercase">Rata-rata Lama Sekolah (RLS)</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded">Bobot: 30%</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Tinggi</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}9.5 tahun (Skor 3)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">8.0–9.5 tahun (Skor 2)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}8.0 tahun (Skor 1)</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase">Angka Partisipasi Sekolah (APS)</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded">Bobot: 50%</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Tinggi</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}80% (Skor 3)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">70–80% (Skor 2)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}70% (Skor 1)</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && (
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border-l-4 border-green-500">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="text-sm font-black text-green-900 dark:text-green-100 uppercase">Rasio Murid-Guru (SD, SMP, SMA, SMK)</h5>
-                          <span className="inline-block mt-1 px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold rounded">Bobot: 20%</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Ringan</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}12 murid/guru (Skor 3)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">12–16 murid/guru (Skor 2)</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
-                          <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Berat</div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}16 murid/guru (Skor 1)</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Hasil Analisis</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-green-200 dark:border-green-700">
-                      <div className="text-xs font-black text-green-600 dark:text-green-400 uppercase">BAIK</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">Skor ≥ 2.4</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Sistem pendidikan berkinerja sangat baik</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-yellow-200 dark:border-yellow-700">
-                      <div className="text-xs font-black text-yellow-600 dark:text-yellow-400 uppercase">SEDANG</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">1.8 ≤ Skor {'<'} 2.4</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Perlu peningkatan bertahap</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-red-200 dark:border-red-700">
-                      <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase">KRITIS</div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">Skor {'<'} 1.8</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Memerlukan intervensi segera</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-2">Validitas Metodologi</h4>
-                  <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
-                    Pembobotan mengacu pada standar Kemendikbudristek dan UNESCO. APS mendapat bobot tertinggi (50%) karena merepresentasikan akses pendidikan secara langsung.
-                  </p>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
-                    <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Catatan Penting</div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      Analisis memberikan gambaran holistik kondisi pendidikan dengan mempertimbangkan aspek outcome (RLS), aksesibilitas (APS), dan kapasitas pengajar (Rasio) secara berimbang.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Sumber Data</div>
-                  <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
-                    <li>• BPS Web API — Rata-rata Lama Sekolah (Var: 459) — Tahun 2024</li>
-                    <li>• BPS Web API — Angka Partisipasi Sekolah (Var: 2211) — Tahun 2025</li>
-                    <li>• BPS Web API — SIMDASI Kemdikbudristek (SD/SMP/SMA/SMK) — Tahun 2024</li>
-                  </ul>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* CONTROL BUTTONS BAR */}
-            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 p-3 shadow-2xl">
-              <div className="flex justify-center gap-2">
-                <button
-                  onClick={() => { setPanelInfoTerbuka(!panelInfoTerbuka); setPanelTabelTerbuka(false); setPanelMetodologiTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            {/* METODOLOGI PANEL */}
+            {panelMetodologiTerbuka && (
+              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                      Metodologi Perhitungan Skor Pendidikan Terintegrasi (SPT)
+                    </h3>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <button
+                          onClick={() => setMenuDatasetTerbuka(!menuDatasetTerbuka)}
+                          className="px-3 py-2 bg-purple-600 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2"
+                        >
+                          <Download size={12} /> Dataset
+                        </button>
+                        {menuDatasetTerbuka && (
+                          <div className="absolute top-full mt-2 right-0 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
+                            <button onClick={() => unduhDataset('ALL')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
+                              <Database size={14} className="inline mr-2 text-purple-600" /> Semua Dataset
+                            </button>
+                            <button onClick={() => unduhDataset('RLS')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
+                              {loadingDataset.RLS ? '⏳' : '📚'} Dataset RLS {loadingDataset.RLS && '(Memproses...)'}
+                            </button>
+                            <button onClick={() => unduhDataset('APS')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all border-b border-slate-100 dark:border-slate-700">
+                              {loadingDataset.APS ? '⏳' : '🎓'} Dataset APS {loadingDataset.APS && '(Memproses...)'}
+                            </button>
+                            <button onClick={() => unduhDataset('RASIO')} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
+                              {loadingDataset.RASIO ? '⏳' : '👥'} Dataset Rasio Murid-Guru {loadingDataset.RASIO && '(Memproses...)'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => setPanelMetodologiTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <X size={18} className="text-slate-500" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Skor Pendidikan Terintegrasi (SPT) menggabungkan 3 indikator kunci pendidikan dengan pembobotan berdasarkan dampak dan relevansi terhadap kualitas SDM nasional.
+                  </p>
+
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+                    <h4 className="text-sm font-black text-purple-900 dark:text-purple-100 mb-2 uppercase">Formula Perhitungan</h4>
+                    <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-300 dark:border-purple-700">
+                      <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                        SPT = (Skor_RLS × 0.30) + (Skor_APS_Gabungan × 0.50) + (Skor_Rasio × 0.20)
+                      </code>
+                    </div>
+                  </div>
+
+                  {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
+                    <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-xl p-4 border-2 border-cyan-200 dark:border-cyan-800">
+                      <h4 className="text-sm font-black text-cyan-900 dark:text-cyan-100 mb-2 uppercase flex items-center gap-2">
+                        <span>📊</span> Catatan: Angka Partisipasi Sekolah (APS)
+                      </h4>
+                      <div className="text-xs text-cyan-800 dark:text-cyan-200 font-semibold mb-2">
+                        <strong>Metode:</strong> Rata-rata skor dari 4 kelompok umur
+                      </div>
+                      <p className="text-xs text-cyan-700 dark:text-cyan-300 mb-3 leading-relaxed">
+                        Skor APS Gabungan dihitung dengan merata-ratakan skor dari 4 kelompok umur: 7–12 tahun (SD), 13–15 tahun (SMP), 16–18 tahun (SMA/K), dan 19–23 tahun (Perguruan Tinggi).
+                      </p>
+                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-cyan-300 dark:border-cyan-700 mb-3">
+                        <div className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase mb-1">Formula</div>
+                        <code className="text-xs font-mono font-bold text-cyan-900 dark:text-cyan-100">
+                          Skor_APS = (Skor_7-12 + Skor_13-15 + Skor_16-18 + Skor_19-23) / 4
+                        </code>
+                      </div>
+                      <div className="bg-cyan-100 dark:bg-cyan-950/30 rounded-lg p-3 border border-cyan-300 dark:border-cyan-700">
+                        <div className="text-[10px] font-black text-cyan-700 dark:text-cyan-300 uppercase mb-1">Aturan Skor per Kelompok</div>
+                        <code className="text-xs font-mono font-semibold text-cyan-900 dark:text-cyan-100">{'>'}80% → Skor 3 | 70–80% → Skor 2 | {'<'}70% → Skor 1</code>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && (
+                      <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border-l-4 border-purple-500">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h5 className="text-sm font-black text-purple-900 dark:text-purple-100 uppercase">Rata-rata Lama Sekolah (RLS)</h5>
+                            <span className="inline-block mt-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded">Bobot: 30%</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
+                            <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Tinggi</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}9.5 tahun (Skor 3)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
+                            <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">8.0–9.5 tahun (Skor 2)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-purple-200 dark:border-purple-700">
+                            <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}8.0 tahun (Skor 1)</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'APS') && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h5 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase">Angka Partisipasi Sekolah (APS)</h5>
+                            <span className="inline-block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded">Bobot: 50%</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
+                            <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Tinggi</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}80% (Skor 3)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
+                            <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">70–80% (Skor 2)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
+                            <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Rendah</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}70% (Skor 1)</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && (
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border-l-4 border-green-500">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h5 className="text-sm font-black text-green-900 dark:text-green-100 uppercase">Rasio Murid-Guru (SD, SMP, SMA, SMK)</h5>
+                            <span className="inline-block mt-1 px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold rounded">Bobot: 20%</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
+                            <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase">Ringan</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'<'}12 murid/guru (Skor 3)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
+                            <div className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase">Sedang</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">12–16 murid/guru (Skor 2)</div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700">
+                            <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase">Berat</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{'>'}16 murid/guru (Skor 1)</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
+                    <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Hasil Analisis</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-green-200 dark:border-green-700">
+                        <div className="text-xs font-black text-green-600 dark:text-green-400 uppercase">BAIK</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">Skor ≥ 2.4</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Sistem pendidikan berkinerja sangat baik</div>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-yellow-200 dark:border-yellow-700">
+                        <div className="text-xs font-black text-yellow-600 dark:text-yellow-400 uppercase">SEDANG</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">1.8 ≤ Skor {'<'} 2.4</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Perlu peningkatan bertahap</div>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-red-200 dark:border-red-700">
+                        <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase">KRITIS</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">Skor {'<'} 1.8</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Memerlukan intervensi segera</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+                    <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-2">Validitas Metodologi</h4>
+                    <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
+                      Pembobotan mengacu pada standar Kemendikbudristek dan UNESCO. APS mendapat bobot tertinggi (50%) karena merepresentasikan akses pendidikan secara langsung.
+                    </p>
+                    <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-blue-300 dark:border-blue-700">
+                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Catatan Penting</div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Analisis memberikan gambaran holistik kondisi pendidikan dengan mempertimbangkan aspek outcome (RLS), aksesibilitas (APS), dan kapasitas pengajar (Rasio) secara berimbang.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                    <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Sumber Data</div>
+                    <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
+                      <li>• BPS Web API — Rata-rata Lama Sekolah (Var: 459) — Tahun 2024</li>
+                      <li>• BPS Web API — Angka Partisipasi Sekolah (Var: 2211) — Tahun 2025</li>
+                      <li>• BPS Web API — SIMDASI Kemdikbudristek (SD/SMP/SMA/SMK) — Tahun 2024</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB BAR + DRAG HANDLE */}
+            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 shadow-2xl flex-shrink-0">
+              {/* DRAG HANDLE */}
+              {adaPanelTerbuka && (
+                <div
+                  className={`flex items-center justify-center py-1.5 cursor-row-resize select-none group ${isDragging ? 'bg-blue-50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'} transition-colors`}
+                  onMouseDown={handleDragStart}
+                  onTouchStart={handleDragStart}
+                  title="Drag untuk mengubah tinggi panel"
                 >
-                  <Info size={14} /> Info
-                  {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
+                  <div className={`flex flex-col gap-0.5 transition-opacity ${isDragging ? 'opacity-100' : 'opacity-40 group-hover:opacity-80'}`}>
+                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>
+                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>
+                    <div className="w-5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600 mx-auto"></div>
+                  </div>
+                </div>
+              )}
 
-                <button
-                  onClick={() => { setPanelTabelTerbuka(!panelTabelTerbuka); setPanelInfoTerbuka(false); setPanelMetodologiTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <Table size={14} /> Tabel
-                  {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                <button
-                  onClick={() => { setPanelKebijakanTerbuka(!panelKebijakanTerbuka); setPanelInfoTerbuka(false); setPanelTabelTerbuka(false); setPanelMetodologiTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <ClipboardList size={14} /> Kebijakan
-                  {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                <button
-                  onClick={() => { setPanelMetodologiTerbuka(!panelMetodologiTerbuka); setPanelInfoTerbuka(false); setPanelTabelTerbuka(false); setPanelKebijakanTerbuka(false); }}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <FileText size={14} /> Metodologi
-                  {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                {adaPanelTerbuka && (
+              {/* TAB BUTTONS */}
+              <div className="p-3 pt-1">
+                <div className="flex justify-center gap-2">
                   <button
-                    onClick={toggleAllPanels}
-                    className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                    onClick={() => { adaPanelTerbuka && panelInfoTerbuka ? setPanelInfoTerbuka(false) : bukaPanel(setPanelInfoTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
                   >
-                    <ChevronDown size={14} /> Tutup Semua
+                    <Info size={14} /> Info
+                    {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                   </button>
-                )}
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelTabelTerbuka ? setPanelTabelTerbuka(false) : bukaPanel(setPanelTabelTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <Table size={14} /> Tabel
+                    {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelKebijakanTerbuka ? setPanelKebijakanTerbuka(false) : bukaPanel(setPanelKebijakanTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <ClipboardList size={14} /> Kebijakan
+                    {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  <button
+                    onClick={() => { adaPanelTerbuka && panelMetodologiTerbuka ? setPanelMetodologiTerbuka(false) : bukaPanel(setPanelMetodologiTerbuka); }}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                  >
+                    <FileText size={14} /> Metodologi
+                    {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  {adaPanelTerbuka && (
+                    <button
+                      onClick={toggleAllPanels}
+                      className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                    >
+                      <ChevronDown size={14} /> Tutup Semua
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
