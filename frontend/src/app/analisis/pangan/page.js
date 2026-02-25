@@ -1,1055 +1,1294 @@
-"use client";
-import { useState, useRef, useEffect } from 'react';
+'use client';
+import { useState, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import axios from 'axios';
-import { 
-  Play, Download, Plus, Minus, ChevronDown, Filter, Save, X, Activity, RotateCcw, ChevronUp, Info, Table, FileText, ClipboardList, Search, Eye, EyeOff, Wheat
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import * as XLSX from 'xlsx';
 import HeaderBar from '@/components/layout/HeaderBar';
+import Footerauth from '@/components/layout/footerauth';
+import {
+  BarChart3,
+  Map,
+  Info,
+  History,
+  RefreshCw,
+  Play,
+  Search,
+  ArrowUpDown,
+  CheckCircle2,
+  XCircle,
+  Satellite,
+  Wheat,
+  UtensilsCrossed,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Save,
+  RotateCcw,
+  Building2,
+  Trees,
+  Waves,
+  Route,
+  FileText,
+} from 'lucide-react';
 
-// Konfigurasi Kategori Ketahanan Pangan
-const KATEGORI = {
-  "SANGAT RENTAN": { warna: "#dc2626", label: "SANGAT RENTAN", emoji: "🚨" },
-  "RENTAN": { warna: "#ef4444", label: "RENTAN", emoji: "⚠️" },
-  "AGAK TAHAN": { warna: "#f59e0b", label: "AGAK TAHAN", emoji: "📊" },
-  "TAHAN": { warna: "#10b981", label: "TAHAN", emoji: "✅" },
-  "SANGAT TAHAN": { warna: "#059669", label: "SANGAT TAHAN", emoji: "🏆" }
+// Leaflet hanya di sisi client
+const PanganMap = dynamic(
+  () => import('@/components/analisis/panganMap'),
+  { ssr: false }
+);
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
+const PROVINSI_LIST = [
+  'Aceh','Bali','Banten','Bengkulu',
+  'Daerah Istimewa Yogyakarta','Daerah Khusus Ibukota Jakarta',
+  'Gorontalo','Jambi','Jawa Barat','Jawa Tengah','Jawa Timur',
+  'Kalimantan Barat','Kalimantan Selatan','Kalimantan Tengah',
+  'Kalimantan Timur','Kalimantan Utara',
+  'Kepulauan Bangka Belitung','Kepulauan Riau','Lampung',
+  'Maluku','Maluku Utara','Nusa Tenggara Barat','Nusa Tenggara Timur',
+  'Papua','Papua Barat','Papua Barat Daya','Papua Pegunungan',
+  'Papua Selatan','Papua Tengah','Riau',
+  'Sulawesi Barat','Sulawesi Selatan','Sulawesi Tengah',
+  'Sulawesi Tenggara','Sulawesi Utara',
+  'Sumatera Barat','Sumatera Selatan','Sumatera Utara',
+];
+
+const TABS = [
+  { id: 'dashboard',  label: 'Dashboard',     Icon: BarChart3  },
+  { id: 'analisis',   label: 'Analisis IKPG', Icon: FileText   },
+  { id: 'metodologi', label: 'Metodologi',    Icon: Info       },
+  { id: 'riwayat',    label: 'Riwayat',       Icon: History    },
+];
+
+// Status color maps
+const STATUS_STYLE = {
+  Tinggi: {
+    bar:   '#10b981',
+    text:  'text-emerald-600 dark:text-emerald-400',
+    badge: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-400/10 dark:border-emerald-400/30',
+  },
+  Sedang: {
+    bar:   '#f59e0b',
+    text:  'text-amber-600 dark:text-amber-400',
+    badge: 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-400/10 dark:border-amber-400/30',
+  },
+  Rendah: {
+    bar:   '#ef4444',
+    text:  'text-red-600 dark:text-red-400',
+    badge: 'text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-400/10 dark:border-red-400/30',
+  },
 };
+const STATUS_DEFAULT = {
+  bar:   '#6b7280',
+  text:  'text-slate-500 dark:text-slate-400',
+  badge: 'text-slate-600 bg-slate-100 border-slate-200 dark:text-slate-400 dark:bg-slate-700 dark:border-slate-600',
+};
+const getSt = (s) => STATUS_STYLE[s] ?? STATUS_DEFAULT;
 
-const PUSAT_DEFAULT = [-2.5, 118];
-const ZOOM_DEFAULT = 5;
+const barColor = (v) =>
+  v >= 70 ? '#10b981' : v >= 40 ? '#f59e0b' : '#ef4444';
 
-export default function PanganPage() {
-  const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
-  const [hasilAnalisis, setHasilAnalisis] = useState(null);
-  const [kategoriTerpilih, setKategoriTerpilih] = useState('SEMUA');
-  const [adalahClient, setAdalahClient] = useState(false);
-  const [petaSedangMemuat, setPetaSedangMemuat] = useState(true);
-  
-  const [menuUnduhTerbuka, setMenuUnduhTerbuka] = useState(false);
-  const [menuFilterTerbuka, setMenuFilterTerbuka] = useState(false);
-  
-  // Drop-up panels
-  const [panelInfoTerbuka, setPanelInfoTerbuka] = useState(false);
-  const [panelTabelTerbuka, setPanelTabelTerbuka] = useState(false);
-  const [panelMetodologiTerbuka, setPanelMetodologiTerbuka] = useState(false);
-  const [panelKebijakanTerbuka, setPanelKebijakanTerbuka] = useState(false);
-  
-  // Koordinat cursor dan zoom
-  const [koordinatCursor, setKoordinatCursor] = useState({ lat: 0, lng: 0 });
-  const [currentZoom, setCurrentZoom] = useState(ZOOM_DEFAULT);
-  
-  // Modal Save
-  const [modalSaveTerbuka, setModalSaveTerbuka] = useState(false);
-  const [namaSimpan, setNamaSimpan] = useState('');
-  const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
 
-  // Search location
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchTerbuka, setSearchTerbuka] = useState(false);
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const [provinsiDipilih, setProvinsiDipilih] = useState(null);
+// Primitives
 
-  // Clean View Mode
-  const [modeBersih, setModeBersih] = useState(false);
-
-  const petaRef = useRef(null);
-
-  const [KontainerPeta, setKontainerPeta] = useState(null);
-  const [LapisanPeta, setLapisanPeta] = useState(null);
-  const [GeoJSON, setGeoJSON] = useState(null);
-  const [useMapEvents, setUseMapEvents] = useState(null);
-
-  useEffect(() => {
-    setAdalahClient(true);
-    setPetaSedangMemuat(true);
-    import('react-leaflet').then((leaflet) => {
-      setKontainerPeta(() => leaflet.MapContainer);
-      setLapisanPeta(() => leaflet.TileLayer);
-      setGeoJSON(() => leaflet.GeoJSON);
-      setUseMapEvents(() => leaflet.useMapEvents);
-      setPetaSedangMemuat(false);
-    });
-    import('leaflet/dist/leaflet.css');
-  }, []);
-
-  const hitungScaleKm = (zoom) => {
-    const scales = { 5: 1000, 6: 500, 7: 200, 8: 100, 9: 50, 10: 25 };
-    return scales[Math.floor(zoom)] || scales[5];
-  };
-
-  const MouseTracker = () => {
-    if (!useMapEvents) return null;
-    
-    const MapEventsComponent = () => {
-      useMapEvents({
-        mousemove: (e) => {
-          setKoordinatCursor({
-            lat: e.latlng.lat.toFixed(4),
-            lng: e.latlng.lng.toFixed(4)
-          });
-        },
-        zoomend: (e) => {
-          setCurrentZoom(e.target.getZoom());
-        }
-      });
-      return null;
-    };
-    
-    return <MapEventsComponent />;
-  };
-
-  useEffect(() => {
-    if (!hasilAnalisis?.matched_features?.features || !searchQuery.trim()) {
-      setSearchSuggestions([]);
-      return;
-    }
-    
-    const suggestions = hasilAnalisis.matched_features.features
-      .filter(f => f.properties?.food_security_analysis?.nama_provinsi?.toLowerCase().includes(searchQuery.toLowerCase()))
-      .map(f => ({
-        nama: f.properties.food_security_analysis.nama_provinsi,
-        kategori: f.properties.food_security_analysis.kategori,
-        warna: f.properties.food_security_analysis.warna
-      }))
-      .slice(0, 5);
-    
-    setSearchSuggestions(suggestions);
-  }, [searchQuery, hasilAnalisis]);
-
-  const handleSearch = (namaProvinsi) => {
-    const provinsiNama = namaProvinsi || searchQuery;
-    if (!hasilAnalisis?.matched_features?.features || !provinsiNama.trim()) return;
-    
-    const fitur = hasilAnalisis.matched_features.features.find(f => 
-      f.properties?.food_security_analysis?.nama_provinsi?.toLowerCase() === provinsiNama.toLowerCase()
-    );
-    
-    if (fitur && petaRef.current) {
-      const coords = fitur.geometry.coordinates;
-      let lat, lng;
-      if (fitur.geometry.type === "MultiPolygon") {
-        const polygon = coords[0][0];
-        lat = polygon.reduce((sum, coord) => sum + coord[1], 0) / polygon.length;
-        lng = polygon.reduce((sum, coord) => sum + coord[0], 0) / polygon.length;
-      } else {
-        const polygon = coords[0];
-        lat = polygon.reduce((sum, coord) => sum + coord[1], 0) / polygon.length;
-        lng = polygon.reduce((sum, coord) => sum + coord[0], 0) / polygon.length;
-      }
-      
-      petaRef.current.setView([lat, lng], 7);
-      setProvinsiDipilih(fitur.properties.food_security_analysis.nama_provinsi);
-      
-      toast.success(
-        <div className="flex items-center gap-2">
-          <span className="text-xl">📍</span>
-          <div>
-            <div className="font-bold">Lokasi Ditemukan!</div>
-            <div className="text-xs">{fitur.properties.food_security_analysis.nama_provinsi}</div>
-          </div>
-        </div>,
-        { duration: 3000, style: { background: '#fff', color: '#333', padding: '12px', borderRadius: '12px' } }
-      );
-      
-      setSearchTerbuka(false);
-      setSearchQuery('');
-      setSearchSuggestions([]);
-    } else {
-      toast.error('Provinsi tidak ditemukan');
-    }
-  };
-
-  const jalankanAnalisisBPS = async () => {
-    setSedangMenganalisis(true);
-    const petunjukMemuat = toast.loading('Mengambil data ketahanan pangan dari BPS Web API...');
-
-    try {
-      const respons = await axios.post('http://127.0.0.1:8000/api/analyze-food-security-bps/', {});
-
-      toast.dismiss(petunjukMemuat);
-      
-      if (respons.data.status === 'success') {
-        setHasilAnalisis(respons.data);
-        toast.success(`Berhasil menganalisis ${respons.data.total_success} provinsi!`, { duration: 5000 });
-      }
-    } catch (galat) {
-      toast.dismiss(petunjukMemuat);
-      
-      if (galat.response?.data?.error) {
-        toast.error(galat.response.data.error);
-      } else {
-        toast.error('Gagal terhubung ke server');
-      }
-      
-      console.error(galat);
-    } finally {
-      setSedangMenganalisis(false);
-    }
-  };
-
-  const resetAnalisis = () => {
-    setHasilAnalisis(null);
-    setKategoriTerpilih('SEMUA');
-    setPanelInfoTerbuka(false);
-    setPanelTabelTerbuka(false);
-    setPanelMetodologiTerbuka(false);
-    setPanelKebijakanTerbuka(false);
-    setProvinsiDipilih(null);
-    setModeBersih(false);
-    toast.success('Analisis berhasil direset');
-  };
-
-  const bukaModalSave = () => {
-    if (!hasilAnalisis) return toast.error("Belum ada data untuk disimpan");
-    setNamaSimpan('');
-    setModalSaveTerbuka(true);
-  };
-
-  const simpanAnalisis = async () => {
-    if (!namaSimpan.trim()) return toast.error("Nama analisis tidak boleh kosong");
-    
-    setSedangMenyimpan(true);
-    const petunjukMemuat = toast.loading('Menyimpan analisis...');
-
-    try {
-      const respons = await axios.post('http://127.0.0.1:8000/api/save-food-security-analysis/', {
-        name: namaSimpan,
-        analysis_data: hasilAnalisis
-      });
-
-      toast.dismiss(petunjukMemuat);
-      if (respons.data.status === 'success') {
-        toast.success(`Analisis "${namaSimpan}" berhasil disimpan!`);
-        setModalSaveTerbuka(false);
-        setNamaSimpan('');
-      }
-    } catch (galat) {
-      toast.dismiss(petunjukMemuat);
-      toast.error('Gagal menyimpan analisis');
-      console.error(galat);
-    } finally {
-      setSedangMenyimpan(false);
-    }
-  };
-
-  const eksporData = (format) => {
-    if (!hasilAnalisis) return toast.error("Data tidak tersedia");
-    const ringkasan = hasilAnalisis.analysis_summary;
-    setMenuUnduhTerbuka(false);
-
-    if (format === 'EXCEL') {
-      const dataExport = ringkasan.map(item => ({
-        'Provinsi': item.provinsi,
-        'Kategori': item.kategori,
-        'IKP': item.food_security_index,
-        'Prevalensi Ketidakcukupan (%)': item.prevalensi_ketidakcukupan
-      }));
-      
-      const lembarKerja = XLSX.utils.json_to_sheet(dataExport);
-      const bukuKerja = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(bukuKerja, lembarKerja, "Ketahanan Pangan");
-      XLSX.writeFile(bukuKerja, "TERASEG_Ketahanan_Pangan_BPS.xlsx");
-      toast.success('File Excel berhasil diunduh');
-    } else if (format === 'JSON') {
-      const gumpalan = new Blob([JSON.stringify(hasilAnalisis, null, 2)], { type: 'application/json' });
-      unduhBerkas(gumpalan, 'TERASEG_Ketahanan_Pangan_BPS.json');
-      toast.success('File JSON berhasil diunduh');
-    } else if (format === 'CSV') {
-      const barisCsv = [
-        ["Provinsi", "Kategori", "IKP", "Prevalensi (%)"].join(","),
-        ...ringkasan.map(s => [s.provinsi, s.kategori, s.food_security_index, s.prevalensi_ketidakcukupan].join(","))
-      ].join("\n");
-      const gumpalan = new Blob([barisCsv], { type: 'text/csv' });
-      unduhBerkas(gumpalan, 'TERASEG_Ketahanan_Pangan_BPS.csv');
-      toast.success('File CSV berhasil diunduh');
-    } else if (format === 'GEOJSON') {
-      const gumpalan = new Blob([JSON.stringify(hasilAnalisis.matched_features, null, 2)], { type: 'application/json' });
-      unduhBerkas(gumpalan, 'TERASEG_Spasial_Ketahanan_Pangan.geojson');
-      toast.success('File GeoJSON berhasil diunduh');
-    }
-  };
-
-  const unduhBerkas = (gumpalan, namaBerkas) => {
-    const tautan = URL.createObjectURL(gumpalan);
-    const elemen = document.createElement('a');
-    elemen.href = tautan; 
-    elemen.download = namaBerkas; 
-    elemen.click();
-    URL.revokeObjectURL(tautan);
-  };
-
-  const ambilDataTabelTerfilter = () => {
-    if (!hasilAnalisis?.matched_features?.features) return [];
-    let fitur = hasilAnalisis.matched_features.features;
-    
-    if (kategoriTerpilih !== 'SEMUA') {
-      fitur = fitur.filter(f => f.properties?.food_security_analysis?.kategori === kategoriTerpilih);
-    }
-    
-    return fitur.sort((a, b) => {
-      const ikpA = a.properties?.food_security_analysis?.food_security_index || 0;
-      const ikpB = b.properties?.food_security_analysis?.food_security_index || 0;
-      return ikpA - ikpB; // Sort ascending (terburuk dulu)
-    });
-  };
-
-  const dataTerfilter = ambilDataTabelTerfilter();
-  const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetodologiTerbuka || panelKebijakanTerbuka;
-
-  const hitungKategori = () => {
-    if (!hasilAnalisis?.kategori_distribusi) return { "SANGAT RENTAN": 0, "RENTAN": 0, "AGAK TAHAN": 0, "TAHAN": 0, "SANGAT TAHAN": 0 };
-    return hasilAnalisis.kategori_distribusi;
-  };
-
-  const jumlahKategori = hitungKategori();
-
-  const toggleAllPanels = () => {
-    setPanelInfoTerbuka(false);
-    setPanelTabelTerbuka(false);
-    setPanelMetodologiTerbuka(false);
-    setPanelKebijakanTerbuka(false);
-  };
-
-  if (!adalahClient) return null;
-
+function Card({ children, className = '' }) {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {!modeBersih && <HeaderBar />}
-      
-      {/* MODAL SAVE */}
-      {modalSaveTerbuka && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Simpan Analisis</h3>
-              <button onClick={() => setModalSaveTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
+    <div
+      className={`bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
 
-            <div className="mb-6">
-              <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-3">Nama Analisis</label>
-              <input 
-                type="text"
-                value={namaSimpan}
-                onChange={(e) => setNamaSimpan(e.target.value)}
-                placeholder="contoh: Analisis Ketahanan Pangan 2024"
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-colors"
-                onKeyPress={(e) => e.key === 'Enter' && simpanAnalisis()}
-              />
-            </div>
+function SectionLabel({ children }) {
+  return (
+    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">
+      {children}
+    </p>
+  );
+}
 
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setModalSaveTerbuka(false)}
-                className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={simpanAnalisis}
-                disabled={sedangMenyimpan || !namaSimpan.trim()}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {sedangMenyimpan ? 'Menyimpan...' : 'Simpan'}
-              </button>
-            </div>
+function Toast({ toast: t, onClose }) {
+  useEffect(() => {
+    if (!t) return;
+    const id = setTimeout(onClose, 3500);
+    return () => clearTimeout(id);
+  }, [t, onClose]);
+  if (!t) return null;
+  const bg = { success: 'bg-emerald-600', error: 'bg-red-600', info: 'bg-blue-600' };
+  const Icon = t.type === 'success' ? CheckCircle2 : t.type === 'error' ? XCircle : Info;
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-[1300] flex items-center gap-3 px-5 py-3 rounded-xl text-white shadow-2xl ${bg[t.type] ?? 'bg-slate-700'}`}
+    >
+      <Icon size={15} />
+      <span className="text-sm font-medium">{t.message}</span>
+      <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100">
+        <XCircle size={14} />
+      </button>
+    </div>
+  );
+}
+
+function StatCard({ label, value, Icon, sub, colorCls }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <Icon size={18} className="text-slate-400 dark:text-slate-500" />
+        <span className="text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-full">
+          {sub}
+        </span>
+      </div>
+      <div className={`text-2xl font-bold ${colorCls ?? 'text-slate-800 dark:text-slate-100'}`}>
+        {value ?? '-'}
+      </div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</div>
+    </Card>
+  );
+}
+
+function ScoreBar({ label, Icon, score, weight, detail, noDataMsg }) {
+  const pct   = score != null ? Math.min(score, 100) : 0;
+  const color = score != null ? barColor(pct) : '#94a3b8';
+  return (
+    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700/50">
+      <div className="flex justify-between items-start mb-2 gap-3">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <Icon size={15} className="text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{label}</div>
+            {detail && (
+              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{detail}</div>
+            )}
+            {noDataMsg && score == null && (
+              <div className="text-xs text-amber-500 dark:text-amber-400 mt-0.5">{noDataMsg}</div>
+            )}
           </div>
         </div>
-      )}
+        <div className="text-right flex-shrink-0">
+          <div className="text-sm font-bold" style={{ color }}>
+            {score != null ? score.toFixed(1) : '-'}
+            <span className="text-slate-400 dark:text-slate-500 text-xs font-normal">/100</span>
+          </div>
+          <div className="text-xs text-slate-400 dark:text-slate-500">
+            Bobot {(weight * 100).toFixed(0)}%
+          </div>
+        </div>
+      </div>
+      <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
+  );
+}
 
-      <div className={`fixed inset-0 bg-white dark:bg-slate-900 ${modeBersih ? 'top-0' : 'top-16'}`}>
-        {!petaSedangMemuat && KontainerPeta && (
-          <KontainerPeta 
-            center={PUSAT_DEFAULT} 
-            zoom={ZOOM_DEFAULT} 
-            className="h-full w-full z-0" 
-            zoomControl={false}
-            ref={petaRef}
-          >
-            <LapisanPeta 
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            />
-            <MouseTracker />
-            {hasilAnalisis?.matched_features?.features && (
-              <GeoJSON 
-                key={JSON.stringify(hasilAnalisis.matched_features.features) + kategoriTerpilih + provinsiDipilih}
-                data={{ type: "FeatureCollection", features: hasilAnalisis.matched_features.features }}
-                style={(fitur) => {
-                  const analisis = fitur.properties?.food_security_analysis || {};
-                  let terlihat = true;
-                  
-                  if (kategoriTerpilih !== 'SEMUA' && analisis.kategori !== kategoriTerpilih) {
-                    terlihat = false;
-                  }
-                  
-                  const isHighlighted = provinsiDipilih === analisis.nama_provinsi;
-                  
-                  return { 
-                    fillColor: analisis.warna || "#cbd5e1", 
-                    weight: isHighlighted ? 4 : 2, 
-                    opacity: terlihat ? 1 : 0, 
-                    color: isHighlighted ? '#3b82f6' : 'white', 
-                    fillOpacity: terlihat ? 0.75 : 0 
-                  };
-                }}
-                onEachFeature={(fitur, lapisan) => {
-                  const analisis = fitur.properties?.food_security_analysis || {};
-                  const wawasan = analisis.insights?.map(i => `<div style="margin-bottom:3px; padding-left:6px; border-left:2px solid ${analisis.warna}; font-weight: 600; font-size: 9px;">${i}</div>`).join('') || '';
-                  
-                  lapisan.bindTooltip(`
-                    <div style="font-family: inherit; padding: 4px;">
-                      <div style="font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px;">${analisis.nama_provinsi}</div>
-                      <div style="font-size: 9px; font-weight: 800; color: ${analisis.warna}; margin-top:2px;">${KATEGORI[analisis.kategori]?.emoji || ''} ${analisis.kategori}</div>
-                      <div style="font-size: 8px; font-weight: 700; color: #64748b; margin-top:2px;">IKP: ${analisis.food_security_index}</div>
-                    </div>
-                  `, { sticky: true, opacity: 0.95 });
+function ProporsiBar({ label, Icon, pct, color }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Icon size={13} className="flex-shrink-0 text-slate-400 dark:text-slate-500" />
+      <div className="flex-1">
+        <div className="flex justify-between text-xs mb-1">
+          <span className="text-slate-500 dark:text-slate-400">{label}</span>
+          <span className="text-slate-700 dark:text-slate-300 font-mono">{pct?.toFixed(1) ?? 0}%</span>
+        </div>
+        <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${Math.min(pct ?? 0, 100)}%`, backgroundColor: color }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-                  lapisan.bindPopup(`
-                    <div style="font-family: inherit; min-width: 280px; color: #1e293b; padding: 4px;">
-                      <div style="background: ${analisis.warna}; color: white; padding: 8px; border-radius: 8px; margin-bottom: 6px;">
-                        <div style="font-weight: 900; font-size: 12px; text-transform: uppercase;">${analisis.nama_provinsi}</div>
-                        <div style="font-size: 10px; opacity: 0.9; margin-top: 2px;">Analisis Ketahanan Pangan</div>
-                      </div>
-                      
-                      <div style="padding: 0 2px;">
-                        <div style="text-align: center; margin-bottom: 6px;">
-                          <span style="background: ${analisis.warna}; color: white; padding: 4px 12px; border-radius: 10px; font-size: 8px; font-weight: 900;">
-                            ${KATEGORI[analisis.kategori]?.emoji || ''} ${analisis.kategori}
-                          </span>
-                        </div>
+function IkpgGauge({ ikpg, status }) {
+  const bar = getSt(status).bar;
+  const pct = ikpg ?? 0;
+  const r = 54, cx = 64, cy = 64, a0 = 140, a1 = 400;
+  const fill = (pct / 100) * (a1 - a0);
+  const arc = (s, e) => {
+    const sr = (s * Math.PI) / 180, er = (e * Math.PI) / 180;
+    return `M ${cx + r * Math.cos(sr)} ${cy + r * Math.sin(sr)} A ${r} ${r} 0 ${e - s > 180 ? 1 : 0} 1 ${cx + r * Math.cos(er)} ${cy + r * Math.sin(er)}`;
+  };
+  return (
+    <div className="relative flex items-center justify-center">
+      <svg width="128" height="128" viewBox="0 0 128 128">
+        <path
+          d={arc(a0, a1)}
+          fill="none"
+          stroke="#e2e8f0"
+          className="dark:[stroke:#1e293b]"
+          strokeWidth="10"
+          strokeLinecap="round"
+        />
+        {ikpg != null && (
+          <path
+            d={arc(a0, a0 + fill)}
+            fill="none"
+            stroke={bar}
+            strokeWidth="10"
+            strokeLinecap="round"
+            className="transition-all duration-1000"
+          />
+        )}
+      </svg>
+      <div className="absolute text-center">
+        <div className="text-3xl font-black text-slate-800 dark:text-white leading-none">
+          {ikpg ?? '-'}
+        </div>
+        <div className={`text-xs font-semibold mt-1 ${getSt(status).text}`}>{status ?? '-'}</div>
+      </div>
+    </div>
+  );
+}
 
-                        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 8px; border-radius: 8px; margin-bottom: 6px; border-left: 3px solid ${analisis.warna};">
-                          <div style="font-size: 7px; font-weight: 900; color: #14532d; text-transform: uppercase;">Indeks Ketahanan Pangan (IKP)</div>
-                          <div style="font-size: 16px; font-weight: 900; color: #16a34a;">${analisis.food_security_index}</div>
-                        </div>
+function FormulaBox({ accent = 'indigo', children }) {
+  const variants = {
+    indigo: 'border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/60 dark:bg-indigo-500/5',
+    amber:  'border-amber-200  dark:border-amber-500/30  bg-amber-50/60  dark:bg-amber-500/5',
+    cyan:   'border-cyan-200   dark:border-cyan-500/30   bg-cyan-50/60   dark:bg-cyan-500/5',
+    emerald:'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/5',
+    pink:   'border-pink-200   dark:border-pink-500/30   bg-pink-50/60   dark:bg-pink-500/5',
+  };
+  return (
+    <div
+      className={`rounded-xl border p-4 font-mono text-sm leading-relaxed overflow-x-auto text-slate-700 dark:text-slate-200 ${variants[accent]}`}
+    >
+      {children}
+    </div>
+  );
+}
 
-                        <div style="background: #fef2f2; padding: 8px; border-radius: 8px; margin-bottom: 6px; border-left: 3px solid #ef4444;">
-                          <div style="font-size: 7px; font-weight: 900; color: #7f1d1d; text-transform: uppercase;">Prevalensi Ketidakcukupan</div>
-                          <div style="font-size: 16px; font-weight: 900; color: #dc2626;">${analisis.prevalensi_ketidakcukupan}%</div>
-                        </div>
+function MetSection({ title, Icon, children }) {
+  return (
+    <Card className="p-6 space-y-4">
+      <h3 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
+        <Icon size={17} className="text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
+        {title}
+      </h3>
+      {children}
+    </Card>
+  );
+}
 
-                        <div style="font-size: 7px; font-weight: 900; color: #64748b; text-transform: uppercase; margin-bottom: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">💡 WAWASAN</div>
-                        <div style="font-size: 9px; color: #334155; line-height: 1.4;">${wawasan}</div>
-                      </div>
-                    </div>
-                  `, { maxWidth: 300, maxHeight: 400 });
-                }}
+
+// Mai
+export default function PanganPage() {
+  const [tab,             setTab]             = useState('dashboard');
+  const [toast,           setToast]           = useState(null);
+  const [analisisProv,    setAnalisisProv]    = useState('');
+  const [analisisResult,  setAnalisisResult]  = useState(null);
+  const [analisisLoading, setAnalisisLoading] = useState(false);
+  const [dashData,        setDashData]        = useState(null);
+  const [dashLoading,     setDashLoading]     = useState(false);
+  const [history,         setHistory]         = useState([]);
+  const [histLoading,     setHistLoading]     = useState(false);
+  const [searchProv,      setSearchProv]      = useState('');
+  const [sortCol,         setSortCol]         = useState('ikpg');
+  const [sortDir,         setSortDir]         = useState('asc');
+
+  const showToast = (message, type = 'info') => setToast({ message, type });
+
+  // Data loaders
+  // NOT called on mount — user must click the run button
+  const loadDashboard = useCallback(async () => {
+    setDashLoading(true);
+    try {
+      const res = await axios.post(`${API}/analyze-all-provinces-bps/`);
+      setDashData(res.data);
+      showToast('Data nasional berhasil dimuat', 'success');
+    } catch (e) {
+      showToast('Gagal memuat: ' + (e.response?.data?.error ?? e.message), 'error');
+    } finally {
+      setDashLoading(false);
+    }
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    setHistLoading(true);
+    try {
+      const res = await axios.get(`${API}/food-security-analysis/list/?limit=50`);
+      setHistory(res.data.results ?? []);
+    } catch {
+      showToast('Gagal memuat riwayat', 'error');
+    } finally {
+      setHistLoading(false);
+    }
+  }, []);
+
+  // Auto-load hanya riwayat saat tab aktif
+  useEffect(() => {
+    if (tab === 'riwayat') loadHistory();
+  }, [tab, loadHistory]);
+
+  const runAnalisis = async () => {
+    if (!analisisProv) return showToast('Pilih provinsi terlebih dahulu', 'error');
+    setAnalisisLoading(true);
+    setAnalisisResult(null);
+    try {
+      const res = await axios.post(`${API}/analyze-food-security-bps/`, { provinsi: analisisProv });
+      setAnalisisResult(res.data);
+      showToast(`IKPG ${analisisProv}: ${res.data.ikpg} (${res.data.status})`, 'success');
+    } catch (e) {
+      showToast('Gagal: ' + (e.response?.data?.error ?? e.message), 'error');
+    } finally {
+      setAnalisisLoading(false);
+    }
+  };
+
+  const saveAnalisis = async () => {
+    if (!analisisResult) return;
+    try {
+      await axios.post(`${API}/save-food-security-analysis/`, analisisResult);
+      showToast('Analisis berhasil disimpan', 'success');
+    } catch {
+      showToast('Gagal menyimpan', 'error');
+    }
+  };
+
+  const deleteHistory = async (id) => {
+    try {
+      await axios.delete(`${API}/food-security-analysis/${id}/delete/`);
+      setHistory((h) => h.filter((x) => x.analysis_id !== id));
+      showToast('Data dihapus', 'info');
+    } catch {
+      showToast('Gagal menghapus', 'error');
+    }
+  };
+
+  // Sorted province table
+  const provTable = (() => {
+    const src      = dashData?.summary ?? [];
+    const filtered = searchProv
+      ? src.filter((p) => p.nama_provinsi.toLowerCase().includes(searchProv.toLowerCase()))
+      : src;
+    return [...filtered].sort((a, b) => {
+      const g = (obj, col) => {
+        if (col === 'prov')  return obj.nama_provinsi ?? '';
+        if (col === 'ikpg')  return obj.ikpg ?? -1;
+        if (col === 'geoai') return obj.komponen?.geoai_weighted ?? -1;
+        if (col === 'prod')  return obj.komponen?.production_score ?? -1;
+        if (col === 'kal')   return obj.komponen?.calorie_score ?? -1;
+        if (col === 'insec') return obj.komponen?.insecurity_score ?? -1;
+        return 0;
+      };
+      const va = g(a, sortCol), vb = g(b, sortCol);
+      if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  })();
+
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const SortTh = ({ col, label }) => (
+    <th
+      onClick={() => toggleSort(col)}
+      className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 select-none whitespace-nowrap"
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <ArrowUpDown
+          size={9}
+          className={sortCol === col ? 'text-indigo-500' : 'text-slate-300 dark:text-slate-600'}
+        />
+      </span>
+    </th>
+  );
+
+
+  // DASHBOARD
+  const renderDashboard = () => {
+    const d    = dashData;
+    const dist = d?.status_distribusi ?? {};
+
+    return (
+      <div className="space-y-6">
+
+        {/* Run-button state — prominent when no data loaded yet */}
+        {!d && !dashLoading && (
+          <Card className="p-10 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mx-auto mb-5">
+              <Play size={26} className="text-indigo-500 dark:text-indigo-400" />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-2">
+              Mulai Analisis Nasional
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">
+              Klik tombol di bawah untuk mengambil data BPS dan menghitung IKPG
+              seluruh provinsi Indonesia. Proses memerlukan beberapa saat.
+            </p>
+            <button
+              onClick={loadDashboard}
+              className="inline-flex items-center gap-2 px-7 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm"
+            >
+              <Play size={15} />
+              Jalankan Analisis
+            </button>
+          </Card>
+        )}
+
+        {dashLoading && (
+          <Card className="p-10 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+              <RefreshCw size={26} className="text-indigo-400 animate-spin" />
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Mengambil data BPS dan menghitung IKPG...
+            </p>
+          </Card>
+        )}
+
+        {d && (
+          <>
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Rata-rata IKPG Nasional"
+                value={d.national_avg_ikpg}
+                Icon={BarChart3}
+                sub="Seluruh Provinsi"
+                colorCls="text-indigo-600 dark:text-indigo-400"
               />
-            )}
-          </KontainerPeta>
-        )}
-
-        {/* JUDUL HALAMAN */}
-        {!modeBersih && (
-          <div className="absolute top-6 left-6 z-[1000] bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-3 rounded-xl shadow-xl">
-            <div className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-              <Wheat size={18} /> Ketahanan Pangan Nasional
+              <StatCard
+                label="Ketahanan Tinggi"
+                value={dist.Tinggi ?? '-'}
+                Icon={TrendingUp}
+                sub="IKPG >= 70"
+                colorCls="text-emerald-600 dark:text-emerald-400"
+              />
+              <StatCard
+                label="Perlu Perhatian"
+                value={dist.Sedang ?? '-'}
+                Icon={BarChart3}
+                sub="IKPG 40-69"
+                colorCls="text-amber-600 dark:text-amber-400"
+              />
+              <StatCard
+                label="Kerawanan Rendah"
+                value={dist.Rendah ?? '-'}
+                Icon={TrendingDown}
+                sub="IKPG < 40"
+                colorCls="text-red-600 dark:text-red-400"
+              />
             </div>
-          </div>
-        )}
 
-        {/* ZOOM CONTROLS */}
-        {!modeBersih && (
-          <div className="absolute top-20 left-6 z-[1000] flex flex-col gap-2">
-            <button onClick={() => petaRef.current?.zoomIn()} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700">
-              <Plus size={16}/>
-            </button>
-            <button onClick={() => petaRef.current?.zoomOut()} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700">
-              <Minus size={16}/>
-            </button>
-          </div>
-        )}
+            {/* Formula strip */}
+            <Card className="p-5">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">
+                Formula IKPG — 4 Kelas YOLO
+              </p>
+              <p className="font-mono text-sm text-slate-700 dark:text-slate-300 leading-loose">
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
+                {' = (0.5 x '}
+                <span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
+                {') + (0.3 x '}
+                <span className="text-emerald-600 dark:text-emerald-400">Produksi</span>
+                {') + (0.1 x '}
+                <span className="text-amber-600 dark:text-amber-400">Kalori</span>
+                {') + (0.1 x '}
+                <span className="text-pink-600 dark:text-pink-400">Insecurity</span>
+                {')'}
+              </p>
+              <p className="font-mono text-xs text-slate-500 dark:text-slate-500 mt-1.5">
+                <span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
+                {' = clamp((+0.40 x Pepohonan%) + (+0.30 x Perairan%) - (0.20 x Bangunan%) - (0.10 x Jalan%) + 30, 0, 100)'}
+              </p>
+            </Card>
 
-        {/* MODE BERSIH */}
-        {hasilAnalisis && (
-          <div className="absolute top-[170px] left-6 z-[1000]">
-            <button onClick={() => setModeBersih(!modeBersih)} className="p-2.5 rounded-lg shadow-lg hover:shadow-xl transition-all active:scale-90 border-2 border-white dark:border-slate-700 bg-gradient-to-r from-amber-600 to-amber-500">
-              {modeBersih ? <EyeOff size={16} className="text-white" /> : <Eye size={16} className="text-white" />}
-            </button>
-          </div>
-        )}
-
-        {/* SEARCH */}
-        {hasilAnalisis && !modeBersih && (
-          <div className="absolute top-[215px] left-6 z-[1000]">
-            {searchTerbuka ? (
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                <div className="p-2 flex gap-2">
-                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSearch()} placeholder="Cari provinsi..." className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none w-48" autoFocus />
-                  <button onClick={() => handleSearch()} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-all"><Search size={16} /></button>
-                  <button onClick={() => { setSearchTerbuka(false); setSearchQuery(''); setSearchSuggestions([]); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"><X size={16} /></button>
+            {/* Map */}
+            <Card className="overflow-hidden">
+              <div className="px-5 pt-4 pb-2 flex items-center justify-between flex-wrap gap-3 border-b border-slate-100 dark:border-slate-700/50">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <Map size={15} className="text-slate-400 dark:text-slate-500" />
+                  Peta Ketahanan Pangan per Provinsi
                 </div>
-                {searchSuggestions.length > 0 && (
-                  <div className="border-t border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
-                    {searchSuggestions.map((sug, idx) => (
-                      <button key={idx} onClick={() => handleSearch(sug.nama)} className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
-                        <span className="text-sm font-bold text-slate-900 dark:text-white">{sug.nama}</span>
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg" style={{ backgroundColor: sug.warna + '20', color: sug.warna }}>{sug.kategori}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                  {[
+                    ['#10b981', 'Tinggi >=70'],
+                    ['#f59e0b', 'Sedang 40-69'],
+                    ['#ef4444', 'Rendah <40'],
+                  ].map(([c, l]) => (
+                    <span key={l} className="flex items-center gap-1.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: c }}
+                      />
+                      {l}
+                    </span>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <button onClick={() => setSearchTerbuka(true)} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700"><Search size={16}/></button>
-            )}
-          </div>
+              <div style={{ height: 420 }}>
+                <PanganMap
+                  geojson={d.geojson}
+                  onProvinceClick={(prov) => {
+                    setAnalisisProv(prov);
+                    setTab('analisis');
+                  }}
+                />
+              </div>
+            </Card>
+
+            {/* Province table */}
+            <Card className="overflow-hidden">
+              <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap border-b border-slate-100 dark:border-slate-700/50">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <FileText size={15} className="text-slate-400 dark:text-slate-500" />
+                  Tabel Semua Provinsi
+                </div>
+                <div className="relative">
+                  <Search
+                    size={13}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cari provinsi..."
+                    value={searchProv}
+                    onChange={(e) => setSearchProv(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400 w-52 placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-900/60">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase w-8">
+                        #
+                      </th>
+                      <SortTh col="prov"  label="Provinsi"   />
+                      <SortTh col="ikpg"  label="IKPG"       />
+                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <SortTh col="geoai" label="GeoAI"      />
+                      <SortTh col="prod"  label="Produksi"   />
+                      <SortTh col="kal"   label="Kalori"     />
+                      <SortTh col="insec" label="Insecurity" />
+                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
+                        Data
+                      </th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                    {provTable.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="text-center py-10 text-slate-400 dark:text-slate-500 text-sm"
+                        >
+                          Tidak ada data.
+                        </td>
+                      </tr>
+                    ) : (
+                      provTable.map((p, i) => {
+                        const k  = p.komponen ?? {};
+                        const sc = getSt(p.status);
+                        return (
+                          <tr
+                            key={p.nama_provinsi}
+                            onClick={() => {
+                              setAnalisisProv(p.nama_provinsi);
+                              setTab('analisis');
+                            }}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
+                          >
+                            <td className="px-4 py-3 text-slate-400 dark:text-slate-600 text-xs">
+                              {i + 1}
+                            </td>
+                            <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                              {p.nama_provinsi}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-14 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{ width: `${p.ikpg}%`, backgroundColor: p.warna }}
+                                  />
+                                </div>
+                                <span
+                                  className="font-bold font-mono text-sm"
+                                  style={{ color: p.warna }}
+                                >
+                                  {p.ikpg}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full border font-medium ${sc.badge}`}
+                              >
+                                {p.status}
+                              </span>
+                            </td>
+                            {[
+                              k.geoai_weighted,
+                              k.production_score,
+                              k.calorie_score,
+                              k.insecurity_score,
+                            ].map((v, vi) => (
+                              <td
+                                key={vi}
+                                className="px-4 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs"
+                              >
+                                {v != null ? (
+                                  v.toFixed(1)
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">-</span>
+                                )}
+                              </td>
+                            ))}
+                            <td className="px-4 py-3 text-xs">
+                              {p.has_geoai_data ? (
+                                <span className="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-400/10 px-2 py-0.5 rounded-full font-medium">
+                                  GeoAI
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs text-indigo-500 dark:text-indigo-400">
+                                Detail
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {provTable.length > 0 && (
+                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-400 dark:text-slate-500">
+                  Menampilkan {provTable.length} dari {dashData?.summary?.length ?? 0} provinsi
+                  {searchProv && (
+                    <>
+                      {' — filter: '}
+                      <span className="text-slate-600 dark:text-slate-300">{searchProv}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            {/* Refresh button — shown after first load */}
+            <div className="flex justify-end">
+              <button
+                onClick={loadDashboard}
+                disabled={dashLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-xl transition-colors"
+              >
+                <RefreshCw size={12} className={dashLoading ? 'animate-spin' : ''} />
+                Perbarui Data
+              </button>
+            </div>
+          </>
         )}
+      </div>
+    );
+  };
 
-        {/* KOORDINAT & LEGEND */}
-        {!modeBersih && (
-          <div className="absolute top-6 right-6 z-[1000] space-y-2">
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                <span className="text-blue-600 dark:text-blue-400">Lat:</span> {koordinatCursor.lat} | <span className="text-blue-600 dark:text-blue-400">Lng:</span> {koordinatCursor.lng}
-              </div>
-            </div>
 
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-              <div className="flex flex-col gap-1">
-                <div className="h-2 bg-slate-300 dark:bg-slate-600" style={{width: '80px', borderLeft: '2px solid #64748b', borderRight: '2px solid #64748b', borderBottom: '2px solid #64748b'}}></div>
-                <div className="text-[11px] font-bold text-center text-slate-700 dark:text-slate-300">{hitungScaleKm(currentZoom)} km</div>
-              </div>
-            </div>
+  // ANALISIS
+  const renderAnalisis = () => {
+    const r   = analisisResult;
+    const k   = r?.komponen ?? {};
+    const b   = r?.bobot_used ?? {};
+    const p   = r?.proporsi_lahan ?? {};
+    const raw = r?.bps_raw ?? {};
+    const sc  = getSt(r?.status);
 
-            {/* LEGEND */}
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
-              <div className="space-y-2">
-                {Object.entries(KATEGORI).map(([kunci, nilai]) => (
-                  <div key={kunci} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: nilai.warna }}></div>
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{nilai.emoji} {nilai.label}</span>
-                    </div>
-                    {hasilAnalisis && (
-                      <span className="text-[10px] font-black bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-900 dark:text-white">{jumlahKategori[kunci] || 0}</span>
+    return (
+      <div className="space-y-5">
+        <Card className="p-5">
+          <SectionLabel>Pilih Provinsi</SectionLabel>
+          <div className="flex gap-3">
+            <select
+              value={analisisProv}
+              onChange={(e) => {
+                setAnalisisProv(e.target.value);
+                setAnalisisResult(null);
+              }}
+              className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-400"
+            >
+              <option value="">-- Pilih Provinsi --</option>
+              {PROVINSI_LIST.map((pv) => (
+                <option key={pv} value={pv}>{pv}</option>
+              ))}
+            </select>
+            <button
+              onClick={runAnalisis}
+              disabled={analisisLoading || !analisisProv}
+              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm transition-colors"
+            >
+              {analisisLoading ? (
+                <><RefreshCw size={14} className="animate-spin" /> Menganalisis...</>
+              ) : (
+                <><Play size={14} /> Analisis</>
+              )}
+            </button>
+          </div>
+        </Card>
+
+        {r && (
+          <div className="space-y-5">
+            {/* Hero gauge */}
+            <Card className="p-6">
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                <IkpgGauge ikpg={r.ikpg} status={r.status} />
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      Indeks Ketahanan Pangan Gabungan
+                    </p>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                      {r.provinsi}
+                    </h2>
+                    <span
+                      className={`inline-flex items-center mt-2 px-3 py-1 rounded-full border text-sm font-semibold ${sc.badge}`}
+                    >
+                      {r.status}
+                    </span>
+                    {!r.has_geoai_data && (
+                      <div className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded-lg px-3 py-2">
+                        <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
+                        Tanpa data GeoAI — bobot: Produksi 60%, Kalori 20%, Insecurity 20%
+                      </div>
                     )}
                   </div>
-                ))}
+                  <div>
+                    <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: `${r.ikpg}%`, backgroundColor: sc.bar }}
+                      />
+                      <div className="absolute top-0 h-full w-px bg-amber-400/60" style={{ left: '40%' }} />
+                      <div className="absolute top-0 h-full w-px bg-emerald-400/60" style={{ left: '70%' }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 dark:text-slate-600 mt-1">
+                      <span>0</span>
+                      <span className="text-amber-500">40</span>
+                      <span className="text-emerald-500">70</span>
+                      <span>100</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Score breakdown + proporsi */}
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <SectionLabel>Komponen Skor</SectionLabel>
+                <ScoreBar
+                  label="GeoAI Weighted (4 kelas)"
+                  Icon={Satellite}
+                  score={k.geoai_weighted}
+                  weight={b.geoai ?? 0.5}
+                  detail={r.has_geoai_data ? 'pepohonan · perairan · bangunan · jalan' : null}
+                  noDataMsg={!r.has_geoai_data ? 'Data GeoAI tidak tersedia' : null}
+                />
+                <ScoreBar
+                  label="Produksi Padi"
+                  Icon={Wheat}
+                  score={k.production_score}
+                  weight={b.produksi ?? 0.3}
+                  detail={
+                    raw.produksi_padi_ton
+                      ? `${(raw.produksi_padi_ton / 1e6).toFixed(2)} juta ton (2024)`
+                      : null
+                  }
+                />
+                <ScoreBar
+                  label="Konsumsi Kalori"
+                  Icon={UtensilsCrossed}
+                  score={k.calorie_score}
+                  weight={b.kalori ?? 0.1}
+                  detail={
+                    raw.kalori_kkal_perhari
+                      ? `${raw.kalori_kkal_perhari} kkal/kapita/hari (2025)`
+                      : null
+                  }
+                />
+                <ScoreBar
+                  label="Ketahanan Pangan"
+                  Icon={AlertTriangle}
+                  score={k.insecurity_score}
+                  weight={b.insecurity ?? 0.1}
+                  detail={
+                    raw.prevalensi_insecurity_persen != null
+                      ? `Prevalensi: ${raw.prevalensi_insecurity_persen}% (2025)`
+                      : null
+                  }
+                />
+              </div>
+
+              <div>
+                <SectionLabel>Proporsi Tutupan (4 Kelas GeoAI)</SectionLabel>
+                {r.has_geoai_data && Object.keys(p).length > 0 ? (
+                  <Card className="p-4 space-y-3">
+                    <ProporsiBar label="Pepohonan / Vegetasi" Icon={Trees}     pct={p.pepohonan} color="#22c55e" />
+                    <ProporsiBar label="Perairan"             Icon={Waves}     pct={p.perairan}  color="#3b82f6" />
+                    <ProporsiBar label="Bangunan"             Icon={Building2} pct={p.bangunan}  color="#ef4444" />
+                    <ProporsiBar label="Jalan"                Icon={Route}     pct={p.jalan}     color="#8b5cf6" />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-700 leading-relaxed font-mono">
+                      GeoAI = (+0.40 x {p.pepohonan?.toFixed(1)}%) + (+0.30 x {p.perairan?.toFixed(1)}%)
+                      {' - '}(0.20 x {p.bangunan?.toFixed(1)}%) - (0.10 x {p.jalan?.toFixed(1)}%)
+                      {' + 30 = '}
+                      <span className="text-cyan-600 dark:text-cyan-400 font-bold">
+                        {k.geoai_weighted?.toFixed(1)}
+                      </span>
+                    </p>
+                  </Card>
+                ) : (
+                  <Card className="p-8 flex flex-col items-center justify-center text-center gap-3 min-h-48">
+                    <Satellite size={32} className="text-slate-300 dark:text-slate-600" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Belum ada data GeoAI untuk provinsi ini.
+                      <br />
+                      Simpan hasil deteksi ke{' '}
+                      <code className="text-xs bg-slate-100 dark:bg-slate-700 px-1 rounded">
+                        ai_features
+                      </code>{' '}
+                      terlebih dahulu.
+                    </p>
+                  </Card>
+                )}
               </div>
             </div>
 
-            {/* FILTER */}
-            {hasilAnalisis && (
-              <div className="relative">
-                <button onClick={() => { setMenuFilterTerbuka(!menuFilterTerbuka); setMenuUnduhTerbuka(false); }} className="w-full px-4 py-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-[10px] font-bold hover:border-amber-400 transition-all flex items-center justify-between gap-2 shadow-lg">
-                  <div className="flex items-center gap-2"><Filter size={14} /> {kategoriTerpilih}</div>
-                  <ChevronDown size={14} className={`transition-transform ${menuFilterTerbuka ? 'rotate-180' : ''}`} />
-                </button>
-
-                {menuFilterTerbuka && (
-                  <div className="absolute top-full mt-2 right-0 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                    {["SEMUA", ...Object.keys(KATEGORI)].map(kat => (
-                      <button key={kat} onClick={() => { setKategoriTerpilih(kat); setMenuFilterTerbuka(false); }} className={`w-full text-left px-4 py-2 text-[10px] font-bold transition-all border-b border-slate-100 dark:border-slate-700 last:border-0 ${kategoriTerpilih === kat ? 'bg-amber-500 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>{kat}</button>
-                    ))}
-                  </div>
-                )}
+            {/* Rekomendasi */}
+            {r.rekomendasi?.length > 0 && (
+              <div>
+                <SectionLabel>Rekomendasi Kebijakan</SectionLabel>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {r.rekomendasi.map((rek, i) => (
+                    <Card key={i} className="p-4">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Info size={12} className="text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                          {rek.kategori}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {rek.pesan}
+                      </p>
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* ACTION BUTTONS */}
-        {!modeBersih && (
-          <div className={`absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-300 ${adaPanelTerbuka ? 'bottom-[380px]' : 'bottom-16'}`}>
             <div className="flex gap-3">
-              <button onClick={jalankanAnalisisBPS} disabled={sedangMenganalisis} className="px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl font-black text-xs tracking-wider hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase active:scale-95 flex items-center gap-2">
-                <Play size={14} className={sedangMenganalisis ? "animate-pulse" : ""} />
-                {sedangMenganalisis ? 'Loading...' : 'Analisis'}
+              <button
+                onClick={saveAnalisis}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-colors"
+              >
+                <Save size={14} /> Simpan Analisis
               </button>
-
-              {hasilAnalisis && (
-                <>
-                  <button onClick={bukaModalSave} className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-black text-xs tracking-wider hover:shadow-xl transition-all uppercase active:scale-95 flex items-center gap-2">
-                    <Save size={14} /> Simpan
-                  </button>
-                  <button onClick={resetAnalisis} className="px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-500 text-white rounded-xl font-black text-xs tracking-wider hover:shadow-xl transition-all uppercase active:scale-95 flex items-center gap-2">
-                    <RotateCcw size={14} /> Reset
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* BOTTOM PANELS - Similar structure to health page */}
-        {hasilAnalisis && !modeBersih && (
-          <div className="absolute bottom-0 left-0 right-0 z-[1001]">
-            {/* INFO PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelInfoTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Activity className="text-amber-500" size={24} />
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Ringkasan Analisis</h2>
-                  </div>
-                  <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500" /></button>
-                </div>
-                
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
-                  Analisis ketahanan pangan menggunakan data BPS - Prevalensi Ketidakcukupan Konsumsi Pangan
-                </p>
-                
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
-                    <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Total Provinsi</div>
-                    <div className="text-xl font-black text-blue-700 dark:text-blue-300">{hasilAnalisis.total_success}</div>
-                  </div>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
-                    <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Sangat Rentan</div>
-                    <div className="text-xl font-black text-red-700 dark:text-red-300">{jumlahKategori["SANGAT RENTAN"]}</div>
-                  </div>
-                  <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 border border-orange-200 dark:border-orange-800">
-                    <div className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-1">Rentan</div>
-                    <div className="text-xl font-black text-orange-700 dark:text-orange-300">{jumlahKategori["RENTAN"]}</div>
-                  </div>
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800">
-                    <div className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-1">Agak Tahan</div>
-                    <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">{jumlahKategori["AGAK TAHAN"]}</div>
-                  </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
-                    <div className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1">Tahan</div>
-                    <div className="text-xl font-black text-green-700 dark:text-green-300">{jumlahKategori["TAHAN"]}</div>
-                  </div>
-                  <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 border border-emerald-200 dark:border-emerald-800">
-                    <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Sangat Tahan</div>
-                    <div className="text-xl font-black text-emerald-700 dark:text-emerald-300">{jumlahKategori["SANGAT TAHAN"]}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* TABEL PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelTabelTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Matriks Ketahanan Pangan</h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">{dataTerfilter.length} Wilayah</p>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <button onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }} className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl text-[10px] font-bold hover:shadow-lg transition-all flex items-center gap-2">
-                        <Download size={12} /> UNDUH
-                      </button>
-
-                      {menuUnduhTerbuka && (
-                        <div className="absolute top-full mt-2 right-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700">
-                          {['GEOJSON', 'JSON', 'EXCEL', 'CSV'].map(format => (
-                            <button key={format} onClick={() => eksporData(format)} className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border-b border-slate-100 dark:border-slate-700 last:border-0">
-                              <Download size={12} className="inline mr-2 text-amber-500" /> {format}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500" /></button>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[700px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2 text-center">IKP</th>
-                        <th className="px-3 py-2 text-center">Prevalensi (%)</th>
-                        <th className="px-3 py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.food_security_analysis;
-                        
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">
-                                {data.food_security_index}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-center text-xs font-bold text-slate-600 dark:text-slate-400">
-                              {data.prevalensi_ketidakcukupan}%
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" style={{ borderColor: data.warna + '40', color: data.warna }}>
-                                {KATEGORI[data.kategori]?.emoji || ''} {data.kategori}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* KEBIJAKAN PANEL */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelKebijakanTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <ClipboardList className="text-amber-500" size={24} />
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Rekomendasi Kebijakan</h3>
-                  </div>
-                  <button 
-                    onClick={() => setPanelKebijakanTerbuka(false)}
-                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[900px]">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="px-3 py-2 text-center">No</th>
-                        <th className="px-3 py-2">Provinsi</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Prioritas</th>
-                        <th className="px-3 py-2">Rekomendasi Kebijakan</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataTerfilter.map((fitur, indeks) => {
-                        const data = fitur.properties.food_security_analysis;
-                        const rekUtama = data.rekomendasi?.[0];
-                        
-                        return (
-                          <tr key={indeks} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                            <td className="px-3 py-2 text-center text-[10px] font-bold text-slate-400">{indeks + 1}</td>
-                            <td className="px-3 py-2 text-xs font-black text-slate-900 dark:text-white">{data.nama_provinsi}</td>
-                            <td className="px-3 py-2">
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold border-2" 
-                                    style={{ borderColor: data.warna + '40', color: data.warna }}>
-                                {KATEGORI[data.kategori]?.emoji || ''} {data.kategori}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                                data.kategori === 'SANGAT RENTAN' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                data.kategori === 'RENTAN' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
-                                data.kategori === 'AGAK TAHAN' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                                data.kategori === 'TAHAN' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                                'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                              }`}>
-                                {rekUtama?.priority || "PEMELIHARAAN"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 max-w-md">
-                              <div className="mb-2">
-                                <div className="text-xs font-black text-slate-900 dark:text-white mb-1">
-                                  {rekUtama?.title || "Pertahankan Kondisi"}
-                                </div>
-                              </div>
-                              <ul className="space-y-1 text-[10px]">
-                                {rekUtama?.actions?.map((action, idx) => (
-                                  <li key={idx} className="text-slate-600 dark:text-slate-300 font-medium">
-                                    • {action}
-                                  </li>
-                                )) || <li className="text-slate-400">Pertahankan kondisi saat ini</li>}
-                              </ul>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* METODOLOGI PANEL - FULL LENGKAP */}
-            <div className={`bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-2xl ${panelMetodologiTerbuka ? 'h-[340px] overflow-y-auto' : 'max-h-0 overflow-hidden'}`}>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Metodologi Perhitungan Indeks Ketahanan Pangan (IKP)
-                  </h3>
-                  <button 
-                    onClick={() => setPanelMetodologiTerbuka(false)}
-                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    <X size={18} className="text-slate-500" />
-                  </button>
-                </div>
-
-                {/* INTRO TEXT */}
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Indeks Ketahanan Pangan (IKP) mengukur tingkat ketahanan pangan suatu wilayah berdasarkan prevalensi ketidakcukupan konsumsi pangan penduduk.
-                </p>
-
-                {/* INDIKATOR UTAMA */}
-                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border-2 border-amber-200 dark:border-amber-800">
-                  <h4 className="text-sm font-black text-amber-900 dark:text-amber-100 mb-2 uppercase flex items-center gap-2">
-                    <Wheat size={16} /> Indikator Utama
-                  </h4>
-                  <div className="space-y-2 text-xs text-amber-800 dark:text-amber-200">
-                    <div>
-                      <strong>Nama:</strong> Prevalensi Ketidakcukupan Konsumsi Pangan
-                    </div>
-                    <div>
-                      <strong>Definisi:</strong> Persentase penduduk yang konsumsi energi pangannya di bawah kebutuhan minimum (2100 kkal/kapita/hari)
-                    </div>
-                    <div>
-                      <strong>Karakteristik:</strong> Indikator negatif - semakin rendah nilai, semakin baik ketahanan pangan
-                    </div>
-                    <div>
-                      <strong>Sumber:</strong> BPS Web API - Variabel 1473
-                    </div>
-                  </div>
-                </div>
-
-                {/* FORMULA PERHITUNGAN */}
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
-                  <h4 className="text-sm font-black text-purple-900 dark:text-purple-100 mb-2 uppercase">Formula Perhitungan IKP</h4>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-purple-300 dark:border-purple-700 mb-3">
-                    <code className="text-xs font-mono font-bold text-slate-900 dark:text-white">
-                      IKP = max(0, 100 - (Prevalensi × 4))
-                    </code>
-                  </div>
-                  <div className="text-xs text-purple-800 dark:text-purple-200 space-y-1">
-                    <p><strong>Penjelasan:</strong></p>
-                    <p>Faktor 4 digunakan untuk memberikan gradasi yang jelas dalam skala 0-100. Ini memastikan bahwa perubahan prevalensi diterjemahkan secara proporsional ke dalam indeks.</p>
-                  </div>
-                </div>
-
-                {/* CONTOH PERHITUNGAN */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 mb-2 uppercase">Contoh Perhitungan</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 0%</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = 100 - (0 × 4) = 100</code>
-                      <div className="text-[9px] text-green-600 dark:text-green-400 mt-1">→ Sangat Tahan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 5%</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = 100 - (5 × 4) = 80</code>
-                      <div className="text-[9px] text-green-600 dark:text-green-400 mt-1">→ Tahan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 10%</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = 100 - (10 × 4) = 60</code>
-                      <div className="text-[9px] text-yellow-600 dark:text-yellow-400 mt-1">→ Agak Tahan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 15%</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = 100 - (15 × 4) = 40</code>
-                      <div className="text-[9px] text-orange-600 dark:text-orange-400 mt-1">→ Rentan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 20%</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = 100 - (20 × 4) = 20</code>
-                      <div className="text-[9px] text-red-600 dark:text-red-400 mt-1">→ Sangat Rentan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200 dark:border-blue-700">
-                      <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Prevalensi 25%+</div>
-                      <code className="text-xs font-mono text-slate-900 dark:text-white">IKP = max(0, ...) = 0</code>
-                      <div className="text-[9px] text-red-600 dark:text-red-400 mt-1">→ Krisis Pangan</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KATEGORI HASIL */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-xl p-4 border-2 border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-3">Kategori Ketahanan Pangan</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-emerald-200 dark:border-emerald-700">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#059669' }}></div>
-                        <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase">🏆 Sangat Tahan</div>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <div><strong>Prevalensi:</strong> {'<'} 5%</div>
-                        <div><strong>IKP:</strong> ≥ 80</div>
-                        <div className="text-[10px]">Akses pangan sangat baik, sistem ketahanan pangan optimal</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-green-200 dark:border-green-700">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#10b981' }}></div>
-                        <div className="text-xs font-black text-green-600 dark:text-green-400 uppercase">✅ Tahan</div>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <div><strong>Prevalensi:</strong> 5-10%</div>
-                        <div><strong>IKP:</strong> 60-80</div>
-                        <div className="text-[10px]">Akses pangan baik, sistem berfungsi dengan baik</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-yellow-200 dark:border-yellow-700">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }}></div>
-                        <div className="text-xs font-black text-yellow-600 dark:text-yellow-400 uppercase">📊 Agak Tahan</div>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <div><strong>Prevalensi:</strong> 10-15%</div>
-                        <div><strong>IKP:</strong> 40-60</div>
-                        <div className="text-[10px]">Perlu penguatan sistem distribusi dan ketersediaan</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-orange-200 dark:border-orange-700">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ef4444' }}></div>
-                        <div className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase">⚠️ Rentan</div>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <div><strong>Prevalensi:</strong> 15-20%</div>
-                        <div><strong>IKP:</strong> 20-40</div>
-                        <div className="text-[10px]">Rawan pangan, perlu intervensi program bantuan</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-red-200 dark:border-red-700 md:col-span-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#dc2626' }}></div>
-                        <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase">🚨 Sangat Rentan</div>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <div><strong>Prevalensi:</strong> ≥ 20%</div>
-                        <div><strong>IKP:</strong> {'<'} 20</div>
-                        <div className="text-[10px]">Krisis pangan, memerlukan intervensi darurat segera</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* DIMENSI KETAHANAN PANGAN */}
-                <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-xl p-4 border border-cyan-200 dark:border-cyan-800">
-                  <h4 className="text-sm font-black text-cyan-900 dark:text-cyan-100 mb-2 uppercase">Dimensi Ketahanan Pangan</h4>
-                  <p className="text-xs text-cyan-800 dark:text-cyan-200 mb-3">
-                    Prevalensi ketidakcukupan konsumsi pangan mengukur dimensi <strong>"AKSES"</strong> dari ketahanan pangan:
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-cyan-200 dark:border-cyan-700">
-                      <div className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase mb-1">1. Ketersediaan</div>
-                      <div className="text-[9px] text-slate-600 dark:text-slate-300">Produksi & stok pangan</div>
-                    </div>
-                    <div className="bg-cyan-100 dark:bg-cyan-900/40 rounded-lg p-2 border-2 border-cyan-500 dark:border-cyan-600">
-                      <div className="text-[10px] font-black text-cyan-700 dark:text-cyan-300 uppercase mb-1">2. Akses ✓</div>
-                      <div className="text-[9px] text-slate-700 dark:text-slate-200 font-bold">Kemampuan memperoleh pangan</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-cyan-200 dark:border-cyan-700">
-                      <div className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase mb-1">3. Pemanfaatan</div>
-                      <div className="text-[9px] text-slate-600 dark:text-slate-300">Asupan & absorpsi gizi</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-cyan-200 dark:border-cyan-700">
-                      <div className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase mb-1">4. Stabilitas</div>
-                      <div className="text-[9px] text-slate-600 dark:text-slate-300">Konsistensi sepanjang waktu</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* REFERENSI */}
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase mb-2">Referensi Metodologi</div>
-                  <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300 font-semibold">
-                    <li>• FAO - Food Security Indicators and Measurement Framework</li>
-                    <li>• Kementan RI - Peta Ketahanan dan Kerentanan Pangan (FSVA)</li>
-                    <li>• BPS - Statistik Ketahanan Pangan Indonesia</li>
-                    <li>• WHO - Nutrition Landscape Information System (NLIS)</li>
-                    <li>• WFP - Comprehensive Food Security and Vulnerability Analysis</li>
-                  </ul>
-                </div>
-
-                {/* VALIDITAS */}
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-black text-green-900 dark:text-green-100 uppercase mb-2">Validitas Metodologi</h4>
-                  <p className="text-xs text-green-800 dark:text-green-200 mb-3">
-                    Threshold kategori berdasarkan standar FAO untuk food security dan disesuaikan dengan kondisi Indonesia melalui penelitian Kementan RI tentang peta kerentanan pangan. Prevalensi ketidakcukupan konsumsi pangan adalah indikator kunci dalam mengukur dimensi 'akses' dari ketahanan pangan.
-                  </p>
-                  <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-green-300 dark:border-green-700">
-                    <div className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase mb-1">Catatan Penting</div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      Indikator ini mencerminkan kemampuan rumah tangga untuk memperoleh pangan yang cukup secara kuantitas maupun kualitas. Semakin rendah prevalensi, semakin baik akses masyarakat terhadap pangan bergizi.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* CONTROL BUTTONS BAR */}
-            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 p-3 shadow-2xl">
-              <div className="flex justify-center gap-2">
-                <button 
-                  onClick={() => { 
-                    setPanelInfoTerbuka(!panelInfoTerbuka); 
-                    setPanelTabelTerbuka(false); 
-                    setPanelMetodologiTerbuka(false); 
-                    setPanelKebijakanTerbuka(false); 
-                  }} 
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelInfoTerbuka ? 'bg-amber-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <Info size={14} /> Info
-                  {panelInfoTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-                
-                <button 
-                  onClick={() => { 
-                    setPanelTabelTerbuka(!panelTabelTerbuka); 
-                    setPanelInfoTerbuka(false); 
-                    setPanelMetodologiTerbuka(false); 
-                    setPanelKebijakanTerbuka(false); 
-                  }} 
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelTabelTerbuka ? 'bg-amber-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <Table size={14} /> Tabel
-                  {panelTabelTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-                
-                <button 
-                  onClick={() => { 
-                    setPanelKebijakanTerbuka(!panelKebijakanTerbuka); 
-                    setPanelInfoTerbuka(false); 
-                    setPanelTabelTerbuka(false); 
-                    setPanelMetodologiTerbuka(false); 
-                  }} 
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelKebijakanTerbuka ? 'bg-amber-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <ClipboardList size={14} /> Kebijakan
-                  {panelKebijakanTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-                
-                <button 
-                  onClick={() => { 
-                    setPanelMetodologiTerbuka(!panelMetodologiTerbuka); 
-                    setPanelInfoTerbuka(false); 
-                    setPanelTabelTerbuka(false); 
-                    setPanelKebijakanTerbuka(false); 
-                  }} 
-                  className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 ${panelMetodologiTerbuka ? 'bg-amber-500 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                >
-                  <FileText size={14} /> Metodologi
-                  {panelMetodologiTerbuka ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-
-                {adaPanelTerbuka && (
-                  <button 
-                    onClick={toggleAllPanels} 
-                    className="px-5 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-                  >
-                    <ChevronDown size={14} /> Tutup Semua
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={() => { setAnalisisResult(null); setAnalisisProv(''); }}
+                className="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm transition-colors"
+              >
+                <RotateCcw size={14} /> Reset
+              </button>
             </div>
           </div>
         )}
       </div>
+    );
+  };
+
+
+  // METODOLOGI
+  const renderMetodologi = () => (
+    <div className="space-y-6">
+
+      <MetSection title="Indeks Ketahanan Pangan Gabungan (IKPG)" Icon={Info}>
+        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+          IKPG adalah indeks komposit yang menggabungkan{' '}
+          <strong className="text-slate-800 dark:text-slate-200">
+            data spasial dari model YOLO custom (4 kelas)
+          </strong>{' '}
+          dengan{' '}
+          <strong className="text-slate-800 dark:text-slate-200">statistik BPS</strong>
+          {' '}untuk penilaian ketahanan pangan per provinsi.
+          Nilai berkisar 0–100; semakin tinggi semakin baik.
+        </p>
+        <div className="grid grid-cols-3 gap-3 text-xs text-center">
+          {[
+            { label: 'Tinggi', range: 'IKPG >= 70', st: 'Tinggi' },
+            { label: 'Sedang', range: '40 <= IKPG < 70', st: 'Sedang' },
+            { label: 'Rendah', range: 'IKPG < 40',  st: 'Rendah' },
+          ].map((c) => {
+            const sc = getSt(c.st);
+            return (
+              <div key={c.label} className={`rounded-xl border p-3 ${sc.badge}`}>
+                <div className={`font-bold text-sm mb-0.5 ${sc.text}`}>{c.label}</div>
+                <div className="text-slate-500 dark:text-slate-400">{c.range}</div>
+              </div>
+            );
+          })}
+        </div>
+      </MetSection>
+
+      <MetSection title="Formula Utama IKPG" Icon={BarChart3}>
+        <FormulaBox accent="indigo">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">
+            Dengan data GeoAI:
+          </span>
+          <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
+          {' = (0.50 x '}
+          <span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
+          {') + (0.30 x '}
+          <span className="text-emerald-600 dark:text-emerald-400">Production</span>
+          {') + (0.10 x '}
+          <span className="text-amber-600 dark:text-amber-400">Calorie</span>
+          {') + (0.10 x '}
+          <span className="text-pink-600 dark:text-pink-400">Insecurity</span>
+          {')'}
+        </FormulaBox>
+        <FormulaBox accent="amber">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">
+            Fallback — tanpa data GeoAI:
+          </span>
+          <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
+          {' = (0.60 x '}
+          <span className="text-emerald-600 dark:text-emerald-400">Production</span>
+          {') + (0.20 x '}
+          <span className="text-amber-600 dark:text-amber-400">Calorie</span>
+          {') + (0.20 x '}
+          <span className="text-pink-600 dark:text-pink-400">Insecurity</span>
+          {')'}
+        </FormulaBox>
+        <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 leading-relaxed">
+          <strong className="text-slate-700 dark:text-slate-300">Rasionalisasi bobot:</strong>
+          {' '}GeoAI mendapat bobot terbesar (50%) karena mencerminkan kondisi tutupan lahan aktual.
+          Produksi padi 30% sebagai output utama. Kalori dan insecurity masing-masing 10%.
+          Tanpa GeoAI, bobot diredistribusi ke komponen BPS.
+        </p>
+      </MetSection>
+
+      <MetSection title="Formula GeoAI Weighted — 4 Kelas YOLO Custom" Icon={Satellite}>
+        <p className="text-xs text-slate-500 dark:text-slate-400 bg-cyan-50 dark:bg-cyan-500/5 border border-cyan-200 dark:border-cyan-500/20 rounded-xl p-3 leading-relaxed">
+          Model YOLO dilatih sendiri dengan{' '}
+          <strong className="text-slate-700 dark:text-slate-300">4 kelas</strong>:
+          pepohonan, perairan, bangunan, jalan.
+          Tidak ada kelas "lahan pertanian" — sistem menggunakan proxy ekologis.
+        </p>
+        <FormulaBox accent="cyan">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">
+            Raw score kemudian dinormalisasi ke [0, 100]:
+          </span>
+          <span className="text-slate-500 dark:text-slate-400">raw = </span>
+          <span className="text-emerald-600 dark:text-emerald-400">(+0.40 x Pepohonan%)</span>
+          {' + '}
+          <span className="text-blue-600 dark:text-blue-400">(+0.30 x Perairan%)</span>
+          {' - '}
+          <span className="text-red-600 dark:text-red-400">(0.20 x Bangunan%)</span>
+          {' - '}
+          <span className="text-purple-600 dark:text-purple-400">(0.10 x Jalan%)</span>
+          <br />
+          <span className="text-cyan-600 dark:text-cyan-400 font-bold">GeoAI</span>
+          <span className="text-slate-500 dark:text-slate-400"> = clamp(raw + 30, 0, 100)</span>
+          <br />
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans block mt-2">
+            Offset +30: terburuk (100% bangunan, raw=-20) = skor 10.
+            Terbaik (100% pepohonan, raw=40) = skor 70.
+          </span>
+        </FormulaBox>
+        <div className="grid md:grid-cols-2 gap-3 text-xs">
+          {[
+            {
+              Icon: Trees, label: 'Pepohonan', bobot: '+40%',
+              colorCls: 'text-emerald-600 dark:text-emerald-400',
+              desc: 'Tutupan vegetasi = ekosistem sehat, siklus air terjaga.',
+            },
+            {
+              Icon: Waves, label: 'Perairan', bobot: '+30%',
+              colorCls: 'text-blue-600 dark:text-blue-400',
+              desc: 'Sumber air dan irigasi — krusial untuk produktivitas lahan.',
+            },
+            {
+              Icon: Building2, label: 'Bangunan (Penalti)', bobot: '-20%',
+              colorCls: 'text-red-600 dark:text-red-400',
+              desc: 'Alih fungsi lahan produktif. Penalti besar.',
+            },
+            {
+              Icon: Route, label: 'Jalan (Penalti)', bobot: '-10%',
+              colorCls: 'text-purple-600 dark:text-purple-400',
+              desc: 'Fragmentasi lahan. Penalti kecil karena juga mendukung distribusi.',
+            },
+          ].map((item) => (
+            <Card key={item.label} className="p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <item.Icon size={13} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{item.label}</span>
+                <span className={`ml-auto font-mono font-bold ${item.colorCls}`}>{item.bobot}</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
+            </Card>
+          ))}
+        </div>
+      </MetSection>
+
+      <MetSection title="Komponen BPS" Icon={BarChart3}>
+        <div className="space-y-4">
+          {[
+            {
+              Icon: Wheat, label: 'Produksi Padi — Production_Score', bobot: '30%', accent: 'emerald',
+              colorCls: 'text-emerald-600 dark:text-emerald-400',
+              formula: (
+                <>
+                  <span className="text-emerald-600 dark:text-emerald-400">Production_Score</span>
+                  {' = (Produksi_Prov - Min) / (Max - Min) x 100'}
+                </>
+              ),
+              desc: 'Min-Max Normalisasi. Produksi padi (ton) dipetakan ke skala 0-100 relatif terhadap seluruh provinsi.',
+              src: 'BPS Web API — mms/557, Tahun 2024',
+            },
+            {
+              Icon: UtensilsCrossed, label: 'Konsumsi Kalori — Calorie_Score', bobot: '10%', accent: 'amber',
+              colorCls: 'text-amber-600 dark:text-amber-400',
+              formula: (
+                <>
+                  <span className="text-amber-600 dark:text-amber-400">Calorie_Score</span>
+                  {' = min( (Kalori / 2100) x 100, 100 )'}
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans block mt-1">
+                    AKG = 2100 kkal/kapita/hari (Permenkes 2019)
+                  </span>
+                </>
+              ),
+              desc: 'Rasio terhadap Angka Kecukupan Gizi. Skor 100 jika konsumsi memenuhi atau melebihi AKG.',
+              src: 'BPS Web API — Var 951, Tahun 2025',
+            },
+            {
+              Icon: AlertTriangle, label: 'Ketidakcukupan Pangan — Insecurity_Score', bobot: '10%', accent: 'pink',
+              colorCls: 'text-pink-600 dark:text-pink-400',
+              formula: (
+                <>
+                  <span className="text-pink-600 dark:text-pink-400">Insecurity_Score</span>
+                  {' = max(100 - Prevalensi_Persen, 0)'}
+                </>
+              ),
+              desc: 'Inversi prevalensi: makin tinggi prevalensi ketidakcukupan, skor makin rendah.',
+              src: 'BPS Web API — Var 1473, Tahun 2025',
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/20"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <item.Icon size={14} className="text-slate-400 dark:text-slate-500" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm">
+                    {item.label}
+                  </span>
+                </div>
+                <span
+                  className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 ${item.colorCls}`}
+                >
+                  Bobot {item.bobot}
+                </span>
+              </div>
+              <FormulaBox accent={item.accent}>{item.formula}</FormulaBox>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{item.desc}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                <strong className="text-slate-500 dark:text-slate-400">Sumber:</strong> {item.src}
+              </p>
+            </div>
+          ))}
+        </div>
+      </MetSection>
+    </div>
+  );
+
+
+  // RIWAYAT
+  const renderRiwayat = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Riwayat Analisis IKPG</SectionLabel>
+        <button
+          onClick={loadHistory}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-colors"
+        >
+          <RefreshCw size={11} /> Refresh
+        </button>
+      </div>
+
+      {histLoading && (
+        <Card className="p-10 text-center">
+          <RefreshCw size={22} className="text-slate-300 dark:text-slate-600 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-400 dark:text-slate-500">Memuat riwayat...</p>
+        </Card>
+      )}
+
+      {!histLoading && history.length === 0 && (
+        <Card className="p-14 text-center">
+          <History size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada analisis tersimpan.</p>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {history.map((item) => {
+          const k  = item.komponen ?? {};
+          const b  = item.bobot_used ?? {};
+          const sc = getSt(item.status);
+          return (
+            <Card key={item.analysis_id} className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-200">
+                    {item.provinsi}
+                  </div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    {item.timestamp
+                      ? new Date(item.timestamp).toLocaleString('id-ID')
+                      : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => deleteHistory(item.analysis_id)}
+                  className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                >
+                  <XCircle size={16} />
+                </button>
+              </div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`text-2xl font-black ${sc.text}`}>{item.ikpg}</div>
+                <div className="flex-1">
+                  <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${item.ikpg}%`, backgroundColor: sc.bar }}
+                    />
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${sc.badge}`}>
+                  {item.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { label: 'GeoAI',      val: k.geoai_weighted,   bobot: b.geoai,      Icon: Satellite },
+                  { label: 'Produksi',   val: k.production_score, bobot: b.produksi,   Icon: Wheat },
+                  { label: 'Kalori',     val: k.calorie_score,    bobot: b.kalori,     Icon: UtensilsCrossed },
+                  { label: 'Insecurity', val: k.insecurity_score, bobot: b.insecurity, Icon: AlertTriangle },
+                ].map(({ label, val, bobot, Icon: Ic }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg px-2 py-1.5"
+                  >
+                    <Ic size={11} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                    <div>
+                      <div className="text-slate-400 dark:text-slate-500">{label}</div>
+                      <div className="font-mono text-slate-700 dark:text-slate-300">
+                        {val != null ? val.toFixed(1) : '-'}
+                        <span className="text-slate-400 dark:text-slate-600">
+                          {' '}({((bobot ?? 0) * 100).toFixed(0)}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {item.has_geoai_data && (
+                <div className="mt-2 inline-flex items-center gap-1 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-400/10 rounded-lg px-2 py-1">
+                  <Satellite size={10} /> Data GeoAI tersedia
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+
+  // LAYOUT
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+      {/* Fixed top bar — z-[1200] — provided by HeaderBar itself */}
+      <HeaderBar />
+
+      {/*
+        Sub-header: sticky, sits just below the fixed HeaderBar.
+        top-16 = 64px = height of HeaderBar
+        z-[100] keeps it below HeaderBar (z-[1200]) but above page content
+      */}
+      <div className="sticky top-16 z-[100] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Title row */}
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <h1 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-tight">
+                Ketahanan Pangan Nasional
+              </h1>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                IKPG &middot; BPS Web API &middot; Hasil Deteksi Citra 4 Kelas
+              </p>
+            </div>
+            {/* Show refresh only after data is loaded */}
+            {dashData && tab === 'dashboard' && (
+              <button
+                onClick={loadDashboard}
+                disabled={dashLoading}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-lg transition-colors"
+              >
+                <RefreshCw size={11} className={dashLoading ? 'animate-spin' : ''} />
+                {dashLoading ? 'Memuat...' : 'Refresh Data'}
+              </button>
+            )}
+          </div>
+
+          {/* Tab row — no bottom padding, border from parent */}
+          <div className="flex gap-0.5 overflow-x-auto">
+            {TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all -mb-px ${
+                  tab === id
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Page content — pt-6 is enough since sticky sub-header handles own space */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
+        {tab === 'dashboard'  && renderDashboard()}
+        {tab === 'analisis'   && renderAnalisis()}
+        {tab === 'metodologi' && renderMetodologi()}
+        {tab === 'riwayat'    && renderRiwayat()}
+      </main>
+
+      <Footerauth />
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }
