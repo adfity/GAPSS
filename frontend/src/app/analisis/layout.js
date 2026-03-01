@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Analisis Data | Dashboard',
-  description: 'Platform analisis data ekonomi, kesehatan, dan pendidikan terintegrasi',
+  title: 'Analisis Data',
+  description: 'Platform analisis data terintegrasi',
 };
 
 export default function AnalysisLayout({ children }) {
