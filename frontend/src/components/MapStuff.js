@@ -61,14 +61,18 @@ export function ZoomButtons({ modeBersih }) {
       <button
         onClick={() => map.zoomIn()}
         title="Zoom In"
-        className={`${glass} w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+        className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
+                    text-black dark:text-white
+                    hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
       >
         <Plus size={15} strokeWidth={2.5} />
       </button>
       <button
         onClick={() => map.zoomOut()}
         title="Zoom Out"
-        className={`${glass} w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+        className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
+                    text-black dark:text-white
+                    hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
       >
         <Minus size={15} strokeWidth={2.5} />
       </button>
@@ -94,7 +98,7 @@ export function MouseCoordinate({ modeBersih }) {
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
       <div className={`${glass} rounded-full px-4 py-1.5 flex items-center gap-3`}>
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-        <span className="font-mono text-[11px] tracking-wide text-slate-600 dark:text-slate-300 select-none whitespace-nowrap">
+        <span className="font-mono text-[11px] tracking-wide text-black dark:text-white select-none whitespace-nowrap">
           <span className="text-sky-500 font-semibold">φ</span>{" "}{coords.lat}
           <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
           <span className="text-sky-500 font-semibold">λ</span>{" "}{coords.lng}
@@ -119,7 +123,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
           transition-all duration-300 active:scale-90
           ${modeBersih
             ? 'bg-sky-500 shadow-[0_0_14px_rgba(14,165,233,0.5)] text-white'
-            : `${glass} text-slate-600 dark:text-slate-300`
+            : `${glass} text-black dark:text-white`
           }
         `}
       >
@@ -279,12 +283,13 @@ export function SearchLocation({ boundaryData, modeBersih }) {
                   ? 'Cari kabupaten / kota…'
                   : 'Aktifkan layer batas dahulu…'
               }
-              className="flex-1 bg-transparent text-sm text-slate-800 dark:text-white placeholder-slate-400 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-black dark:text-white placeholder-slate-400 outline-none min-w-0"
               autoFocus
             />
             <button
               onClick={closeSearch}
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-colors shrink-0"
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700
+                         text-black dark:text-white transition-colors shrink-0"
             >
               <X size={13} />
             </button>
@@ -318,7 +323,7 @@ export function SearchLocation({ boundaryData, modeBersih }) {
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                    <span className="text-sm font-medium text-black dark:text-white truncate">
                       {sug.nama}
                     </span>
                   </div>
@@ -338,14 +343,16 @@ export function SearchLocation({ boundaryData, modeBersih }) {
 
           {searchQuery.trim() && searchSuggestions.length === 0 && adaData && (
             <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/60">
-              <p className="text-[11px] text-slate-400">Wilayah tidak ditemukan.</p>
+              <p className="text-[11px] text-black dark:text-white">Wilayah tidak ditemukan.</p>
             </div>
           )}
         </div>
       ) : (
         <button
           onClick={() => setSearchTerbuka(true)}
-          className={`${glass} w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+          className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
+                      text-black dark:text-white
+                      hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
           title="Cari Wilayah"
         >
           <Search size={15} />
@@ -427,6 +434,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   if (modeBersih) return null;
 
+  /* ── Mobile: bottom bar ── */
   if (isMobile) {
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[1100]">
@@ -443,11 +451,19 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
                   transition-all duration-200 active:scale-90
                   ${active
                     ? 'bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.4)]'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    : 'text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                   }
                 `}
               >
-                {btn.icon}
+                {/* Custom image icons: invert when active (jadi putih) */}
+                {['radius', 'geoai'].includes(btn.id) && active
+                  ? <img
+                      src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`}
+                      className="w-[18px] h-[18px] object-contain"
+                      alt={btn.label}
+                    />
+                  : btn.icon
+                }
                 {active && (
                   <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-sky-400" />
                 )}
@@ -459,6 +475,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
     );
   }
 
+  /* ── Desktop: right sidebar ── */
   return (
     <div
       className="fixed z-[1100]"
@@ -469,9 +486,11 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
           const active = activePanel === btn.id;
           return (
             <div key={btn.id} className="relative group">
+              {/* Divider sebelum tombol terakhir */}
               {i === buttons.length - 1 && (
                 <div className="w-6 h-px bg-slate-200 dark:bg-slate-700 mx-auto my-1" />
               )}
+
               <button
                 onClick={() => handleButtonClick(btn.id)}
                 className={`
@@ -479,18 +498,28 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
                   transition-all duration-200 active:scale-90
                   ${active
                     ? 'bg-sky-500 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)]'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800'
+                    : 'text-black dark:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800'
                   }
                 `}
               >
-                {btn.icon}
+                {/* Custom image icons: pakai versi putih ketika active */}
+                {['radius', 'geoai'].includes(btn.id) && active
+                  ? <img
+                      src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`}
+                      className="w-[18px] h-[18px] object-contain"
+                      alt={btn.label}
+                    />
+                  : btn.icon
+                }
+
                 {active && (
                   <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[3px] w-[3px] h-5 rounded-full bg-sky-400" />
                 )}
               </button>
 
+              {/* Tooltip kiri */}
               <div className="pointer-events-none absolute right-[54px] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center">
-                <span className={`${glass} rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap tracking-wide`}>
+                <span className={`${glass} rounded-xl px-3 py-1.5 text-[11px] font-semibold text-black dark:text-white whitespace-nowrap tracking-wide`}>
                   {btn.label}
                 </span>
                 <span className="block w-2 h-2 -ml-1 rotate-45 bg-white/85 dark:bg-slate-900/85 border-r border-t border-white/70 dark:border-slate-700/60" />
@@ -798,9 +827,9 @@ export default function MapStuff(props) {
 
     const header = document.querySelector('header');
     if (header) {
-      header.style.transition = 'opacity 0.2s, transform 0.2s';
-      header.style.opacity    = modeBersih ? '0' : '';
-      header.style.transform  = modeBersih ? 'translateY(-100%)' : '';
+      header.style.transition    = 'opacity 0.2s, transform 0.2s';
+      header.style.opacity       = modeBersih ? '0' : '';
+      header.style.transform     = modeBersih ? 'translateY(-100%)' : '';
       header.style.pointerEvents = modeBersih ? 'none' : '';
     }
 

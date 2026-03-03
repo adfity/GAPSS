@@ -7,6 +7,7 @@ import '@/styles/utilities.css';
 import '@/styles/components.css';
 import '@/styles/public.css';
 import HeaderBar from "@/components/layout/HeaderBar";
+import SideBar from "@/components/layout/sideBar";
 import Footerauth from "@/components/layout/footerauth";
 import HeroSection from "@/components/sections/publik/hero";
 import FeaturesSection from "@/components/sections/publik/feature";
@@ -62,9 +63,12 @@ export default function HomePage() {
             bg-slate-100 text-slate-900ds
             dark:bg-slate-950 dark:text-white
     ">
+
     {/* Header */}
       <HeaderBar />
 
+    {/* Sider */}
+      <SideBar />
     {/* Section */}
       <HeroSection />
       <FeaturesSection />

@@ -2,7 +2,9 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import HeaderBar from "@/components/layout/HeaderBar";
+import SideBar from "@/components/layout/sideBar";
 import { RotateCw } from "lucide-react";
+
 
 const MapWithNoSSR = dynamic(() => import("@/components/MainMap"), {
   ssr: false,
@@ -69,6 +71,9 @@ export default function Home() {
 
       {/* HEADER */}
       <HeaderBar />
+
+      {/* Sider */}
+      <SideBar />
 
       {/* MAP */}
       <div className="flex-1 relative">

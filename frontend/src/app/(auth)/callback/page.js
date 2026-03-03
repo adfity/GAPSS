@@ -21,14 +21,18 @@ function CallbackContent() {
     }
 
     if (accessToken) {
+      // localStorage
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
       localStorage.setItem('user_name', name || '');
       localStorage.setItem('user_role', role || 'user');
 
+      // ✅ Cookie untuk middleware
+      document.cookie = `access_token=${accessToken}; path=/; max-age=3600; SameSite=Lax`;
+      document.cookie = `user_role=${role || 'user'}; path=/; max-age=3600; SameSite=Lax`;
+
       toast.success(`Selamat datang, ${name || 'Pengguna'}!`);
 
-      // Redirect sesuai role
       if (role === 'admin') {
         window.location.href = '/admin/dashboard';
       } else {

@@ -3,12 +3,14 @@ import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import axios from 'axios';
 import HeaderBar from '@/components/layout/HeaderBar';
+import SideBar from "@/components/layout/sideBar";
 import Footerauth from '@/components/layout/footerauth';
 import {
   BarChart3, Map, Info, RefreshCw, Play, Search, ArrowUpDown,
   Satellite, Wheat, UtensilsCrossed, AlertTriangle,
   TrendingUp, TrendingDown, Save, RotateCcw,
-  Building2, Trees, Waves, Route, FileText,
+  Building2, Trees, Waves, Route, FileText, History,
+  ChevronRight, Home,
 } from 'lucide-react';
 
 import {
@@ -19,8 +21,6 @@ import {
   FormulaBox, MetSection, RiwayatCard,
 } from '@/components/analisis/pangan';
 
-// PanganMap kini ada di pangan.jsx, tapi tetap harus dynamic (ssr: false)
-// karena Leaflet tidak bisa jalan di server-side rendering Next.js.
 const PanganMap = dynamic(
   () => import('@/components/analisis/pangan').then((m) => m.PanganMap),
   { ssr: false }
@@ -28,7 +28,67 @@ const PanganMap = dynamic(
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
-// ─── Main Page
+// ─── Floating Right Sidebar ───────────────────────────────────────────────────
+
+const SIDEBAR_TABS = [
+  { id: 'dashboard',  Icon: BarChart3, label: 'Dashboard'     },
+  { id: 'analisis',   Icon: FileText,  label: 'Analisis IKPG' },
+  { id: 'metodologi', Icon: Info,      label: 'Metodologi'    },
+  { id: 'riwayat',    Icon: History,   label: 'Riwayat'       },
+];
+
+function FloatingSidebar({ tab, setTab }) {
+  const [tooltip, setTooltip] = useState(null);
+  return (
+    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-[1100]
+                    flex flex-col items-center gap-3 py-4 px-2
+                    bg-white dark:bg-slate-800 rounded-2xl
+                    shadow-2xl shadow-black/20
+                    border border-slate-200 dark:border-slate-700/60">
+      {SIDEBAR_TABS.map(({ id, Icon, label }) => {
+        const active = tab === id;
+        return (
+          <div key={id} className="relative flex items-center">
+            {tooltip === id && (
+              <div className="absolute right-full mr-3 whitespace-nowrap
+                              bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold
+                              px-3 py-1.5 rounded-lg shadow-lg pointer-events-none
+                              before:content-[''] before:absolute before:left-full before:top-1/2
+                              before:-translate-y-1/2 before:border-4 before:border-transparent
+                              before:border-l-slate-900 dark:before:border-l-slate-700">
+                {label}
+              </div>
+            )}
+            <button
+              onClick={() => setTab(id)}
+              onMouseEnter={() => setTooltip(id)}
+              onMouseLeave={() => setTooltip(null)}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center
+                          transition-all duration-200 active:scale-95
+                          ${active
+                            ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/40 scale-110'
+                            : 'bg-slate-100 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400'
+                          }`}
+            >
+              <Icon size={18} />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Page title metadata ──────────────────────────────────────────────────────
+
+const TAB_META = {
+  dashboard:  { title: 'Ketahanan Pangan Nasional', sub: 'IKPG · BPS Web API · Hasil Deteksi Citra 4 Kelas' },
+  analisis:   { title: 'Analisis IKPG Provinsi',    sub: 'Pilih provinsi untuk melihat skor ketahanan pangan' },
+  metodologi: { title: 'Metodologi IKPG',            sub: 'Formula, bobot, dan sumber data yang digunakan' },
+  riwayat:    { title: 'Riwayat Analisis',           sub: 'Analisis IKPG yang telah disimpan' },
+};
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PanganPage() {
   const [tab,             setTab]             = useState('dashboard');
@@ -45,8 +105,6 @@ export default function PanganPage() {
   const [sortDir,         setSortDir]         = useState('asc');
 
   const showToast = (message, type = 'info') => setToast({ message, type });
-
-  // ─── Data loaders 
 
   const loadDashboard = useCallback(async () => {
     setDashLoading(true);
@@ -112,7 +170,7 @@ export default function PanganPage() {
     }
   };
 
-  // ─── Sorted table 
+  // ── Sorted table ────────────────────────────────────────────────────────────
 
   const provTable = (() => {
     const src = dashData?.summary ?? [];
@@ -150,7 +208,7 @@ export default function PanganPage() {
     </th>
   );
 
-  // ─── Tab: Dashboard ────────────────────────────────────────────────────────
+  // ── Tab: Dashboard ──────────────────────────────────────────────────────────
 
   const renderDashboard = () => {
     const d    = dashData;
@@ -212,7 +270,7 @@ export default function PanganPage() {
                   <Map size={15} className="text-slate-400 dark:text-slate-500" /> Peta Ketahanan Pangan per Provinsi
                 </div>
                 <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                  {[['#10b981','Tinggi >=70'],['#f59e0b','Sedang 40-69'],['#ef4444','Rendah <40']].map(([c, l]) => (
+                  {[['#10b981','Tinggi ≥70'],['#f59e0b','Sedang 40-69'],['#ef4444','Rendah <40']].map(([c, l]) => (
                     <span key={l} className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c }} />{l}
                     </span>
@@ -233,11 +291,9 @@ export default function PanganPage() {
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                   <input type="text" placeholder="Cari provinsi..." value={searchProv}
                     onChange={(e) => setSearchProv(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400 w-52 placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                  />
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400 w-52 placeholder:text-slate-400 dark:placeholder:text-slate-600" />
                 </div>
               </div>
-
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 dark:bg-slate-900/60">
@@ -296,7 +352,6 @@ export default function PanganPage() {
                   </tbody>
                 </table>
               </div>
-
               {provTable.length > 0 && (
                 <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-400 dark:text-slate-500">
                   Menampilkan {provTable.length} dari {dashData?.summary?.length ?? 0} provinsi
@@ -304,20 +359,13 @@ export default function PanganPage() {
                 </div>
               )}
             </Card>
-
-            <div className="flex justify-end">
-              <button onClick={loadDashboard} disabled={dashLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-xl transition-colors">
-                <RefreshCw size={12} className={dashLoading ? 'animate-spin' : ''} /> Perbarui Data
-              </button>
-            </div>
           </>
         )}
       </div>
     );
   };
 
-  // ─── Tab: Analisis ─────────────────────────────────────────────────────────
+  // ── Tab: Analisis ───────────────────────────────────────────────────────────
 
   const renderAnalisis = () => {
     const r   = analisisResult;
@@ -395,7 +443,6 @@ export default function PanganPage() {
                   score={k.insecurity_score} weight={b.insecurity ?? 0.1}
                   detail={raw.prevalensi_insecurity_persen != null ? `Prevalensi: ${raw.prevalensi_insecurity_persen}% (2025)` : null} />
               </div>
-
               <div>
                 <SectionLabel>Proporsi Tutupan (4 Kelas GeoAI)</SectionLabel>
                 {r.has_geoai_data && Object.keys(p).length > 0 ? (
@@ -458,7 +505,7 @@ export default function PanganPage() {
     );
   };
 
-  // ─── Tab: Metodologi ───────────────────────────────────────────────────────
+  // ── Tab: Metodologi ─────────────────────────────────────────────────────────
 
   const renderMetodologi = () => (
     <div className="space-y-6">
@@ -481,7 +528,6 @@ export default function PanganPage() {
           })}
         </div>
       </MetSection>
-
       <MetSection title="Formula Utama IKPG" Icon={BarChart3}>
         <FormulaBox accent="indigo">
           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">Dengan data GeoAI:</span>
@@ -498,88 +544,25 @@ export default function PanganPage() {
           {') + (0.20 x '}<span className="text-amber-600 dark:text-amber-400">Calorie</span>
           {') + (0.20 x '}<span className="text-pink-600 dark:text-pink-400">Insecurity</span>{')'}
         </FormulaBox>
-        <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 leading-relaxed">
-          <strong className="text-slate-700 dark:text-slate-300">Rasionalisasi bobot:</strong>{' '}
-          GeoAI mendapat bobot terbesar (50%) karena mencerminkan kondisi tutupan lahan aktual.
-          Produksi padi 30% sebagai output utama. Kalori dan insecurity masing-masing 10%.
-        </p>
       </MetSection>
-
       <MetSection title="Formula GeoAI Weighted — 4 Kelas YOLO Custom" Icon={Satellite}>
-        <p className="text-xs text-slate-500 dark:text-slate-400 bg-cyan-50 dark:bg-cyan-500/5 border border-cyan-200 dark:border-cyan-500/20 rounded-xl p-3 leading-relaxed">
-          Model YOLO dilatih sendiri dengan <strong className="text-slate-700 dark:text-slate-300">4 kelas</strong>: pepohonan, perairan, bangunan, jalan.
-          Skor GeoAI dihitung dari{' '}
-          <strong className="text-slate-700 dark:text-slate-300">komposisi persentase tutupan lahan</strong>
-          {' '}— bukan luas absolut (m²) maupun akurasi deteksi model.
-        </p>
         <FormulaBox accent="cyan">
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">Raw score dinormalisasi ke [0, 100]:</span>
-          <span className="text-slate-500 dark:text-slate-400">raw = </span>
-          <span className="text-emerald-600 dark:text-emerald-400">(+0.40 x Pepohonan%)</span>
-          {' + '}<span className="text-blue-600 dark:text-blue-400">(+0.30 x Perairan%)</span>
-          {' - '}<span className="text-red-600 dark:text-red-400">(0.20 x Bangunan%)</span>
-          {' - '}<span className="text-purple-600 dark:text-purple-400">(0.10 x Jalan%)</span>
-          <br />
           <span className="text-cyan-600 dark:text-cyan-400 font-bold">GeoAI</span>
-          <span className="text-slate-500 dark:text-slate-400"> = clamp(raw + 30, 0, 100)</span>
-          <br />
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans block mt-2">
-            Offset +30: terburuk (100% bangunan, raw=-20) = skor 10. Terbaik (100% pepohonan, raw=40) = skor 70.
-          </span>
+          {' = clamp( (+0.40 × Pepohonan%) + (+0.30 × Perairan%) − (0.20 × Bangunan%) − (0.10 × Jalan%) + 30, 0, 100 )'}
         </FormulaBox>
-        <div className="grid md:grid-cols-2 gap-3 text-xs">
-          {[
-            { Icon: Trees,     label: 'Pepohonan',         bobot: '+40%', colorCls: 'text-emerald-600 dark:text-emerald-400', desc: 'Tutupan vegetasi = ekosistem sehat, siklus air terjaga.' },
-            { Icon: Waves,     label: 'Perairan',          bobot: '+30%', colorCls: 'text-blue-600 dark:text-blue-400',       desc: 'Sumber air dan irigasi — krusial untuk produktivitas lahan.' },
-            { Icon: Building2, label: 'Bangunan (Penalti)',bobot: '-20%', colorCls: 'text-red-600 dark:text-red-400',         desc: 'Alih fungsi lahan produktif. Penalti besar.' },
-            { Icon: Route,     label: 'Jalan (Penalti)',   bobot: '-10%', colorCls: 'text-purple-600 dark:text-purple-400',   desc: 'Fragmentasi lahan. Penalti kecil karena juga mendukung distribusi.' },
-          ].map((item) => (
-            <Card key={item.label} className="p-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <item.Icon size={13} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                <span className="font-semibold text-slate-700 dark:text-slate-300">{item.label}</span>
-                <span className={`ml-auto font-mono font-bold ${item.colorCls}`}>{item.bobot}</span>
-              </div>
-              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
-            </Card>
-          ))}
-        </div>
       </MetSection>
-
       <MetSection title="Komponen BPS" Icon={BarChart3}>
         <div className="space-y-4">
           {[
-            {
-              Icon: Wheat, label: 'Produksi Padi — Production_Score', bobot: '30%', accent: 'emerald',
-              colorCls: 'text-emerald-600 dark:text-emerald-400',
+            { Icon: Wheat,           label: 'Produksi Padi — Production_Score',          bobot: '30%', accent: 'emerald', colorCls: 'text-emerald-600 dark:text-emerald-400',
               formula: (<><span className="text-emerald-600 dark:text-emerald-400">Production_Score</span>{' = (Produksi_Prov - Min) / (Max - Min) x 100'}</>),
-              desc: 'Min-Max Normalisasi. Produksi padi (ton) dipetakan ke skala 0-100 relatif terhadap seluruh provinsi.',
-              src: 'BPS Web API — mms/557, Tahun 2024',
-            },
-            {
-              Icon: UtensilsCrossed, label: 'Konsumsi Kalori — Calorie_Score', bobot: '10%', accent: 'amber',
-              colorCls: 'text-amber-600 dark:text-amber-400',
-              formula: (<>
-                <span className="text-amber-600 dark:text-amber-400">Calorie_Score</span>
-                {' = min( (Kalori / 2100) x 100, 100 )'}
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans block mt-1">AKG = 2100 kkal/kapita/hari (Permenkes 2019)</span>
-              </>),
-              desc: 'Rasio terhadap Angka Kecukupan Gizi. Skor 100 jika konsumsi memenuhi atau melebihi AKG.',
-              src: 'BPS Web API — Var 951, Tahun 2025',
-            },
-            {
-              Icon: AlertTriangle, label: 'Ketidakcukupan Pangan — Insecurity_Score', bobot: '10%', accent: 'pink',
-              colorCls: 'text-pink-600 dark:text-pink-400',
-              formula: (<>
-                <span className="text-pink-600 dark:text-pink-400">Insecurity_Score</span>
-                {' = max(100 - Prevalensi_Persen, 0)'}
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans block mt-1">
-                  Contoh: Papua Tengah prevalensi 32,3% → skor = 100 - 32,3 = 67,7
-                </span>
-              </>),
-              desc: 'Inversi prevalensi: makin tinggi prevalensi ketidakcukupan pangan, skor makin rendah.',
-              src: 'BPS Web API — Var 1473, Tahun 2025',
-            },
+              desc: 'Min-Max Normalisasi. Produksi padi (ton) dipetakan ke skala 0-100.', src: 'BPS Web API — mms/557, Tahun 2024' },
+            { Icon: UtensilsCrossed, label: 'Konsumsi Kalori — Calorie_Score',           bobot: '10%', accent: 'amber',   colorCls: 'text-amber-600 dark:text-amber-400',
+              formula: (<><span className="text-amber-600 dark:text-amber-400">Calorie_Score</span>{' = min( (Kalori / 2100) x 100, 100 )'}</>),
+              desc: 'Rasio terhadap Angka Kecukupan Gizi 2100 kkal/kapita/hari.', src: 'BPS Web API — Var 951, Tahun 2025' },
+            { Icon: AlertTriangle,   label: 'Ketidakcukupan Pangan — Insecurity_Score',  bobot: '10%', accent: 'pink',    colorCls: 'text-pink-600 dark:text-pink-400',
+              formula: (<><span className="text-pink-600 dark:text-pink-400">Insecurity_Score</span>{' = max(100 - Prevalensi_Persen, 0)'}</>),
+              desc: 'Inversi prevalensi: makin tinggi prevalensi, skor makin rendah.', src: 'BPS Web API — Var 1473, Tahun 2025' },
           ].map((item) => (
             <div key={item.label} className="border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/20">
               <div className="flex items-center justify-between mb-3">
@@ -591,9 +574,7 @@ export default function PanganPage() {
               </div>
               <FormulaBox accent={item.accent}>{item.formula}</FormulaBox>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{item.desc}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                <strong className="text-slate-500 dark:text-slate-400">Sumber:</strong> {item.src}
-              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1"><strong className="text-slate-500 dark:text-slate-400">Sumber:</strong> {item.src}</p>
             </div>
           ))}
         </div>
@@ -601,7 +582,7 @@ export default function PanganPage() {
     </div>
   );
 
-  // ─── Tab: Riwayat 
+  // ── Tab: Riwayat ────────────────────────────────────────────────────────────
 
   const renderRiwayat = () => (
     <div className="space-y-4">
@@ -612,21 +593,18 @@ export default function PanganPage() {
           <RefreshCw size={11} /> Refresh
         </button>
       </div>
-
       {histLoading && (
         <Card className="p-10 text-center">
           <RefreshCw size={22} className="text-slate-300 dark:text-slate-600 animate-spin mx-auto mb-3" />
           <p className="text-sm text-slate-400 dark:text-slate-500">Memuat riwayat...</p>
         </Card>
       )}
-
       {!histLoading && history.length === 0 && (
         <Card className="p-14 text-center">
           <FileText size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
           <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada analisis tersimpan.</p>
         </Card>
       )}
-
       <div className="grid md:grid-cols-2 gap-4">
         {history.map((item) => (
           <RiwayatCard key={item.analysis_id} item={item} onDelete={deleteHistory} />
@@ -635,52 +613,78 @@ export default function PanganPage() {
     </div>
   );
 
-  // ─── Layout
+  // ── Layout ──────────────────────────────────────────────────────────────────
+
+  const meta = TAB_META[tab];
+
+  /*
+   * HEADER OFFSET GUIDE:
+   *   HeaderBar   = fixed, h-[60px]   → top-[60px]
+   *   Title bar   = sticky, h-14(56px) → top-[60px] (sticks right below header)
+   *   Main pt     = 60 + 56 = 116px   → pt-[116px]
+   */
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+
+      {/* ① Fixed top header */}
       <HeaderBar />
 
-      <div className="sticky top-16 z-[100] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <h1 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-tight">Ketahanan Pangan Nasional</h1>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">IKPG &middot; BPS Web API &middot; Hasil Deteksi Citra 4 Kelas</p>
+      {/* ② Left overlay sidebar */}
+      <SideBar />
+
+      {/*
+        ③ Main content — pushed down by HeaderBar (60px) only.
+           Title lives inside the content flow with generous padding — no separate bar.
+      */}
+      <main className="pt-[60px] pb-12 min-h-screen">
+        <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 sm:pr-20">
+
+          {/* Page title — floats freely, no background box */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pt-8 pb-6">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 leading-tight">
+                {meta.title}
+              </h1>
+              <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-1">
+                {meta.sub}
+              </p>
             </div>
-            {dashData && tab === 'dashboard' && (
-              <button onClick={loadDashboard} disabled={dashLoading}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-lg transition-colors">
-                <RefreshCw size={11} className={dashLoading ? 'animate-spin' : ''} />
-                {dashLoading ? 'Memuat...' : 'Refresh Data'}
-              </button>
-            )}
+            <div className="flex items-center gap-3 shrink-0 sm:pt-1">
+              {dashData && tab === 'dashboard' && (
+                <button onClick={loadDashboard} disabled={dashLoading}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5
+                             bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700
+                             border border-slate-200 dark:border-slate-700
+                             disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-lg transition-colors shadow-sm">
+                  <RefreshCw size={11} className={dashLoading ? 'animate-spin' : ''} />
+                  {dashLoading ? 'Memuat...' : 'Refresh'}
+                </button>
+              )}
+              <nav className="hidden md:flex items-center gap-1 text-[12px] text-slate-400 dark:text-slate-500">
+                <Home size={12} />
+                <ChevronRight size={11} />
+                <span>Analisis</span>
+                <ChevronRight size={11} />
+                <span className="text-slate-600 dark:text-slate-300 font-medium">Ketahanan Pangan</span>
+              </nav>
+            </div>
           </div>
 
-          <div className="flex gap-0.5 overflow-x-auto">
-            {TABS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => setTab(id)}
-                className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all -mb-px ${
-                  tab === id
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}>
-                <Icon size={14} />{label}
-              </button>
-            ))}
-          </div>
+          {/* Tab content */}
+          {tab === 'dashboard'  && renderDashboard()}
+          {tab === 'analisis'   && renderAnalisis()}
+          {tab === 'metodologi' && renderMetodologi()}
+          {tab === 'riwayat'    && renderRiwayat()}
+
         </div>
-      </div>
-
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-6">
-        {tab === 'dashboard'  && renderDashboard()}
-        {tab === 'analisis'   && renderAnalisis()}
-        {tab === 'metodologi' && renderMetodologi()}
-        {tab === 'riwayat'    && renderRiwayat()}
       </main>
 
       <Footerauth />
       <Toast toast={toast} onClose={() => setToast(null)} />
+
+      {/* ⑤ Floating right sidebar tab navigation */}
+      <FloatingSidebar tab={tab} setTab={setTab} />
     </div>
   );
 }
