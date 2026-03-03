@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-# ── Load .env dari path yang benar (sama seperti migrate_bank_kebijakan.py) ──
+# ── Load .env dari path yang benar ────────────────────────────────────────────
 base_dir    = os.path.dirname(__file__)
 dotenv_path = os.path.abspath(os.path.join(base_dir, '..', '..', '.env'))
 load_dotenv(dotenv_path)
@@ -21,7 +21,7 @@ BPS_API_KEY   = os.getenv("BPS_WEB_API_KEY")
 client   = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 
-# ── Koneksi PostgreSQL (tanpa fallback hardcoded, murni dari .env) ────────────
+# ── Koneksi PostgreSQL ────────────────────────────────────────────────────────
 def get_pg_connection():
     return psycopg2.connect(
         host     = os.getenv("DB_HOST"),
@@ -33,11 +33,41 @@ def get_pg_connection():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# KONFIGURASI INDIKATOR EKONOMI
+# KONFIGURASI INDIKATOR EKONOMI — mapping th (tahun BPS) ke tahun kalender
+# BPS menggunakan kode th internal: 125 = 2024, 124 = 2023, 123 = 2022, dst.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Mapping kode tahun BPS → tahun kalender (2010-2024)
+BPS_TAHUN_MAP = {
+    "130": 2030,  # Untuk kebutuhan masa depan
+    "129": 2029,
+    "128": 2028,
+    "127": 2027,
+    "126": 2026,
+    "125": 2025,
+    "124": 2024,
+    "123": 2023,
+    "122": 2022,
+    "121": 2021,
+    "120": 2020,
+    "119": 2019,
+    "118": 2018,
+    "117": 2017,
+    "116": 2016,
+    "115": 2015,
+    "114": 2014,
+    "113": 2013,
+    "112": 2012,
+    "111": 2011,
+    "110": 2010,
+}
+
+# Urutan tahun dari terbaru ke terlama (untuk auto-fallback)
+BPS_TAHUN_URUT = ["130", "129", "128", "127", "126", "125", "124", "123", "122", "121", "120", "119", "118", "117", "116", "115", "114", "113", "112", "111", "110"]
+
 INDIKATOR_EKONOMI = {
     "PDRB": {
-        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/534/th/125/key/{key}/",
+        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/534/th/{th}/key/{key}/",
         "nama": "PDRB Atas Dasar Harga Berlaku Menurut Pengeluaran",
         "satuan": "Milyar Rupiah",
         "threshold_tinggi": 75000,
@@ -52,7 +82,7 @@ INDIKATOR_EKONOMI = {
         },
     },
     "KEMISKINAN": {
-        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/192/th/125/key/{key}/",
+        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/192/th/{th}/key/{key}/",
         "nama": "Persentase Penduduk Miskin",
         "satuan": "%",
         "threshold_rendah": 7,
@@ -67,7 +97,7 @@ INDIKATOR_EKONOMI = {
         },
     },
     "INVESTASI": {
-        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/793/th/123/key/{key}/",
+        "url_template": "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000/var/793/th/{th}/key/{key}/",
         "nama": "Realisasi Investasi PMDN",
         "satuan": "Milyar Rupiah",
         "threshold_tinggi": 10000,
@@ -100,8 +130,8 @@ def get_bank_kebijakan_by_kategori(kategori_list: list, limit_per_kategori: int 
                 SELECT id, kategori_utama, sub_sektor, prioritas, no_aksi,
                        nama_aksi, detail_aksi, timeline, budget_est,
                        sektor_terkait, indikator_dampak
-                FROM bank_kebijakan_ekonomi
-                WHERE kategori_utama = %s
+                FROM bank_kebijakan
+                WHERE domain = 'ekonomi' AND kategori_utama = %s
                 ORDER BY no_aksi ASC
                 LIMIT %s
             """, (kategori, limit_per_kategori))
@@ -156,19 +186,67 @@ class EkonomiAnalytics:
         "TERTINGGAL": "#ef4444",
     }
 
-    def fetch_all_data(self):
+    def fetch_all_data(self, th_code: str = "125"):
+        """Fetch data dari BPS untuk kode tahun tertentu."""
         all_data = {}
         for key, cfg in INDIKATOR_EKONOMI.items():
             try:
-                url  = cfg["url_template"].format(key=BPS_API_KEY)
+                url  = cfg["url_template"].format(th=th_code, key=BPS_API_KEY)
                 resp = requests.get(url, timeout=30)
-                all_data[key] = resp.json() if resp.status_code == 200 else None
-                status = "✓" if resp.status_code == 200 else f"✗ HTTP {resp.status_code}"
-                print(f"  {status} {key}")
+                raw  = resp.json() if resp.status_code == 200 else None
+                # Validasi: pastikan ada data
+                if raw and raw.get("datacontent"):
+                    all_data[key] = raw
+                    print(f"  ✓ {key} (th={th_code})")
+                else:
+                    all_data[key] = None
+                    print(f"  ✗ {key} (th={th_code}): kosong atau error")
             except Exception as e:
                 print(f"  ✗ {key}: {e}")
                 all_data[key] = None
         return all_data
+
+    def fetch_latest_available(self):
+        """
+        Coba fetch dari tahun terbaru sampai dapat data.
+        Return (all_data, th_code, tahun_kalender)
+        """
+        for th_code in BPS_TAHUN_URUT:
+            print(f"\n=== Mencoba tahun BPS th={th_code} ({BPS_TAHUN_MAP.get(th_code, '?')}) ===")
+            data = self.fetch_all_data(th_code)
+            # Cek apakah minimal satu indikator berhasil
+            if any(v is not None for v in data.values()):
+                tahun_kal = BPS_TAHUN_MAP.get(th_code, th_code)
+                print(f"  → Menggunakan data tahun {tahun_kal}")
+                return data, th_code, tahun_kal
+        # Fallback jika semua gagal
+        return {k: None for k in INDIKATOR_EKONOMI}, BPS_TAHUN_URUT[0], None
+
+    def fetch_historis(self, th_codes: list):
+        """
+        Fetch data untuk beberapa tahun sekaligus (untuk grafik tren).
+        Return dict: { tahun_kalender: { provinsi: { PDRB, KEMISKINAN, INVESTASI } } }
+        """
+        historis = {}
+        for th_code in th_codes:
+            tahun_kal = BPS_TAHUN_MAP.get(th_code, th_code)
+            print(f"  Historis th={th_code} ({tahun_kal})")
+            data = self.fetch_all_data(th_code)
+            parsed = {
+                k: self.parse_province_data(data[k], k)
+                for k in INDIKATOR_EKONOMI
+            }
+            # Konsolidasikan per provinsi
+            semua_prov = set()
+            for pd in parsed.values():
+                semua_prov.update(pd.keys())
+
+            historis[tahun_kal] = {}
+            for prov in semua_prov:
+                historis[tahun_kal][prov] = {
+                    k: parsed[k].get(prov) for k in INDIKATOR_EKONOMI
+                }
+        return historis
 
     def parse_province_data(self, raw_data, indikator_key):
         province_values = {}
@@ -331,10 +409,12 @@ def get_bank_kebijakan(request):
     """
     GET /api/bank-kebijakan/
     Query params:
-      - kategori   : TERTINGGAL | BERKEMBANG | MAJU | PDRB_RENDAH | KEMISKINAN_TINGGI | INVESTASI_RENDAH
+      - domain     : ekonomi | kesehatan | pendidikan (default: ekonomi)
+      - kategori   : TERTINGGAL | BERKEMBANG | MAJU | PDRB_RENDAH | dst
       - limit      : jumlah aksi (default 50, max 300)
       - sub_sektor : filter opsional
     """
+    domain     = request.GET.get("domain", "ekonomi").lower().strip()
     kategori   = request.GET.get("kategori", "").upper().strip()
     limit      = min(int(request.GET.get("limit", 50)), 300)
     sub_sektor = request.GET.get("sub_sektor", "").strip()
@@ -344,8 +424,8 @@ def get_bank_kebijakan(request):
         conn = get_pg_connection()
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        where_clauses = []
-        params        = []
+        where_clauses = ["domain = %s"]
+        params        = [domain]
 
         if kategori:
             where_clauses.append("kategori_utama = %s")
@@ -354,14 +434,14 @@ def get_bank_kebijakan(request):
             where_clauses.append("sub_sektor ILIKE %s")
             params.append(f"%{sub_sektor}%")
 
-        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        where_sql = "WHERE " + " AND ".join(where_clauses)
         params.append(limit)
 
         cur.execute(f"""
-            SELECT id, kategori_utama, sub_sektor, prioritas, no_aksi,
+            SELECT id, domain, kategori_utama, sub_sektor, prioritas, no_aksi,
                    nama_aksi, detail_aksi, timeline, budget_est,
                    sektor_terkait, indikator_dampak
-            FROM bank_kebijakan_ekonomi
+            FROM bank_kebijakan
             {where_sql}
             ORDER BY no_aksi ASC
             LIMIT %s
@@ -371,18 +451,20 @@ def get_bank_kebijakan(request):
 
         cur.execute("""
             SELECT kategori_utama, COUNT(*) as jumlah
-            FROM bank_kebijakan_ekonomi
+            FROM bank_kebijakan
+            WHERE domain = %s
             GROUP BY kategori_utama
             ORDER BY kategori_utama
-        """)
+        """, (domain,))
         distribusi = {row["kategori_utama"]: row["jumlah"] for row in cur.fetchall()}
 
         cur.close()
 
         return Response({
             "status":     "success",
+            "domain":     domain,
             "total":      len(docs),
-            "filter":     {"kategori": kategori, "sub_sektor": sub_sektor},
+            "filter":     {"domain": domain, "kategori": kategori, "sub_sektor": sub_sektor},
             "distribusi": distribusi,
             "data":       docs,
         })
@@ -395,12 +477,18 @@ def get_bank_kebijakan(request):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENDPOINT: ANALISIS EKONOMI BPS
+# ENDPOINT: ANALISIS EKONOMI BPS — dengan parameter tahun
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api_view(["POST"])
 def analyze_ekonomi_bps(request):
-    """Analisis data ekonomi menggunakan BPS Web API dengan 3 indikator."""
+    """
+    Analisis data ekonomi menggunakan BPS Web API.
+    Body JSON:
+      - provinces         : 'ALL'
+      - indikator_terpilih: 'ALL' | 'PDRB' | 'KEMISKINAN' | 'INVESTASI'
+      - th_code           : kode tahun BPS (opsional, default auto-detect terbaru)
+    """
 
     if not BPS_API_KEY:
         return Response({
@@ -408,13 +496,22 @@ def analyze_ekonomi_bps(request):
             "message": "Tambahkan BPS_WEB_API_KEY di file .env",
         }, status=500)
 
+    # Ambil parameter tahun dari request (opsional)
+    th_code_req = request.data.get("th_code", None)
+
     try:
         analytics = EkonomiAnalytics()
 
-        print("=== Fetch data dari BPS ===")
-        raw_data = analytics.fetch_all_data()
+        if th_code_req and th_code_req in BPS_TAHUN_MAP:
+            print(f"=== Fetch data dari BPS (tahun diminta: {th_code_req}) ===")
+            raw_data  = analytics.fetch_all_data(th_code_req)
+            th_code   = th_code_req
+            tahun_kal = BPS_TAHUN_MAP[th_code_req]
+        else:
+            print("=== Fetch data dari BPS (auto-detect tahun terbaru) ===")
+            raw_data, th_code, tahun_kal = analytics.fetch_latest_available()
 
-        print("\n=== Parse data per provinsi ===")
+        print(f"\n=== Parse data per provinsi (tahun {tahun_kal}) ===")
         parsed_data = {
             k: analytics.parse_province_data(raw_data[k], k)
             for k in INDIKATOR_EKONOMI
@@ -521,12 +618,22 @@ def analyze_ekonomi_bps(request):
         worst_provinces = sorted_idx[:5]
         best_provinces  = sorted_idx[-5:][::-1]
 
-        print(f"\n=== Selesai: {len(matched_features)} provinsi ===")
-        print(f"  MAJU={kategori_counts['MAJU']} | BERKEMBANG={kategori_counts['BERKEMBANG']} | TERTINGGAL={kategori_counts['TERTINGGAL']}")
+        print(f"\n=== Selesai: {len(matched_features)} provinsi (tahun {tahun_kal}) ===")
+
+        # Daftar tahun yang tersedia untuk selector frontend
+        tahun_tersedia = [
+            {"th_code": k, "tahun": v, "label": str(v)}
+            for k, v in BPS_TAHUN_MAP.items()
+            if k in BPS_TAHUN_URUT
+        ]
+        tahun_tersedia.sort(key=lambda x: x["tahun"], reverse=True)
 
         return Response({
             "status":                   "success",
             "source":                   "BPS Web API + PostgreSQL Bank Kebijakan",
+            "tahun":                    tahun_kal,
+            "th_code":                  th_code,
+            "tahun_tersedia":           tahun_tersedia,
             "total_provinces":          len(all_provinces),
             "total_matched":            len(matched_features),
             "total_success":            len(matched_features),
@@ -563,6 +670,82 @@ def analyze_ekonomi_bps(request):
         import traceback
         traceback.print_exc()
         return Response({"error": str(e), "message": "Gagal mengambil data dari BPS"}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENDPOINT BARU: DATA HISTORIS UNTUK GRAFIK TREN
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(["GET"])
+def get_historis_ekonomi(request):
+    """
+    GET /api/historis-ekonomi/
+    Query params:
+      - provinsi : nama provinsi (opsional, kalau tidak ada → data nasional agregat)
+      - tahun_mulai : 2020 (default)
+      - tahun_akhir : 2024 (default)
+    Mengembalikan data tren per tahun untuk grafik.
+    """
+    if not BPS_API_KEY:
+        return Response({"error": "BPS_WEB_API_KEY belum dikonfigurasi"}, status=500)
+
+    provinsi_req  = request.GET.get("provinsi", "").upper().strip()
+    tahun_mulai   = int(request.GET.get("tahun_mulai", 2020))
+    tahun_akhir   = int(request.GET.get("tahun_akhir", 2024))
+
+    # Tentukan th_codes yang diperlukan
+    th_codes = [
+        k for k, v in BPS_TAHUN_MAP.items()
+        if tahun_mulai <= v <= tahun_akhir and k in BPS_TAHUN_URUT
+    ]
+    th_codes.sort(key=lambda k: BPS_TAHUN_MAP[k])  # urut dari lama ke baru
+
+    try:
+        analytics = EkonomiAnalytics()
+        historis_raw = analytics.fetch_historis(th_codes)
+
+        # Susun response per tahun
+        tren = []
+        for tahun_kal in sorted(historis_raw.keys()):
+            data_tahun = historis_raw[tahun_kal]
+
+            if provinsi_req:
+                # Data spesifik satu provinsi
+                prov_data = data_tahun.get(provinsi_req) or {}
+                # Coba normalisasi jika tidak ketemu langsung
+                if not prov_data:
+                    for pn, pd in data_tahun.items():
+                        if normalize_province_name(pn) == normalize_province_name(provinsi_req):
+                            prov_data = pd
+                            break
+                tren.append({
+                    "tahun":     tahun_kal,
+                    "pdrb":      prov_data.get("PDRB"),
+                    "kemiskinan":prov_data.get("KEMISKINAN"),
+                    "investasi": prov_data.get("INVESTASI"),
+                })
+            else:
+                # Agregat nasional: rata-rata semua provinsi
+                pdrb_list = [v["PDRB"] for v in data_tahun.values() if v.get("PDRB") is not None]
+                kem_list  = [v["KEMISKINAN"] for v in data_tahun.values() if v.get("KEMISKINAN") is not None]
+                inv_list  = [v["INVESTASI"] for v in data_tahun.values() if v.get("INVESTASI") is not None]
+                tren.append({
+                    "tahun":      tahun_kal,
+                    "pdrb":       round(sum(pdrb_list) / len(pdrb_list), 2) if pdrb_list else None,
+                    "kemiskinan": round(sum(kem_list) / len(kem_list), 2) if kem_list else None,
+                    "investasi":  round(sum(inv_list) / len(inv_list), 2) if inv_list else None,
+                })
+
+        return Response({
+            "status":    "success",
+            "provinsi":  provinsi_req or "NASIONAL",
+            "tren":      tren,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=500)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
