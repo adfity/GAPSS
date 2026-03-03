@@ -43,6 +43,7 @@ urlpatterns = [
     path('ekonomi-analysis/list/', economy_views.get_ekonomi_analysis_list, name='get-ekonomi-analysis-list'),
     path('ekonomi-analysis/<str:analysis_id>/', economy_views.get_ekonomi_analysis_detail, name='get-ekonomi-analysis-detail'),
     path('ekonomi-analysis/<str:analysis_id>/delete/', economy_views.delete_ekonomi_analysis, name='delete-ekonomi-analysis'),
+    path('historis-ekonomi/', economy_views.get_historis_ekonomi, name='historis-ekonomi'),
 
     # FOOD SECURITY ANALYSIS (BPS API — KETAHANAN PANGAN)
     path('debug-bps-pangan/', pangan_views.debug_bps_raw, name='debug-bps-pangan'),
