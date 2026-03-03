@@ -6,7 +6,7 @@ import {
   UtensilsCrossed, AlertTriangle,
 } from 'lucide-react';
 
-// Dynamic import untuk komponen Leaflet
+// -- Dynamic import untuk komponen Leaflet
 const MapContainer = dynamic(
   () => import('react-leaflet').then(mod => mod.MapContainer),
   { ssr: false }
@@ -27,16 +27,16 @@ const ScaleControl = dynamic(
   { ssr: false }
 );
 
-const useMap = dynamic(
-  () => import('react-leaflet').then(mod => mod.useMap),
-  { ssr: false }
-);
+// const useMap = dynamic(
+//   () => import('react-leaflet').then(mod => mod.useMap),
+//   { ssr: false }
+// );
 
 // Import CSS di client-side only
 import 'leaflet/dist/leaflet.css';
 
 
-// Konstanta
+// -- Konstanta
 
 export const PROVINSI_LIST = [
   'Aceh','Bali','Banten','Bengkulu',
@@ -88,10 +88,6 @@ export const getSt = (s) => STATUS_STYLE[s] ?? STATUS_DEFAULT;
 export const barColor = (v) =>
   v >= 70 ? '#10b981' : v >= 40 ? '#f59e0b' : '#ef4444';
 
-/**
- * Format ton produksi padi ke satuan yang sesuai.
- * 42.38 → "42.38 ton" | 6072 → "6.07 ribu ton" | 9270435 → "9.27 juta ton"
- */
 export function formatProduksi(ton) {
   if (ton == null) return null;
   if (ton >= 1_000_000) return `${(ton / 1_000_000).toFixed(2)} juta ton`;
@@ -99,7 +95,7 @@ export function formatProduksi(ton) {
   return `${ton.toFixed(2)} ton`;
 }
 
-// UI Primitives
+// -- UI Primitives
 
 export function Card({ children, className = '' }) {
   return (
@@ -258,7 +254,7 @@ export function MetSection({ title, Icon, children }) {
   );
 }
 
-// Riwayat Card─
+// -- Riwayat Card
 
 export function RiwayatCard({ item, onDelete }) {
   const k  = item.komponen ?? {};
@@ -316,84 +312,67 @@ export function RiwayatCard({ item, onDelete }) {
 
 
 
-// ISI PANGAN MAP (intinya handle map di page pangan)
+// -- ISI PANGAN MAP (intinya handle map di page pangan)
 
 function ikpgFill(ikpg) {
   if (ikpg == null) return '#1e293b';
-  if (ikpg >= 70)   return '#10b981';
-  if (ikpg >= 55)   return '#34d399';
-  if (ikpg >= 40)   return '#f59e0b';
-  if (ikpg >= 25)   return '#fb923c';
-  return '#ef4444';
+  if (ikpg >= 70)   return '#10b981'; // Tinggi
+  if (ikpg >= 40)   return '#f59e0b'; // Sedang
+  return '#ef4444';                   // Rendah
 }
 
 function MapLegend() {
-  const [isClient, setIsClient] = useState(false);
-  const map = useMap();
+  const isDark =
+    typeof document !== 'undefined' &&
+    document.documentElement.getAttribute('data-theme') === 'dark';
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const bg     = isDark ? '#0f172a' : '#ffffff';
+  const border = isDark ? '#1e293b' : '#e2e8f0';
+  const txt    = isDark ? '#94a3b8' : '#475569';
+  const head   = isDark ? '#64748b' : '#94a3b8';
 
-  useEffect(() => {
-    if (!map || !isClient) return;
-
-    // Dynamic import untuk leaflet
-    const loadLegend = async () => {
-      const L = await import('leaflet');
-      
-      const ctrl = L.control({ position: 'bottomleft' });
-      ctrl.onAdd = () => {
-        const isDark =
-          typeof document !== 'undefined' &&
-          document.documentElement.getAttribute('data-theme') === 'dark';
-        const bg     = isDark ? '#0f172a' : '#ffffff';
-        const border = isDark ? '#1e293b' : '#e2e8f0';
-        const txt    = isDark ? '#94a3b8' : '#475569';
-        const head   = isDark ? '#64748b' : '#94a3b8';
-
-        const div = L.DomUtil.create('div');
-        div.innerHTML = `
-          <div style="background:${bg};border:1px solid ${border};border-radius:10px;
-            padding:10px 12px;font-size:11px;font-family:system-ui,sans-serif;
-            min-width:145px;box-shadow:0 4px 16px rgba(0,0,0,0.15);">
-            <div style="font-weight:700;color:${head};font-size:9px;
-              text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">
-              Skala IKPG
-            </div>
-            ${[
-              ['#10b981', '>= 70  (Tinggi)'],
-              ['#34d399', '55 - 69'],
-              ['#f59e0b', '40 - 54  (Sedang)'],
-              ['#fb923c', '25 - 39'],
-              ['#ef4444', '< 25  (Rendah)'],
-              ['#94a3b8', 'Tidak ada data'],
-            ]
-              .map(
-                ([c, l]) => `
-                <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">
-                  <span style="width:12px;height:12px;border-radius:3px;background:${c};
-                    display:inline-block;flex-shrink:0;"></span>
-                  <span style="color:${txt};">${l}</span>
-                </div>`
-              )
-              .join('')}
-          </div>`;
-        return div;
-      };
-      ctrl.addTo(map);
-      return () => ctrl.remove();
-    };
-
-    loadLegend();
-  }, [map, isClient]);
-
-  return null;
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '30px',
+      left: '10px',
+      zIndex: 1000,
+      pointerEvents: 'none',
+      background: bg,
+      border: `1px solid ${border}`,
+      borderRadius: '10px',
+      padding: '10px 12px',
+      fontSize: '11px',
+      fontFamily: 'system-ui, sans-serif',
+      minWidth: '145px',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+    }}>
+      <div style={{
+        fontWeight: 700, color: head, fontSize: '9px',
+        textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '8px',
+      }}>
+        Skala IKPG
+      </div>
+      {[
+        ['#10b981', '>= 70  (Tinggi)'],
+        ['#f59e0b', '40 – 69  (Sedang)'],
+        ['#ef4444', '< 40  (Rendah)'],
+        ['#1e293b', 'Tidak ada data'],
+      ].map(([c, l]) => (
+        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px' }}>
+          <span style={{
+            width: '12px', height: '12px', borderRadius: '3px',
+            background: c, display: 'inline-block', flexShrink: 0,
+          }} />
+          <span style={{ color: txt }}>{l}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-// Modifikasi komponen ProvinceLayer
+// -- Modifikasi komponen ProvinceLayer
 function ProvinceLayer({ geojson, onProvinceClick }) {
-  const map      = useMap();
   const layerRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
 
@@ -401,10 +380,8 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
     setIsClient(true);
   }, []);
 
-  // Fix untuk ikon marker Leaflet
   useEffect(() => {
     if (!isClient) return;
-    
     const fixLeafletIcons = async () => {
       const L = await import('leaflet');
       delete L.Icon.Default.prototype._getIconUrl;
@@ -414,7 +391,6 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
         shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
       });
     };
-    
     fixLeafletIcons();
   }, [isClient]);
 
@@ -436,12 +412,12 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
     const isDark =
       typeof document !== 'undefined' &&
       document.documentElement.getAttribute('data-theme') === 'dark';
-    const bg     = isDark ? '#0f172a' : '#ffffff';
-    const border = isDark ? '#1e293b' : '#e2e8f0';
-    const txt    = isDark ? '#e2e8f0' : '#1e293b';
-    const sub    = isDark ? '#94a3b8' : '#64748b';
-    const rowlb  = isDark ? '#475569' : '#94a3b8';
-    const divider= isDark ? '#1e293b' : '#f1f5f9';
+    const bg      = isDark ? '#0f172a' : '#ffffff';
+    const border  = isDark ? '#1e293b' : '#e2e8f0';
+    const txt     = isDark ? '#e2e8f0' : '#1e293b';
+    const sub     = isDark ? '#94a3b8' : '#64748b';
+    const rowlb   = isDark ? '#475569' : '#94a3b8';
+    const divider = isDark ? '#1e293b' : '#f1f5f9';
 
     layer.bindTooltip(
       `<div style="background:${bg};border:1px solid ${border};border-radius:10px;
@@ -453,33 +429,22 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <span style="font-size:22px;font-weight:900;color:${c};line-height:1;">${ikpg}</span>
           <div>
-            <div style="font-size:9px;color:${sub};text-transform:uppercase;
-              letter-spacing:.5px;">IKPG</div>
+            <div style="font-size:9px;color:${sub};text-transform:uppercase;letter-spacing:.5px;">IKPG</div>
             <div style="font-size:11px;font-weight:700;color:${c};">${st}</div>
           </div>
         </div>
         <div style="border-top:1px solid ${divider};padding-top:5px;
           display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;">
           <span style="color:${rowlb};">Produksi</span>
-          <span style="color:${sub};text-align:right;">
-            ${k.production_score?.toFixed(1) ?? '-'}
-          </span>
+          <span style="color:${sub};text-align:right;">${k.production_score?.toFixed(1) ?? '-'}</span>
           <span style="color:${rowlb};">Kalori</span>
-          <span style="color:${sub};text-align:right;">
-            ${k.calorie_score?.toFixed(1) ?? '-'}
-          </span>
+          <span style="color:${sub};text-align:right;">${k.calorie_score?.toFixed(1) ?? '-'}</span>
           <span style="color:${rowlb};">Insecurity</span>
-          <span style="color:${sub};text-align:right;">
-            ${k.insecurity_score?.toFixed(1) ?? '-'}
-          </span>
-          ${
-            k.geoai_weighted != null
-              ? `<span style="color:${rowlb};">GeoAI</span>
-                 <span style="color:${sub};text-align:right;">
-                   ${k.geoai_weighted.toFixed(1)}
-                 </span>`
-              : ''
-          }
+          <span style="color:${sub};text-align:right;">${k.insecurity_score?.toFixed(1) ?? '-'}</span>
+          ${k.geoai_weighted != null
+            ? `<span style="color:${rowlb};">GeoAI</span>
+               <span style="color:${sub};text-align:right;">${k.geoai_weighted.toFixed(1)}</span>`
+            : ''}
         </div>
         <div style="margin-top:5px;font-size:9px;color:${sub};text-align:center;">
           Klik untuk analisis detail
@@ -500,7 +465,11 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
         const nm = fa.nama_provinsi ?? feat.properties?.name ?? '';
         if (nm && onProvinceClick) onProvinceClick(nm);
         try {
-          map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 8 });
+          // Gunakan layer._map (leaflet internal) karena useMap tidak tersedia di sini
+          const leafletMap = layer._map;
+          if (leafletMap) {
+            leafletMap.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 8 });
+          }
         } catch (_) {}
       },
     });
@@ -516,7 +485,7 @@ function ProvinceLayer({ geojson, onProvinceClick }) {
   );
 }
 
-// Komponen PanganMap utama
+// -- Komponen PanganMap utama
 export function PanganMap({ geojson, onProvinceClick }) {
   const [isClient, setIsClient] = useState(false);
 
@@ -528,7 +497,7 @@ export function PanganMap({ geojson, onProvinceClick }) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-slate-900">
         <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4" />
           <p>Memuat peta...</p>
         </div>
       </div>
@@ -536,7 +505,7 @@ export function PanganMap({ geojson, onProvinceClick }) {
   }
 
   return (
-    <>
+    <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <style>{`
         .pangan-tip {
           background: transparent !important;
@@ -575,9 +544,11 @@ export function PanganMap({ geojson, onProvinceClick }) {
           <ProvinceLayer geojson={geojson} onProvinceClick={onProvinceClick} />
         )}
 
-        <MapLegend />
         <ScaleControl position="bottomright" />
       </MapContainer>
-    </>
+
+      {/* Legend dirender sebagai HTML overlay, bukan Leaflet Control */}
+      <MapLegend />
+    </div>
   );
 }

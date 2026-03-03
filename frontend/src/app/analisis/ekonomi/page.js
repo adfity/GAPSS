@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import HeaderBar from '@/components/layout/HeaderBar';
+import SideBar from "@/components/layout/sideBar";
 
 // Konfigurasi Kategori Ekonomi
 const KATEGORI = {
@@ -524,6 +525,8 @@ export default function EkonomiPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
       {!modeBersih && <HeaderBar />}
+      {!modeBersih && <SideBar />}
+
 
       {/* ─── MODAL PILIHAN ANALISIS ─────────────────────────────────────────── */}
       {modalAnalisisTerbuka && (
