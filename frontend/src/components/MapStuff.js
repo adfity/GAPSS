@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import L from 'leaflet';
-import { 
-  GeoJSON, Polygon, Popup, useMap, useMapEvents
-} from 'react-leaflet';
-import { 
-  Home, Map as MapIcon, Layers, LocateFixed, Search, X, Eye, EyeOff, Plus, Minus
+import { GeoJSON, Polygon, Popup, Rectangle, useMap, useMapEvents } from 'react-leaflet';
+import {
+  Home, Map as MapIcon, Layers, LocateFixed,
+  Eye, EyeOff, Plus, Minus
 } from 'lucide-react';
 import { useBoundaryData, BoundaryLayer } from './panel/layers';
 import { toast } from 'react-hot-toast';
@@ -22,48 +21,73 @@ const NAVBAR_H   = 56;
 const LEFT_PX    = 12;
 const TOP_ZOOM   = NAVBAR_H + 12;
 const TOP_CLEAN  = TOP_ZOOM + 90 + 8;
-const TOP_SEARCH = TOP_CLEAN + 36 + 8;
 
-function getNamaWilayah(properties = {}) {
+
+// ─── Detection Preview Box (butuh useMap, harus di dalam MapContainer) ────────
+
+export function DetectionPreviewBox({ show, size }) {
+  const map = useMap();
+  const [bounds, setBounds] = useState(null);
+
+  useEffect(() => {
+    if (!show) { setBounds(null); return; }
+
+    const updateBounds = () => {
+      const center = map.getCenter();
+      const zoom   = map.getZoom();
+      const mpp    = (40075016.686 * Math.abs(Math.cos(center.lat * Math.PI / 180)))
+                     / (256 * Math.pow(2, zoom));
+      const half   = (size / 2) * mpp;
+      const latOff = half / 111320;
+      const lngOff = half / (111320 * Math.cos(center.lat * Math.PI / 180));
+      setBounds([
+        [center.lat - latOff, center.lng - lngOff],
+        [center.lat + latOff, center.lng + lngOff],
+      ]);
+    };
+
+    updateBounds();
+    map.on('move', updateBounds);
+    map.on('zoom', updateBounds);
+    return () => { map.off('move', updateBounds); map.off('zoom', updateBounds); };
+  }, [map, size, show]);
+
+  if (!show || !bounds) return null;
   return (
-    properties.Propinsi   ||
-    properties.PROPINSI   ||
-    properties.Provinsi   ||
-    properties.provinsi   ||
-    properties.NAMOBJ     ||
-    properties.name       ||
-    properties.NAME       ||
-    properties.KAB_KOTA   ||
-    properties.KABUPATEN  ||
-    properties.kabupaten  ||
-    ''
+    <Rectangle
+      bounds={bounds}
+      pathOptions={{
+        color:       '#06b6d4',
+        weight:      3,
+        fillColor:   '#06b6d4',
+        fillOpacity: 0.1,
+        dashArray:   '10, 10',
+      }}
+    />
   );
 }
 
-function getTipeWilayah(properties = {}) {
-  if (
-    properties.Propinsi || properties.PROPINSI ||
-    properties.Provinsi || properties.provinsi
-  ) return 'Provinsi';
-  return 'Kabupaten/Kota';
+// ─── Zoom Watcher — kirim zoom level ke luar MapContainer ─────────────────────
+
+export function ZoomWatcher({ onZoomChange }) {
+  useMapEvents({
+    zoomend: (e) => onZoomChange(e.target.getZoom()),
+  });
+  return null;
 }
+
+// ─── Zoom Buttons ─────────────────────────────────────────────────────────────
 
 export function ZoomButtons({ modeBersih }) {
   const map = useMap();
-
   if (modeBersih) return null;
-
   return (
-    <div
-      className="absolute z-[1000] flex flex-col gap-2"
-      style={{ top: TOP_ZOOM, left: LEFT_PX }}
-    >
+    <div className="absolute z-[1000] flex flex-col gap-2" style={{ top: TOP_ZOOM, left: LEFT_PX }}>
       <button
         onClick={() => map.zoomIn()}
         title="Zoom In"
         className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                    text-black dark:text-white
-                    hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+                    text-black dark:text-white hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
       >
         <Plus size={15} strokeWidth={2.5} />
       </button>
@@ -71,8 +95,7 @@ export function ZoomButtons({ modeBersih }) {
         onClick={() => map.zoomOut()}
         title="Zoom Out"
         className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                    text-black dark:text-white
-                    hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+                    text-black dark:text-white hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
       >
         <Minus size={15} strokeWidth={2.5} />
       </button>
@@ -80,20 +103,14 @@ export function ZoomButtons({ modeBersih }) {
   );
 }
 
+// ─── Mouse Coordinate ─────────────────────────────────────────────────────────
+
 export function MouseCoordinate({ modeBersih }) {
   const [coords, setCoords] = useState({ lat: 0, lng: 0 });
-
   useMapEvents({
-    mousemove: (e) => {
-      setCoords({
-        lat: e.latlng.lat.toFixed(5),
-        lng: e.latlng.lng.toFixed(5),
-      });
-    },
+    mousemove: (e) => setCoords({ lat: e.latlng.lat.toFixed(5), lng: e.latlng.lng.toFixed(5) }),
   });
-
   if (modeBersih) return null;
-
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
       <div className={`${glass} rounded-full px-4 py-1.5 flex items-center gap-3`}>
@@ -108,24 +125,19 @@ export function MouseCoordinate({ modeBersih }) {
   );
 }
 
-// CleanModeButton selalu render — ini satu-satunya jalan keluar dari mode bersih
+// ─── Clean Mode Button ────────────────────────────────────────────────────────
+
 export function CleanModeButton({ modeBersih, setModeBersih }) {
   return (
-    <div
-      className="fixed z-[1300]"
-      style={{ top: TOP_CLEAN, left: LEFT_PX }}
-    >
+    <div className="fixed z-[1300]" style={{ top: TOP_CLEAN, left: LEFT_PX }}>
       <button
         onClick={() => setModeBersih(!modeBersih)}
         title={modeBersih ? 'Tampilkan UI' : 'Mode Bersih'}
-        className={`
-          w-9 h-9 flex items-center justify-center rounded-full
-          transition-all duration-300 active:scale-90
+        className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90
           ${modeBersih
             ? 'bg-sky-500 shadow-[0_0_14px_rgba(14,165,233,0.5)] text-white'
             : `${glass} text-black dark:text-white`
-          }
-        `}
+          }`}
       >
         {modeBersih ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
@@ -133,234 +145,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
   );
 }
 
-export function SearchLocation({ boundaryData, modeBersih }) {
-  const map = useMap();
-  const [searchTerbuka,     setSearchTerbuka]     = useState(false);
-  const [searchQuery,       setSearchQuery]       = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const highlightLayerRef = useRef(null);
-
-  const clearHighlight = () => {
-    if (highlightLayerRef.current) {
-      try { map.removeLayer(highlightLayerRef.current); } catch (_) {}
-      highlightLayerRef.current = null;
-    }
-  };
-
-  useMapEvents({ click: () => clearHighlight() });
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchSuggestions([]);
-      return;
-    }
-
-    const q = searchQuery.toLowerCase();
-    const hasil = [];
-
-    if (boundaryData?.provinsi?.features) {
-      boundaryData.provinsi.features.forEach(f => {
-        const nama = getNamaWilayah(f.properties);
-        if (nama && nama.toLowerCase().includes(q)) {
-          hasil.push({ nama, tipe: 'Provinsi', feature: f, zoom: 7 });
-        }
-      });
-    }
-
-    if (boundaryData?.kabupaten?.features) {
-      boundaryData.kabupaten.features.forEach(f => {
-        const nama = getNamaWilayah(f.properties);
-        if (nama && nama.toLowerCase().includes(q)) {
-          hasil.push({ nama, tipe: 'Kabupaten/Kota', feature: f, zoom: 9 });
-        }
-      });
-    }
-
-    setSearchSuggestions(hasil.slice(0, 8));
-  }, [searchQuery, boundaryData]);
-
-  const handleSearch = (item) => {
-    let target, fitur, zoomLevel;
-
-    if (typeof item === 'string') {
-      const q = item.trim().toLowerCase();
-      const fromProv = boundaryData?.provinsi?.features?.find(
-        f => getNamaWilayah(f.properties).toLowerCase() === q
-      );
-      const fromKab  = boundaryData?.kabupaten?.features?.find(
-        f => getNamaWilayah(f.properties).toLowerCase() === q
-      );
-      fitur     = fromProv || fromKab;
-      target    = item.trim();
-      zoomLevel = fromProv ? 7 : 9;
-    } else {
-      fitur     = item.feature;
-      target    = item.nama;
-      zoomLevel = item.zoom;
-    }
-
-    if (!fitur) {
-      const noData = !boundaryData?.provinsi && !boundaryData?.kabupaten;
-      toast.error(
-        noData
-          ? 'Aktifkan layer Batas Provinsi / Kabupaten dahulu'
-          : 'Wilayah tidak ditemukan'
-      );
-      return;
-    }
-
-    const coords = fitur.geometry.coordinates;
-    const ring   =
-      fitur.geometry.type === 'MultiPolygon' ? coords[0][0] : coords[0];
-    const lat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-    const lng = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-
-    map.setView([lat, lng], zoomLevel, { animate: true });
-
-    clearHighlight();
-
-    const outerGlow = L.geoJSON(fitur, {
-      style: { color: '#0ea5e9', weight: 8, opacity: 0.2, fill: false },
-    });
-
-    const innerLine = L.geoJSON(fitur, {
-      style: { color: '#38bdf8', weight: 2.5, opacity: 1, fillColor: '#38bdf8', fillOpacity: 0.07 },
-    });
-
-    const group = L.layerGroup([outerGlow, innerLine]);
-    group.addTo(map);
-    highlightLayerRef.current = group;
-    setTimeout(() => clearHighlight(), 5000);
-
-    toast.success(
-      <div className="flex items-center gap-2">
-        <span className="text-xl">📍</span>
-        <div>
-          <div className="font-bold">{target}</div>
-          <div className="text-xs opacity-60">{typeof item === 'object' ? item.tipe : ''}</div>
-        </div>
-      </div>,
-      { duration: 3000, style: { borderRadius: '14px', padding: '12px 16px' } }
-    );
-
-    setSearchTerbuka(false);
-    setSearchQuery('');
-    setSearchSuggestions([]);
-  };
-
-  const closeSearch = () => {
-    setSearchTerbuka(false);
-    setSearchQuery('');
-    setSearchSuggestions([]);
-  };
-
-  const adaProvinsi  = !!boundaryData?.provinsi;
-  const adaKabupaten = !!boundaryData?.kabupaten;
-  const adaData      = adaProvinsi || adaKabupaten;
-
-  if (modeBersih) return null;
-
-  return (
-    <div
-      className="absolute z-[1000]"
-      style={{ top: TOP_SEARCH, left: LEFT_PX }}
-    >
-      {searchTerbuka ? (
-        <div className={`${glass} rounded-2xl overflow-hidden`} style={{ minWidth: 272 }}>
-          <div className="flex items-center gap-2 p-2">
-            <Search size={14} className="ml-1 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
-              placeholder={
-                adaProvinsi && adaKabupaten
-                  ? 'Cari provinsi / kab / kota…'
-                  : adaProvinsi
-                  ? 'Cari provinsi…'
-                  : adaKabupaten
-                  ? 'Cari kabupaten / kota…'
-                  : 'Aktifkan layer batas dahulu…'
-              }
-              className="flex-1 bg-transparent text-sm text-black dark:text-white placeholder-slate-400 outline-none min-w-0"
-              autoFocus
-            />
-            <button
-              onClick={closeSearch}
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700
-                         text-black dark:text-white transition-colors shrink-0"
-            >
-              <X size={13} />
-            </button>
-          </div>
-
-          <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
-            {adaProvinsi && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
-                ✓ Provinsi
-              </span>
-            )}
-            {adaKabupaten && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
-                ✓ Kabupaten/Kota
-              </span>
-            )}
-            {!adaData && (
-              <span className="text-[10px] font-medium text-amber-500">
-                ⚠️ Aktifkan layer Batas Provinsi / Kabupaten dahulu
-              </span>
-            )}
-          </div>
-
-          {searchSuggestions.length > 0 && (
-            <div className="border-t border-slate-100 dark:border-slate-700/60 max-h-52 overflow-y-auto">
-              {searchSuggestions.map((sug, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSearch(sug)}
-                  className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                    <span className="text-sm font-medium text-black dark:text-white truncate">
-                      {sug.nama}
-                    </span>
-                  </div>
-                  <span className={`
-                    text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0
-                    ${sug.tipe === 'Provinsi'
-                      ? 'bg-blue-50 text-blue-500 dark:bg-blue-900/30 dark:text-blue-400'
-                      : 'bg-emerald-50 text-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    }
-                  `}>
-                    {sug.tipe === 'Provinsi' ? 'PROV' : 'KAB'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {searchQuery.trim() && searchSuggestions.length === 0 && adaData && (
-            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700/60">
-              <p className="text-[11px] text-black dark:text-white">Wilayah tidak ditemukan.</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <button
-          onClick={() => setSearchTerbuka(true)}
-          className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                      text-black dark:text-white
-                      hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
-          title="Cari Wilayah"
-        >
-          <Search size={15} />
-        </button>
-      )}
-    </div>
-  );
-}
+// ─── Map Reset ────────────────────────────────────────────────────────────────
 
 export function MapReset({ trigger, onDone }) {
   const map = useMap();
@@ -372,6 +157,8 @@ export function MapReset({ trigger, onDone }) {
   return null;
 }
 
+// ─── Sidebar Buttons ──────────────────────────────────────────────────────────
+
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
   const [isMobile, setIsMobile] = useState(false);
   const [isDark,   setIsDark]   = useState(false);
@@ -379,18 +166,12 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     const checkTheme  = () => setIsDark(document.documentElement.getAttribute('data-theme') === 'dark');
-
     checkMobile();
     checkTheme();
     window.addEventListener('resize', checkMobile);
-
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      observer.disconnect();
-    };
+    return () => { window.removeEventListener('resize', checkMobile); observer.disconnect(); };
   }, []);
 
   const buttons = [
@@ -399,24 +180,12 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
     { id: 'layers',  icon: <Layers size={17} />,   label: 'Layer'   },
     {
       id: 'radius',
-      icon: (
-        <img
-          src={isDark ? '/icons/Wradius.png' : '/icons/bradius.png'}
-          className="w-[18px] h-[18px] object-contain"
-          alt="Radius"
-        />
-      ),
+      icon: <img src={isDark ? '/icons/Wradius.png' : '/icons/bradius.png'} className="w-[18px] h-[18px] object-contain" alt="Radius" />,
       label: 'Radius',
     },
     {
       id: 'geoai',
-      icon: (
-        <img
-          src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'}
-          className="w-[18px] h-[18px] object-contain"
-          alt="GeoAI"
-        />
-      ),
+      icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
       label: 'GeoAI',
     },
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
@@ -434,7 +203,12 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   if (modeBersih) return null;
 
-  /* ── Mobile: bottom bar ── */
+  const activeIcon = (btn) =>
+    ['radius', 'geoai'].includes(btn.id)
+      ? <img src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`} className="w-[18px] h-[18px] object-contain" alt={btn.label} />
+      : btn.icon;
+
+  /* Mobile */
   if (isMobile) {
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[1100]">
@@ -446,27 +220,11 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
                 key={btn.id}
                 onClick={() => handleButtonClick(btn.id)}
                 title={btn.label}
-                className={`
-                  relative w-11 h-11 rounded-[14px] flex items-center justify-center
-                  transition-all duration-200 active:scale-90
-                  ${active
-                    ? 'bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.4)]'
-                    : 'text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }
-                `}
+                className={`relative w-11 h-11 rounded-[14px] flex items-center justify-center transition-all duration-200 active:scale-90
+                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.4)]' : 'text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800'}`}
               >
-                {/* Custom image icons: invert when active (jadi putih) */}
-                {['radius', 'geoai'].includes(btn.id) && active
-                  ? <img
-                      src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`}
-                      className="w-[18px] h-[18px] object-contain"
-                      alt={btn.label}
-                    />
-                  : btn.icon
-                }
-                {active && (
-                  <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-sky-400" />
-                )}
+                {active ? activeIcon(btn) : btn.icon}
+                {active && <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-sky-400" />}
               </button>
             );
           })}
@@ -475,49 +233,25 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
     );
   }
 
-  /* ── Desktop: right sidebar ── */
+  /* Desktop */
   return (
-    <div
-      className="fixed z-[1100]"
-      style={{ right: 16, top: '50%', transform: 'translateY(-50%)' }}
-    >
+    <div className="fixed z-[1100]" style={{ right: 16, top: '50%', transform: 'translateY(-50%)' }}>
       <div className={`${glass} rounded-[22px] p-1.5 flex flex-col gap-1`}>
         {buttons.map((btn, i) => {
           const active = activePanel === btn.id;
           return (
             <div key={btn.id} className="relative group">
-              {/* Divider sebelum tombol terakhir */}
               {i === buttons.length - 1 && (
                 <div className="w-6 h-px bg-slate-200 dark:bg-slate-700 mx-auto my-1" />
               )}
-
               <button
                 onClick={() => handleButtonClick(btn.id)}
-                className={`
-                  relative w-11 h-11 rounded-[14px] flex items-center justify-center
-                  transition-all duration-200 active:scale-90
-                  ${active
-                    ? 'bg-sky-500 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)]'
-                    : 'text-black dark:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800'
-                  }
-                `}
+                className={`relative w-11 h-11 rounded-[14px] flex items-center justify-center transition-all duration-200 active:scale-90
+                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)]' : 'text-black dark:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800'}`}
               >
-                {/* Custom image icons: pakai versi putih ketika active */}
-                {['radius', 'geoai'].includes(btn.id) && active
-                  ? <img
-                      src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`}
-                      className="w-[18px] h-[18px] object-contain"
-                      alt={btn.label}
-                    />
-                  : btn.icon
-                }
-
-                {active && (
-                  <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[3px] w-[3px] h-5 rounded-full bg-sky-400" />
-                )}
+                {active ? activeIcon(btn) : btn.icon}
+                {active && <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[3px] w-[3px] h-5 rounded-full bg-sky-400" />}
               </button>
-
-              {/* Tooltip kiri */}
               <div className="pointer-events-none absolute right-[54px] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center">
                 <span className={`${glass} rounded-xl px-3 py-1.5 text-[11px] font-semibold text-black dark:text-white whitespace-nowrap tracking-wide`}>
                   {btn.label}
@@ -531,6 +265,8 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
     </div>
   );
 }
+
+// ─── Preview Layer ────────────────────────────────────────────────────────────
 
 export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) {
   const map = useMap();
@@ -558,29 +294,23 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
           ]);
           return [latLng.lat, latLng.lng];
         });
-
         return (
           <Polygon
             key={`preview-${idx}`}
             positions={polygonCoords}
             pathOptions={{
-              color:       getCategoryColor(obj.kategori),
-              fillColor:   getCategoryColor(obj.kategori),
+              color: getCategoryColor(obj.kategori),
+              fillColor: getCategoryColor(obj.kategori),
               fillOpacity: 0.35,
-              weight:      2,
-              dashArray:   '6, 8',
+              weight: 2,
+              dashArray: '6, 8',
             }}
           >
             <Popup>
               <div className="p-3 min-w-[160px]">
                 <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ background: getCategoryColor(obj.kategori) }}
-                  />
-                  <p className="font-bold text-[13px] uppercase tracking-wide text-slate-800">
-                    {obj.kategori}
-                  </p>
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: getCategoryColor(obj.kategori) }} />
+                  <p className="font-bold text-[13px] uppercase tracking-wide text-slate-800">{obj.kategori}</p>
                 </div>
                 {obj.luas_m2 && (
                   <p className="text-xs text-slate-500 mb-3">
@@ -602,25 +332,17 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
   );
 }
 
+// ─── Saved Data Layer ─────────────────────────────────────────────────────────
+
 export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
-  const handleDelete = async (feature_id) => {
+  const handleDelete = (feature_id) => {
     toast.custom((t) => (
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-4 min-w-[280px] border border-slate-100 dark:border-slate-700">
         <p className="font-semibold text-slate-700 dark:text-slate-200 mb-1">Hapus data ini?</p>
         <p className="text-xs text-slate-400 mb-4">Tindakan ini tidak dapat dibatalkan.</p>
         <div className="flex gap-2">
-          <button
-            onClick={() => toast.dismiss(t.id)}
-            className="flex-1 py-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl transition-colors font-medium"
-          >
-            Batal
-          </button>
-          <button
-            onClick={async () => { toast.dismiss(t.id); await performDelete(feature_id); }}
-            className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors font-semibold"
-          >
-            Hapus
-          </button>
+          <button onClick={() => toast.dismiss(t.id)} className="flex-1 py-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl transition-colors font-medium">Batal</button>
+          <button onClick={async () => { toast.dismiss(t.id); await performDelete(feature_id); }} className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors font-semibold">Hapus</button>
         </div>
       </div>
     ));
@@ -646,24 +368,18 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
           key={item.feature_id || idx}
           data={item.location}
           style={() => ({
-            color:       getCategoryColor(item.kategori),
-            fillColor:   getCategoryColor(item.kategori),
+            color: getCategoryColor(item.kategori),
+            fillColor: getCategoryColor(item.kategori),
             fillOpacity: 0.35,
-            weight:      2,
+            weight: 2,
           })}
         >
           <Popup>
             <div className="p-3 min-w-[220px] max-w-[260px]">
               <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ background: getCategoryColor(item.kategori) }}
-                />
-                <p className="font-bold text-sm uppercase tracking-wide text-slate-800 dark:text-slate-100">
-                  {item.kategori}
-                </p>
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: getCategoryColor(item.kategori) }} />
+                <p className="font-bold text-sm uppercase tracking-wide text-slate-800 dark:text-slate-100">{item.kategori}</p>
               </div>
-
               <div className="space-y-2">
                 {item.provinsi && (
                   <div className="flex items-start gap-2.5">
@@ -688,14 +404,11 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
                     <span className="text-base leading-none mt-0.5">⭐</span>
                     <div>
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Akurasi</p>
-                      <p className="text-xs font-bold text-amber-500 mt-0.5">
-                        {(item.confidence_score * 100).toFixed(1)}%
-                      </p>
+                      <p className="text-xs font-bold text-amber-500 mt-0.5">{(item.confidence_score * 100).toFixed(1)}%</p>
                     </div>
                   </div>
                 )}
               </div>
-
               {item.created_at && (
                 <p className="text-[10px] text-slate-400 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700">
                   {new Date(item.created_at).toLocaleString('id-ID')}
@@ -715,44 +428,7 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   );
 }
 
-export function RBILayer({ activeLayers, rbiData, getCategoryColor }) {
-  return (
-    <>
-      {Object.keys(rbiData).map(layerKey => {
-        if (!activeLayers.includes(layerKey)) return null;
-        const parts    = layerKey.split('_');
-        const kategori = parts[0];
-        const wilayah  = parts.slice(1).join('_');
-
-        return (
-          <GeoJSON
-            key={`rbi-${layerKey}`}
-            data={rbiData[layerKey]}
-            pointToLayer={(f, latlng) =>
-              L.circleMarker(latlng, {
-                radius:      kategori === 'pendidikan' ? 4 : 5,
-                fillColor:   getCategoryColor(kategori),
-                color:       '#ffffff',
-                weight:      kategori === 'kesehatan' ? 2 : 1,
-                fillOpacity: 0.9,
-              })
-            }
-            onEachFeature={(feature, layer) => {
-              const props = feature.properties || {};
-              layer.bindPopup(`
-                <div style="font-size:12px; min-width:180px">
-                  <b style="color:${getCategoryColor(kategori)}">${props.NAMOBJ || 'Tanpa Nama'}</b><br/>
-                  <span>${props.REMARK || (kategori === 'pendidikan' ? 'Sekolah' : 'Kesehatan')}</span><br/>
-                  <small>Wilayah: ${wilayah}</small>
-                </div>
-              `);
-            }}
-          />
-        );
-      })}
-    </>
-  );
-}
+// ─── Analysis Layer ───────────────────────────────────────────────────────────
 
 export function AnalysisLayer({ activeAnalysisData }) {
   if (!activeAnalysisData?.matched_features?.features) return null;
@@ -763,51 +439,40 @@ export function AnalysisLayer({ activeAnalysisData }) {
       data={activeAnalysisData.matched_features}
       style={(feature) => {
         const analysis = feature.properties?.analysis || {};
-        return {
-          fillColor:   analysis.warna || '#cbd5e1',
-          weight:      2,
-          opacity:     1,
-          color:       'white',
-          fillOpacity: 0.7,
-        };
+        return { fillColor: analysis.warna || '#cbd5e1', weight: 2, opacity: 1, color: 'white', fillOpacity: 0.7 };
       }}
       onEachFeature={(feature, layer) => {
         const analysis = feature.properties?.analysis || {};
         const dataAps  = analysis.aps_data || {};
-
         layer.bindTooltip(`
-          <div style="font-family:inherit; padding:6px;">
-            <div style="font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.1em;">
-              ${analysis.nama_provinsi}
-            </div>
-            <div style="font-size:10px; font-weight:800; color:${analysis.warna}; margin-top:2px;">
-              STATUS: ${analysis.kategori}
-            </div>
+          <div style="font-family:inherit;padding:6px;">
+            <div style="font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.1em;">${analysis.nama_provinsi}</div>
+            <div style="font-size:10px;font-weight:800;color:${analysis.warna};margin-top:2px;">STATUS: ${analysis.kategori}</div>
           </div>
         `, { sticky: true, opacity: 0.95 });
 
         const wawasan = analysis.insights?.map(i =>
-          `<div style="margin-bottom:6px; padding-left:10px; border-left:3px solid ${analysis.warna}; font-weight:600;">${i}</div>`
+          `<div style="margin-bottom:6px;padding-left:10px;border-left:3px solid ${analysis.warna};font-weight:600;">${i}</div>`
         ).join('') || '';
 
         layer.bindPopup(`
-          <div style="font-family:inherit; min-width:280px; color:#1e293b; padding:5px;">
-            <div style="background:${analysis.warna}; color:white; padding:15px; border-radius:12px 12px 4px 4px; margin-bottom:10px;">
-              <div style="font-weight:900; font-size:16px; text-transform:uppercase; letter-spacing:0.1em;">${analysis.nama_provinsi}</div>
-              <div style="font-size:10px; font-weight:800; opacity:0.9; text-transform:uppercase; margin-top:4px;">Analisis Strategis Wilayah</div>
+          <div style="font-family:inherit;min-width:280px;color:#1e293b;padding:5px;">
+            <div style="background:${analysis.warna};color:white;padding:15px;border-radius:12px 12px 4px 4px;margin-bottom:10px;">
+              <div style="font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:0.1em;">${analysis.nama_provinsi}</div>
+              <div style="font-size:10px;font-weight:800;opacity:0.9;text-transform:uppercase;margin-top:4px;">Analisis Strategis Wilayah</div>
             </div>
             <div style="padding:10px;">
-              <div style="font-size:10px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px; border-bottom:2px solid #f1f5f9; padding-bottom:4px;">Wawasan Utama</div>
-              <div style="font-size:12px; color:#334155; line-height:1.5; margin-bottom:15px;">${wawasan}</div>
-              <div style="font-size:10px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px; border-bottom:2px solid #f1f5f9; padding-bottom:4px;">Matriks Partisipasi</div>
-              <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;">
-                <div style="background:#f8fafc; padding:10px; border-radius:8px; text-align:center; border:1px solid #f1f5f9;">
-                  <div style="font-size:9px; font-weight:900; color:#0369a1; text-transform:uppercase;">SD</div>
-                  <div style="font-size:13px; font-weight:900;">${dataAps.APS_7_12 || '-'}%</div>
+              <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;border-bottom:2px solid #f1f5f9;padding-bottom:4px;">Wawasan Utama</div>
+              <div style="font-size:12px;color:#334155;line-height:1.5;margin-bottom:15px;">${wawasan}</div>
+              <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;border-bottom:2px solid #f1f5f9;padding-bottom:4px;">Matriks Partisipasi</div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+                <div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center;border:1px solid #f1f5f9;">
+                  <div style="font-size:9px;font-weight:900;color:#0369a1;text-transform:uppercase;">SD</div>
+                  <div style="font-size:13px;font-weight:900;">${dataAps.APS_7_12 || '-'}%</div>
                 </div>
-                <div style="background:#f8fafc; padding:10px; border-radius:8px; text-align:center; border:1px solid #f1f5f9;">
-                  <div style="font-size:9px; font-weight:900; color:#a16207; text-transform:uppercase;">SMP</div>
-                  <div style="font-size:13px; font-weight:900;">${dataAps.APS_13_15 || '-'}%</div>
+                <div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center;border:1px solid #f1f5f9;">
+                  <div style="font-size:9px;font-weight:900;color:#a16207;text-transform:uppercase;">SMP</div>
+                  <div style="font-size:13px;font-weight:900;">${dataAps.APS_13_15 || '-'}%</div>
                 </div>
               </div>
             </div>
@@ -818,13 +483,16 @@ export function AnalysisLayer({ activeAnalysisData }) {
   );
 }
 
+// ─── Default Export ───────────────────────────────────────────────────────────
+
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
-  const [modeBersih, setModeBersih] = useState(false);
+  // modeBersih dikelola di MainMap, diterima via props
+  const modeBersih    = props.modeBersih;
+  const setModeBersih = props.setModeBersih;
 
   useEffect(() => {
     document.documentElement.setAttribute('data-clean', modeBersih ? 'true' : 'false');
-
     const header = document.querySelector('header');
     if (header) {
       header.style.transition    = 'opacity 0.2s, transform 0.2s';
@@ -832,15 +500,10 @@ export default function MapStuff(props) {
       header.style.transform     = modeBersih ? 'translateY(-100%)' : '';
       header.style.pointerEvents = modeBersih ? 'none' : '';
     }
-
     return () => {
       document.documentElement.setAttribute('data-clean', 'false');
       const h = document.querySelector('header');
-      if (h) {
-        h.style.opacity       = '';
-        h.style.transform     = '';
-        h.style.pointerEvents = '';
-      }
+      if (h) { h.style.opacity = ''; h.style.transform = ''; h.style.pointerEvents = ''; }
     };
   }, [modeBersih]);
 
@@ -853,11 +516,6 @@ export default function MapStuff(props) {
         onEachBoundary={onEachBoundary}
       />
       <AnalysisLayer activeAnalysisData={props.activeAnalysisData} />
-      <RBILayer
-        activeLayers={props.activeLayers}
-        rbiData={props.rbiData}
-        getCategoryColor={props.getCategoryColor}
-      />
       <PreviewLayer
         previewData={props.previewData}
         setPreviewData={props.setPreviewData}
@@ -869,9 +527,10 @@ export default function MapStuff(props) {
         getCategoryColor={props.getCategoryColor}
       />
 
+      <DetectionPreviewBox show={props.showPreviewBox} size={props.detectionSize || 640} />
+      <ZoomWatcher onZoomChange={props.onZoomChange || (() => {})} />
       <ZoomButtons     modeBersih={modeBersih} />
       <CleanModeButton modeBersih={modeBersih} setModeBersih={setModeBersih} />
-      <SearchLocation  boundaryData={boundaryData} modeBersih={modeBersih} />
       <MouseCoordinate modeBersih={modeBersih} />
 
       <MapReset trigger={props.goHome} onDone={() => props.setGoHome(false)} />
