@@ -1,345 +1,231 @@
 "use client";
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { GeoJSON } from 'react-leaflet';
-import { 
-  ChevronDown, ChevronRight, School, 
-  CheckCircle2, 
-  Stethoscope, MapPin,
-  Map,
-  Globe,
-  Layers as LayersIcon
-} from 'lucide-react';
+import { Globe, MapPin, Map, Layers as LayersIcon } from 'lucide-react';
 
-const CATEGORIES = [
+const BOUNDARY_LAYERS = [
   {
-    id: 'batas_wilayah',
-    label: 'Batas Wilayah',
-    icon: <Map size={18} />,
-    color: 'blue',
-    type: 'boundary',
-    layers: [
-      {
-        id: 'batas_provinsi',
-        label: 'Batas Provinsi',
-        description: 'Garis batas antar provinsi',
-        icon: <Globe size={14} />,
-        color: 'blue',
-        endpoint: '/api/batas-provinsi/'
-      },
-      {
-        id: 'batas_kabupaten',
-        label: 'Batas Kabupaten',
-        description: 'Garis batas kabupaten/kota',
-        icon: <MapPin size={14} />,
-        color: 'blue',
-        endpoint: '/api/batas-kabupaten/'
-      }
-    ]
+    id: 'batas_provinsi',
+    label: 'Batas Provinsi',
+    description: 'Garis batas antar provinsi',
+    icon: <Globe size={14} />,
   },
   {
-    id: 'pendidikan',
-    label: 'Pendidikan',
-    icon: <School size={18} />,
-    color: 'blue',
-    endpoint: '/api/rbi-pendidikan/',
-    provinsi: [
-      { nama: "JAWA BARAT", cities: ["KOTA BANDUNG", "KAB BOGOR"] },
-      { nama: "JAWA TENGAH", cities: ["KOTA SEMARANG", "KOTA SURAKARTA"] },
-      { nama: "JAWA TIMUR", cities: ["KOTA MALANG", "KOTA SURABAYA"] }
-    ]
+    id: 'batas_kabupaten',
+    label: 'Batas Kabupaten',
+    description: 'Garis batas kabupaten/kota',
+    icon: <MapPin size={14} />,
   },
-  {
-    id: 'kesehatan',
-    label: 'Kesehatan',
-    icon: <Stethoscope size={18} />,
-    color: 'blue',
-    endpoint: '/api/rbi-kesehatan/',
-    provinsi: [
-      { nama: "JAWA BARAT", cities: ["KOTA BANDUNG", "KAB BOGOR"] },
-      { nama: "JAWA TENGAH", cities: ["KOTA SEMARANG", "KOTA SURAKARTA"] },
-      { nama: "JAWA TIMUR", cities: ["KOTA MALANG", "KOTA SURABAYA"] }
-    ]
-  }
 ];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatLuas(m2) {
+  if (m2 == null) return null;
+  const km2 = m2 / 1_000_000;
+  return `${km2.toLocaleString('id-ID', { maximumFractionDigits: 2 })} km²`;
+}
+
+function formatCoord(val, isLat) {
+  if (val == null) return '-';
+  const abs = Math.abs(val).toFixed(4);
+  const dir = isLat ? (val >= 0 ? 'LU' : 'LS') : (val >= 0 ? 'BT' : 'BB');
+  return `${abs}° ${dir}`;
+}
+
+const ROW  = 'display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f1f5f9;';
+const LBL  = 'font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;';
+const VAL  = 'font-size:12px;font-weight:700;color:#1e293b;text-align:right;max-width:140px;';
+
+function row(label, value, color = '') {
+  if (!value && value !== 0) return '';
+  return `<div style="${ROW}">
+    <span style="${LBL}">${label}</span>
+    <span style="${VAL}${color ? `color:${color};` : ''}">${value}</span>
+  </div>`;
+}
+
+// ─── Popup Builders ───────────────────────────────────────────────────────────
+
+function buildProvinsiPopup(props) {
+  const name  = props.name  || props.NAMOBJ || 'Tanpa Nama';
+  const code  = props.code  || props.KODE   || '';
+  const luas  = formatLuas(props.luas_wilayah_m2);
+  const pulau = props.jumlah_pulau != null
+    ? `${Number(props.jumlah_pulau).toLocaleString('id-ID')} pulau`
+    : null;
+  const lat = props.latitude  ?? props.LAT;
+  const lng = props.longitude ?? props.LNG;
+  const coord = (lat != null)
+    ? `${formatCoord(lat, true)},&nbsp;${formatCoord(lng, false)}`
+    : null;
+
+  return `
+    <div style="font-family:inherit;min-width:230px;padding:2px;">
+      <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);color:white;
+                  padding:11px 13px;border-radius:10px 10px 4px 4px;margin-bottom:8px;">
+        <div style="font-size:9px;font-weight:800;opacity:0.8;text-transform:uppercase;
+                    letter-spacing:0.12em;margin-bottom:3px;">Provinsi</div>
+        <div style="font-size:16px;font-weight:900;letter-spacing:0.01em;">${name}</div>
+      </div>
+      <div style="padding:0 4px 4px;">
+        ${row('Kode Wilayah', code)}
+        ${row('Luas Wilayah', luas, '#0ea5e9')}
+        ${row('Jumlah Pulau', pulau, '#8b5cf6')}
+        ${row('Koordinat', coord)}
+      </div>
+    </div>`;
+}
+
+function buildKabupatenPopup(props) {
+  const name = props.name || props.NAMOBJ || props.KAB_KOTA || props.KABUPATEN || 'Tanpa Nama';
+  const code = props.code || props.KODE || '';
+  const prov = props.provinsi || props.PROPINSI || props.Propinsi || '';
+  const tipe = props.type_wilayah || props.TIPE || '';
+
+  return `
+    <div style="font-family:inherit;min-width:210px;padding:2px;">
+      <div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;
+                  padding:11px 13px;border-radius:10px 10px 4px 4px;margin-bottom:8px;">
+        <div style="font-size:9px;font-weight:800;opacity:0.8;text-transform:uppercase;
+                    letter-spacing:0.12em;margin-bottom:3px;">Kabupaten / Kota</div>
+        <div style="font-size:16px;font-weight:900;letter-spacing:0.01em;">${name}</div>
+      </div>
+      <div style="padding:0 4px 4px;">
+        ${row('Kode Wilayah', code)}
+        ${row('Tipe', tipe)}
+        ${row('Provinsi', prov, '#10b981')}
+      </div>
+    </div>`;
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useBoundaryData(activeLayers) {
+  const [boundaryData, setBoundaryData] = useState({ provinsi: null, kabupaten: null });
+
+  const fetchBoundaryData = async (type) => {
+    try {
+      const endpoint = type === 'provinsi' ? '/api/batas-provinsi/' : '/api/batas-kabupaten/';
+      const res = await axios.get(`http://127.0.0.1:8000${endpoint}`);
+      setBoundaryData(prev => ({ ...prev, [type]: res.data }));
+    } catch (err) {
+      console.error(`Gagal mengambil data batas ${type}:`, err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeLayers.includes('batas_provinsi')  && !boundaryData.provinsi)  fetchBoundaryData('provinsi');
+    if (activeLayers.includes('batas_kabupaten') && !boundaryData.kabupaten) fetchBoundaryData('kabupaten');
+  }, [activeLayers, boundaryData]);
+
+  const getBoundaryStyle = (type) =>
+    type === 'provinsi'
+      ? { color: '#006aff', weight: 2, fillColor: 'transparent', fillOpacity: 0, dashArray: '8,8', opacity: 0.7 }
+      : { color: '#fffb00', weight: 2, fillColor: 'transparent', fillOpacity: 0, dashArray: '4,4', opacity: 0.6 };
+
+  const onEachBoundary = (feature, layer, type) => {
+    const props   = feature.properties || {};
+    const content = type === 'provinsi' ? buildProvinsiPopup(props) : buildKabupatenPopup(props);
+    layer.bindPopup(content, { maxWidth: 290 });
+
+    layer.on({
+      mouseover: (e) => e.target.setStyle({ weight: type === 'provinsi' ? 3 : 2, dashArray: '0', opacity: 1 }),
+      mouseout:  (e) => e.target.setStyle(getBoundaryStyle(type)),
+    });
+  };
+
+  return { boundaryData, getBoundaryStyle, onEachBoundary, fetchBoundaryData };
+}
+
+// ─── GeoJSON Layer ────────────────────────────────────────────────────────────
 
 export function BoundaryLayer({ activeLayers, boundaryData, getBoundaryStyle, onEachBoundary }) {
   if (!boundaryData) return null;
-
   return (
     <>
       {activeLayers.includes('batas_provinsi') && boundaryData.provinsi && (
-        <GeoJSON 
+        <GeoJSON
           key="batas-provinsi"
           data={boundaryData.provinsi}
           style={getBoundaryStyle('provinsi')}
-          onEachFeature={(feature, layer) => onEachBoundary(feature, layer, 'provinsi')}
+          onEachFeature={(f, l) => onEachBoundary(f, l, 'provinsi')}
         />
       )}
-
       {activeLayers.includes('batas_kabupaten') && boundaryData.kabupaten && (
-        <GeoJSON 
+        <GeoJSON
           key="batas-kabupaten"
           data={boundaryData.kabupaten}
           style={getBoundaryStyle('kabupaten')}
-          onEachFeature={(feature, layer) => onEachBoundary(feature, layer, 'kabupaten')}
+          onEachFeature={(f, l) => onEachBoundary(f, l, 'kabupaten')}
         />
       )}
     </>
   );
 }
 
-export function useBoundaryData(activeLayers) {
-  const [boundaryData, setBoundaryData] = useState({
-    provinsi: null,
-    kabupaten: null
-  });
+// ─── Panel UI ─────────────────────────────────────────────────────────────────
 
-  const fetchBoundaryData = async (type) => {
-    try {
-      const endpoint = type === 'provinsi' ? '/api/batas-provinsi/' : '/api/batas-kabupaten/';
-      const response = await axios.get(`http://127.0.0.1:8000${endpoint}`);
-      
-      setBoundaryData(prev => ({
-        ...prev,
-        [type]: response.data
-      }));
-    } catch (error) {
-      console.error(`Gagal mengambil data batas ${type}:`, error);
-    }
-  };
-
-  useEffect(() => {
-    if (activeLayers.includes('batas_provinsi') && !boundaryData.provinsi) {
-      fetchBoundaryData('provinsi');
-    }
-    if (activeLayers.includes('batas_kabupaten') && !boundaryData.kabupaten) {
-      fetchBoundaryData('kabupaten');
-    }
-  }, [activeLayers, boundaryData]);
-
-  const getBoundaryStyle = (type) => {
-    if (type === 'provinsi') {
-      return {
-        color: "#006aff",
-        weight: 2,
-        fillColor: "transparent",
-        fillOpacity: 0,
-        dashArray: "8, 8",
-        opacity: 0.7
-      };
-    } else {
-      return {
-        color: "#fffb00",
-        weight: 2,
-        fillColor: "transparent",
-        fillOpacity: 0,
-        dashArray: "4, 4",
-        opacity: 0.6
-      };
-    }
-  };
-
-  const onEachBoundary = (feature, layer, type) => {
-    const properties = feature.properties || {};
-    const name = properties.name || properties.NAMOBJ || 'Tanpa Nama';
-    const code = properties.code || properties.KODE || '';
-    const level = properties.level || type;
-    
-    layer.bindPopup(`
-      <div style="font-size:12px; min-width:180px">
-        <b>${level === 'province' ? 'Provinsi' : 'Kabupaten/Kota'}</b><br/>
-        <strong>${name}</strong><br/>
-        ${code ? `<small>Kode: ${code}</small><br/>` : ''}
-      </div>
-    `);
-    
-    layer.on({
-      mouseover: (e) => {
-        const l = e.target;
-        l.setStyle({
-          weight: type === 'provinsi' ? 3 : 2,
-          dashArray: "0",
-          opacity: 1
-        });
-      },
-      mouseout: (e) => {
-        const l = e.target;
-        l.setStyle(getBoundaryStyle(type));
-      }
-    });
-  };
-
-  return {
-    boundaryData,
-    getBoundaryStyle,
-    onEachBoundary,
-    fetchBoundaryData
-  };
-}
-
-export default function LayersPanel({ activeLayers, onToggleLayer, rbiData, onToggleProvinsi }) {
-  const [activeTab, setActiveTab] = useState('batas_wilayah');
-  const [expandedProv, setExpandedProv] = useState(["JAWA BARAT"]);
-
-  const currentCat = CATEGORIES.find(c => c.id === activeTab);
-  const isBoundaryTab = currentCat?.type === 'boundary';
-
-  const stats = useMemo(() => {
-    if (isBoundaryTab) return {};
-    
-    const counts = {};
-    currentCat?.provinsi?.forEach(prov => {
-      prov.cities.forEach(city => {
-        const cacheKey = `${activeTab}_${city}`;
-        counts[city] = rbiData[cacheKey]?.features?.length || 0;
-      });
-    });
-    return counts;
-  }, [rbiData, activeTab, currentCat, isBoundaryTab]);
-
+export default function LayersPanel({ activeLayers, onToggleLayer }) {
   return (
-    <div 
+    <div
       className="flex flex-col h-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
       onWheel={(e) => e.stopPropagation()}
     >
-      {/* HEADER */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50">
-        <h3 className="font-black text-lg uppercase tracking-tight text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-          <LayersIcon size={20}/>
+        <h3 className="font-black text-lg uppercase tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <LayersIcon size={20} />
           Layer Kontrol
         </h3>
-        <div className="flex gap-2">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveTab(cat.id)}
-              className={`p-2.5 rounded-xl transition-all ${
-                activeTab === cat.id 
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg scale-105' 
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-              }`}
-              title={cat.label}
-            >
-              {cat.icon}
-            </button>
-          ))}
-        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Kelola tampilan batas wilayah
+        </p>
       </div>
 
-      {/* BODY */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isBoundaryTab ? (
-          /* BATAS WILAYAH */
-          <div className="space-y-3">
-            {currentCat.layers.map(layer => {
-              const isActive = activeLayers.includes(layer.id);
-              
-              return (
-                <button
-                  key={layer.id}
-                  onClick={() => onToggleLayer(layer.id)}
-                  className={`w-full p-4 rounded-2xl border-2 transition-all flex items-start gap-3 text-left ${
-                    isActive
-                      ? 'border-cyan-500 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 shadow-lg'
-                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg ${
-                    isActive ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
-                  }`}>
-                    {layer.icon}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-bold ${
-                      isActive ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'
-                    }`}>
-                      {layer.label}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {layer.description}
-                    </p>
-                  </div>
-                  {isActive && (
-                    <div className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 shadow-lg animate-pulse" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          /* RBI (PENDIDIKAN & KESEHATAN) */
-          <div className="space-y-3">
-            {currentCat?.provinsi?.map((prov) => {
-              const prefixedCities = prov.cities.map(city => `${activeTab}_${city}`);
-              const isAllSelected = prefixedCities.every(city => activeLayers.includes(city));
-              const totalProv = prov.cities.reduce((acc, city) => acc + (stats[city] || 0), 0);
+        <div className="flex items-center gap-2 mb-2">
+          <Map size={14} className="text-cyan-500" />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Batas Wilayah
+          </span>
+        </div>
 
-              return (
-                <div key={prov.nama} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                  <div className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                    <div 
-                      className="flex items-center gap-3 cursor-pointer flex-1"
-                      onClick={() => setExpandedProv(prev => 
-                        prev.includes(prov.nama) ? prev.filter(p => p !== prov.nama) : [...prev, prov.nama]
-                      )}
-                    >
-                      <div className="p-1.5 rounded-lg bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400">
-                        {expandedProv.includes(prov.nama) ? <ChevronDown size={14} strokeWidth={3}/> : <ChevronRight size={14} strokeWidth={3}/>}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{prov.nama}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{totalProv} objek</p>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={() => onToggleProvinsi(prefixedCities, isAllSelected)}
-                      className={`p-2 rounded-lg transition-all ${
-                        isAllSelected 
-                        ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg' 
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                      }`}
-                    >
-                      <CheckCircle2 size={16} />
-                    </button>
-                  </div>
-
-                  {expandedProv.includes(prov.nama) && (
-                    <div className="px-3 pb-3 pt-1 grid grid-cols-1 gap-2">
-                      {prov.cities.map(city => {
-                        const layerId = `${activeTab}_${city}`;
-                        return (
-                          <button
-                            key={layerId}
-                            onClick={() => onToggleLayer(layerId)}
-                            className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
-                              activeLayers.includes(layerId)
-                                ? 'border-cyan-500 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 text-cyan-700 dark:text-cyan-400'
-                                : 'border-transparent bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <MapPin size={12} className={activeLayers.includes(layerId) ? 'text-cyan-500' : 'text-slate-300'} />
-                              <span className="text-xs font-bold">{city}</span>
-                            </div>
-                            <div className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                              activeLayers.includes(layerId) 
-                              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg' 
-                              : 'bg-white dark:bg-slate-600 border border-slate-200 dark:border-slate-500 text-slate-400'
-                            }`}>
-                              {stats[city] || 0}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {BOUNDARY_LAYERS.map(layer => {
+          const isActive = activeLayers.includes(layer.id);
+          return (
+            <button
+              key={layer.id}
+              onClick={() => onToggleLayer(layer.id)}
+              className={`w-full p-4 rounded-2xl border-2 transition-all flex items-start gap-3 text-left ${
+                isActive
+                  ? 'border-cyan-500 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 shadow-lg'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              <div className={`p-2 rounded-lg ${
+                isActive
+                  ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
+              }`}>
+                {layer.icon}
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-bold ${
+                  isActive ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'
+                }`}>
+                  {layer.label}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {layer.description}
+                </p>
+              </div>
+              {isActive && (
+                <div className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 shadow-lg animate-pulse mt-1" />
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
