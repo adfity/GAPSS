@@ -21,6 +21,7 @@ urlpatterns = [
     path('rbi-kesehatan/', views.rbi_kesehatan_list, name='rbi-kesehatan'),
 
     # EDUCATION ANALYSIS
+    path('check-year-data/', education_views.check_year_data, name='check-year-data'),
     path('analyze-education-bps/', education_views.analyze_education_bps, name='analyze-education-bps'),
     path('save-education-analysis/', education_views.save_education_analysis, name='save-education-analysis'),
     path('education-analysis/list/', education_views.get_education_analysis_list, name='get-education-analysis-list'),
