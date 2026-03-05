@@ -13,7 +13,7 @@ export function middleware(request) {
 
   // Route /beranda dan /analisis → hanya role 'user'
   if (
-    (pathname.startsWith('/beranda') || pathname.startsWith('/analisis')) &&
+    // (pathname.startsWith('/beranda') || pathname.startsWith('/analisis')) &&
     role !== 'user'
   ) {
     return NextResponse.redirect(new URL('/login', request.url));
@@ -24,7 +24,7 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    '/beranda/:path*',
-    '/analisis/:path*',
+    // '/beranda/:path*',
+    // '/analisis/:path*',
   ],
 };

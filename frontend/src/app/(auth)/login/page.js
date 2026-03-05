@@ -8,6 +8,7 @@ import { FcGoogle } from "react-icons/fc";
 import { SiGithub } from "react-icons/si";
 import toast from "react-hot-toast";
 import HeaderBar from "@/components/layout/HeaderBar";
+import SideBar from "@/components/layout/sideBar";
 import Footerauth from "@/components/layout/footerauth";
 
 export default function LoginPage() {
@@ -46,7 +47,7 @@ export default function LoginPage() {
         if (data.role === "admin") {
           router.push("/admin/dashboard");
         } else {
-          router.push("/beranda");
+          router.push("/map");
         }
       } else {
         toast.error(data.detail || "Email atau password salah!");
@@ -69,6 +70,7 @@ export default function LoginPage() {
       dark:bg-slate-950 dark:text-white
     ">
       <HeaderBar />
+      <SideBar />
 
       {/* cahaya ilahi blue */}
       <div className="absolute inset-0 pointer-events-none">

@@ -14,11 +14,11 @@ import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
 
 export default function MainMap({ activePanel, setActivePanel }) {
-  // ref ke instance Leaflet map
   const mapRef = useRef(null);
 
-  // ── State utama ──────────────────────────────────────────────────────────────
-  const [currentBasemap,     setCurrentBasemap]     = useState(BASEMAP_OPTIONS[0].url);
+  // Simpan seluruh objek basemap agar attribution & maxZoom ikut terbawa
+  const [currentBasemap, setCurrentBasemap] = useState(BASEMAP_OPTIONS[0]);
+
   const [activeLayers,       setActiveLayers]       = useState([]);
   const [data,               setData]               = useState(null);
   const [previewData,        setPreviewData]        = useState([]);
@@ -26,16 +26,13 @@ export default function MainMap({ activePanel, setActivePanel }) {
   const [activeRadius,       setActiveRadius]       = useState(null);
   const [modeBersih,         setModeBersih]         = useState(false);
 
-  // ── State GeoAI (diangkat ke sini agar bisa dibagi ke GeoAI panel & MapStuff) 
   const [zoomLevel,          setZoomLevel]          = useState(5);
   const [showPreviewBox,     setShowPreviewBox]     = useState(true);
   const [detectionSize,      setDetectionSize]      = useState(640);
 
-  // ── State Analysis ───────────────────────────────────────────────────────────
   const [activeAnalysisId,   setActiveAnalysisId]   = useState(null);
   const [activeAnalysisData, setActiveAnalysisData] = useState(null);
 
-  // ── Mobile detection ─────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -44,13 +41,11 @@ export default function MainMap({ activePanel, setActivePanel }) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // ── Reset showPreviewBox ketika panel GeoAI ditutup ──────────────────────────
   useEffect(() => {
     if (activePanel !== 'geoai') setShowPreviewBox(false);
     else setShowPreviewBox(true);
   }, [activePanel]);
 
-  // ── Fetch data awal ──────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -65,7 +60,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
     fetchData();
   }, []);
 
-  // ── Fetch analysis detail ────────────────────────────────────────────────────
   useEffect(() => {
     if (!activeAnalysisId) { setActiveAnalysisData(null); return; }
     const fetch_ = async () => {
@@ -82,7 +76,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
     fetch_();
   }, [activeAnalysisId]);
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
   const getCategoryColor = (cat) => {
     switch (cat?.toLowerCase()) {
       case 'bangunan':  return '#f59e0b';
@@ -111,21 +104,21 @@ export default function MainMap({ activePanel, setActivePanel }) {
   return (
     <div className="h-screen w-full relative overflow-hidden bg-slate-900">
 
-      {/* ── PANEL BASEMAP ── */}
       {activePanel === 'basemap' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
-          <BasemapPanel activeUrl={currentBasemap} onSelect={setCurrentBasemap} />
+          <BasemapPanel
+            activeUrl={currentBasemap.url}
+            onSelect={setCurrentBasemap}
+          />
         </aside>
       )}
 
-      {/* ── PANEL LAYERS ── */}
       {activePanel === 'layers' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
           <LayersPanel activeLayers={activeLayers} onToggleLayer={toggleLayer} />
         </aside>
       )}
 
-      {/* ── PANEL ANALYSIS ── */}
       {activePanel === 'analysis' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
           <AnalysisPanel
@@ -136,8 +129,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
         </aside>
       )}
 
-      {/* ── PANEL GEOAI — di luar MapContainer ─────────────────────────────────
-          Scroll di panel tidak akan menggerakkan peta.                       */}
       {activePanel === 'geoai' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
           <GeoAI
@@ -156,10 +147,8 @@ export default function MainMap({ activePanel, setActivePanel }) {
         </aside>
       )}
 
-      {/* ── SEARCH — di luar MapContainer ── */}
       <SearchLocation mapRef={mapRef} modeBersih={modeBersih} />
 
-      {/* ── PETA UTAMA ── */}
       <MapContainer
         ref={mapRef}
         center={[-2.5, 118]}
@@ -170,10 +159,13 @@ export default function MainMap({ activePanel, setActivePanel }) {
         zoomControl={false}
         doubleClickZoom={false}
       >
+        {/* Basemap — key={url} paksa re-render saat ganti tile provider */}
         <TileLayer
-          url={currentBasemap}
-          attribution='&copy; OpenStreetMap'
-          maxZoom={22}
+          key={currentBasemap.url}
+          url={currentBasemap.url}
+          attribution={currentBasemap.attribution}
+          maxZoom={currentBasemap.maxZoom ?? 22}
+          maxNativeZoom={currentBasemap.maxZoom ?? 19}
         />
 
         <MapStuff
@@ -196,7 +188,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
           onRefreshData={refreshData}
         />
 
-        {/* PANEL RADIUS — tetap di dalam karena butuh useMap */}
         {activePanel === 'radius' && (
           <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
             <aside

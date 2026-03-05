@@ -84,7 +84,7 @@ function buildKabupatenPopup(p) {
     </div>`;
 }
 
-// ─── Komponen utama — terima mapRef dari luar ─────────────────────────────────
+// Komponen utama — terima mapRef dari luar
 
 export default function SearchLocation({ mapRef, modeBersih }) {
   const [searchTerbuka,     setSearchTerbuka]     = useState(false);
@@ -96,7 +96,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
   const cacheRef     = useRef({ provinsi: null, kabupaten: null });
   const highlightRef = useRef(null);
 
-  // ── Fetch boundary data (lazy, cached) ──────────────────────────────────────
+  // Fetch boundary data (lazy, cached)
   const ensureData = async (type) => {
     if (cacheRef.current[type]) return cacheRef.current[type];
     try {
@@ -117,7 +117,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
     }
   }, [searchTerbuka]);
 
-  // ── Clear highlight ──────────────────────────────────────────────────────────
+  // Clear highlight─
   const clearHighlight = () => {
     const map = mapRef?.current;
     if (highlightRef.current && map) {
@@ -128,7 +128,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
     setHasHighlight(false);
   };
 
-  // ── Auto suggestions ─────────────────────────────────────────────────────────
+  // Auto suggestions
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchSuggestions([]); return; }
     const q = searchQuery.toLowerCase();
@@ -144,7 +144,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
     setSearchSuggestions(hasil.slice(0, 8));
   }, [searchQuery]);
 
-  // ── Draw highlight via mapRef ────────────────────────────────────────────────
+  // Draw highlight via mapRef
   const drawHighlight = (fitur, tipe) => {
     const map = mapRef?.current;
     if (!map) return;
@@ -183,7 +183,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
     setHasHighlight(true);
   };
 
-  // ── Show popup via mapRef ────────────────────────────────────────────────────
+  // Show popup via mapRef─
   const showPopup = (fitur, tipe, latlng) => {
     const map = mapRef?.current;
     if (!map) return;
@@ -198,7 +198,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
       .openOn(map);
   };
 
-  // ── Main search handler ──────────────────────────────────────────────────────
+  // Main search handler
   const handleSearch = async (item) => {
     const map = mapRef?.current;
     if (!map) return;
@@ -245,7 +245,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
     setSearchSuggestions([]);
   };
 
-  // ── Query change ─────────────────────────────────────────────────────────────
+  // Query change─
   const handleQueryChange = async (val) => {
     setSearchQuery(val);
     if (!val.trim()) return;
@@ -264,7 +264,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
       className="fixed z-[1200] flex flex-col gap-1.5"
       style={{ top: TOP_SEARCH, left: LEFT_PX }}
     >
-      {/* ── Search panel / tombol ── */}
+      {/* Search panel / tombol */}
       {searchTerbuka ? (
         <div
           className={`${glass} rounded-2xl overflow-hidden`}
@@ -341,7 +341,7 @@ export default function SearchLocation({ mapRef, modeBersih }) {
         </button>
       )}
 
-      {/* ── Tombol hapus batas — muncul kalau ada highlight aktif ── */}
+      {/* Tombol hapus batas — muncul kalau ada highlight aktif */}
       {hasHighlight && !searchTerbuka && (
         <button
           onClick={clearHighlight}

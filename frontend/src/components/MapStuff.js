@@ -23,7 +23,7 @@ const TOP_ZOOM   = NAVBAR_H + 12;
 const TOP_CLEAN  = TOP_ZOOM + 90 + 8;
 
 
-// ─── Detection Preview Box (butuh useMap, harus di dalam MapContainer) ────────
+// Detection Preview Box (butuh useMap, harus di dalam MapContainer)
 
 export function DetectionPreviewBox({ show, size }) {
   const map = useMap();
@@ -67,7 +67,7 @@ export function DetectionPreviewBox({ show, size }) {
   );
 }
 
-// ─── Zoom Watcher — kirim zoom level ke luar MapContainer ─────────────────────
+// Zoom Watcher — kirim zoom level ke luar MapContainer
 
 export function ZoomWatcher({ onZoomChange }) {
   useMapEvents({
@@ -76,7 +76,7 @@ export function ZoomWatcher({ onZoomChange }) {
   return null;
 }
 
-// ─── Zoom Buttons ─────────────────────────────────────────────────────────────
+// Zoom Buttons─
 
 export function ZoomButtons({ modeBersih }) {
   const map = useMap();
@@ -103,7 +103,7 @@ export function ZoomButtons({ modeBersih }) {
   );
 }
 
-// ─── Mouse Coordinate ─────────────────────────────────────────────────────────
+// Mouse Coordinate
 
 export function MouseCoordinate({ modeBersih }) {
   const [coords, setCoords] = useState({ lat: 0, lng: 0 });
@@ -125,7 +125,7 @@ export function MouseCoordinate({ modeBersih }) {
   );
 }
 
-// ─── Clean Mode Button ────────────────────────────────────────────────────────
+// Clean Mode Button
 
 export function CleanModeButton({ modeBersih, setModeBersih }) {
   return (
@@ -145,7 +145,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
   );
 }
 
-// ─── Map Reset ────────────────────────────────────────────────────────────────
+// Map Reset─
 
 export function MapReset({ trigger, onDone }) {
   const map = useMap();
@@ -157,7 +157,7 @@ export function MapReset({ trigger, onDone }) {
   return null;
 }
 
-// ─── Sidebar Buttons ──────────────────────────────────────────────────────────
+// Sidebar Buttons─
 
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
   const [isMobile, setIsMobile] = useState(false);
@@ -266,7 +266,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
   );
 }
 
-// ─── Preview Layer ────────────────────────────────────────────────────────────
+// Preview Layer
 
 export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) {
   const map = useMap();
@@ -332,7 +332,7 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
   );
 }
 
-// ─── Saved Data Layer ─────────────────────────────────────────────────────────
+// Saved Data Layer
 
 export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   const handleDelete = (feature_id) => {
@@ -428,7 +428,7 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   );
 }
 
-// ─── Analysis Layer ───────────────────────────────────────────────────────────
+// Analysis Layer
 
 export function AnalysisLayer({ activeAnalysisData }) {
   if (!activeAnalysisData?.matched_features?.features) return null;
@@ -483,7 +483,7 @@ export function AnalysisLayer({ activeAnalysisData }) {
   );
 }
 
-// ─── Default Export ───────────────────────────────────────────────────────────
+// Default Export
 
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
