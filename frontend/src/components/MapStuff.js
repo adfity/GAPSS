@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { GeoJSON, Polygon, Popup, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import {
   Home, Map as MapIcon, Layers, LocateFixed,
-  Eye, EyeOff, Plus, Minus
+  Eye, EyeOff, Plus, Minus, Grid  // ← tambah Grid
 } from 'lucide-react';
 import { useBoundaryData, BoundaryLayer } from './panel/layers';
 import { toast } from 'react-hot-toast';
@@ -188,6 +188,13 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
       label: 'GeoAI',
     },
+    // ── AREA SCAN ──────────────────────────────────────────────────────────
+    {
+      id: 'areascan',
+      icon: <Grid size={17} />,
+      label: 'Area Scan',
+    },
+    // ──────────────────────────────────────────────────────────────────────
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
   ];
 
@@ -203,10 +210,12 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   if (modeBersih) return null;
 
-  const activeIcon = (btn) =>
-    ['radius', 'geoai'].includes(btn.id)
-      ? <img src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`} className="w-[18px] h-[18px] object-contain" alt={btn.label} />
-      : btn.icon;
+  const activeIcon = (btn) => {
+    if (btn.id === 'radius') return <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />;
+    if (btn.id === 'geoai')  return <img src="/icons/wgeo.png"    className="w-[18px] h-[18px] object-contain" alt="GeoAI" />;
+    // areascan & semua icon lucide: kembalikan icon aslinya (sudah putih karena text-white dari parent)
+    return btn.icon;
+  };
 
   /* Mobile */
   if (isMobile) {
@@ -239,9 +248,11 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       <div className={`${glass} rounded-[22px] p-1.5 flex flex-col gap-1`}>
         {buttons.map((btn, i) => {
           const active = activePanel === btn.id;
+          // Separator sebelum tombol terakhir (Lokasi)
+          const isLast = i === buttons.length - 1;
           return (
             <div key={btn.id} className="relative group">
-              {i === buttons.length - 1 && (
+              {isLast && (
                 <div className="w-6 h-px bg-slate-200 dark:bg-slate-700 mx-auto my-1" />
               )}
               <button
@@ -487,7 +498,6 @@ export function AnalysisLayer({ activeAnalysisData }) {
 
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
-  // modeBersih dikelola di MainMap, diterima via props
   const modeBersih    = props.modeBersih;
   const setModeBersih = props.setModeBersih;
 

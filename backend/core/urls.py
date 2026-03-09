@@ -4,6 +4,7 @@ from . import education_views
 from . import health_views
 from . import economy_views
 from core import pangan_views
+from . import views_area_scan
 
 urlpatterns = [
     # AI DETECTION & FEATURES
@@ -54,4 +55,10 @@ urlpatterns = [
     path('food-security-analysis/list/', pangan_views.get_food_security_analysis_list, name='get-food-security-analysis-list'),
     path('food-security-analysis/<str:analysis_id>/', pangan_views.get_food_security_analysis_detail, name='get-food-security-analysis-detail'),
     path('food-security-analysis/<str:analysis_id>/delete/', pangan_views.delete_food_security_analysis, name='delete-food-security-analysis'),
+
+    # ── AREA SCAN (GeoAI SAS Planet style) ──────────────────────────────────
+    path('area-scan/start/',    views_area_scan.area_scan_session,      name='area-scan-start'),
+    path('area-scan/status/',   views_area_scan.area_scan_status,       name='area-scan-status'),
+    path('area-scan/summary/',  views_area_scan.area_scan_summary,      name='area-scan-summary'),
+    path('area-scan/sessions/', views_area_scan.area_scan_sessions_list, name='area-scan-sessions'),
 ]

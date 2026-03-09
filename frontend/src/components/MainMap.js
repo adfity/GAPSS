@@ -12,6 +12,7 @@ import LayersPanel from './panel/layers';
 import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
+import GeoAreaScanPanel, { AreaScanOverlay } from './panel/GeoAreaScanPanel'; // ← TAMBAHAN
 
 export default function MainMap({ activePanel, setActivePanel }) {
   const mapRef = useRef(null);
@@ -33,6 +34,23 @@ export default function MainMap({ activePanel, setActivePanel }) {
   const [activeAnalysisId,   setActiveAnalysisId]   = useState(null);
   const [activeAnalysisData, setActiveAnalysisData] = useState(null);
 
+  // ── AREA SCAN STATE ──────────────────────────────────────────────────────
+  const [isDrawingArea,   setIsDrawingArea]   = useState(false);
+  const [drawnBounds,     setDrawnBounds]     = useState(null);
+  const [tileGrid,        setTileGrid]        = useState([]);
+  const [scanningTileIdx, setScanningTileIdx] = useState(-1);
+  const [previewResults,  setPreviewResults]  = useState([]);
+  const [tileStats,       setTileStats]       = useState({ total: 0, done: 0, objects: 0 });
+  const [isScanning,      setIsScanning]      = useState(false);
+
+  // Klik tile → flyTo ke tile dengan animasi smooth
+  const handleTileClick = (tile) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo([tile.centerLat, tile.centerLng], 19, { animate: true, duration: 0.6 });
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -44,6 +62,13 @@ export default function MainMap({ activePanel, setActivePanel }) {
   useEffect(() => {
     if (activePanel !== 'geoai') setShowPreviewBox(false);
     else setShowPreviewBox(true);
+  }, [activePanel]);
+
+  // Reset area scan state saat panel ditutup
+  useEffect(() => {
+    if (activePanel !== 'areascan') {
+      setIsDrawingArea(false);
+    }
   }, [activePanel]);
 
   useEffect(() => {
@@ -147,6 +172,32 @@ export default function MainMap({ activePanel, setActivePanel }) {
         </aside>
       )}
 
+      {/* ── AREA SCAN PANEL ──────────────────────────────────────────────── */}
+      {activePanel === 'areascan' && (
+        <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
+          <GeoAreaScanPanel
+            mapRef={mapRef}
+            zoomLevel={zoomLevel}
+            onNewData={refreshData}
+            isDrawingArea={isDrawingArea}
+            setIsDrawingArea={setIsDrawingArea}
+            drawnBounds={drawnBounds}
+            setDrawnBounds={setDrawnBounds}
+            tileGrid={tileGrid}
+            setTileGrid={setTileGrid}
+            previewResults={previewResults}
+            setPreviewResults={setPreviewResults}
+            scanningTileIdx={scanningTileIdx}
+            setScanningTileIdx={setScanningTileIdx}
+            tileStats={tileStats}
+            setTileStats={setTileStats}
+            isScanning={isScanning}
+            setIsScanning={setIsScanning}
+          />
+        </aside>
+      )}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+
       <SearchLocation mapRef={mapRef} modeBersih={modeBersih} />
 
       <MapContainer
@@ -187,6 +238,18 @@ export default function MainMap({ activePanel, setActivePanel }) {
           getCategoryColor={getCategoryColor}
           onRefreshData={refreshData}
         />
+
+        {/* ── AREA SCAN OVERLAY — harus di dalam MapContainer ────────── */}
+        <AreaScanOverlay
+          isDrawing={isDrawingArea}
+          onBoundsSet={setDrawnBounds}
+          drawnBounds={drawnBounds}
+          tileGrid={tileGrid}
+          scanningTileIdx={scanningTileIdx}
+          previewResults={previewResults}
+          onTileClick={handleTileClick}
+        />
+        {/* ─────────────────────────────────────────────────────────────────── */}
 
         {activePanel === 'radius' && (
           <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
