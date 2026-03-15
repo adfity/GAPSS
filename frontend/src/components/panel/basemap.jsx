@@ -1,5 +1,5 @@
 "use client";
-import { MapIcon, Satellite, Map, Navigation, Globe, Mountain } from 'lucide-react';
+import { MapIcon } from 'lucide-react';
 
 export const BASEMAP_OPTIONS = [
     // ── SATELIT ───────────────────────────────────────────────────────────────
@@ -9,21 +9,17 @@ export const BASEMAP_OPTIONS = [
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         thumbnail: '/icons/basemaps/satelit.png',
         attribution: '&copy; Esri, Maxar, Earthstar Geographics',
-        icon: 'Satellite',
         group: 'Satelit',
     },
 
     // ── INDONESIA / RBI ───────────────────────────────────────────────────────
     {
         id: 'big-rbi',
-        name: 'RBI (BIG)',
+        name: 'Rupa Bumi Indonesia',
         url: 'https://geoservices.big.go.id/rbi/rest/services/BASEMAP/Rupabumi_Indonesia/MapServer/tile/{z}/{y}/{x}',
         thumbnail: '/icons/basemaps/rbi.png',
         attribution: '&copy; Badan Informasi Geospasial (BIG)',
-        icon: 'Globe',
         group: 'Indonesia',
-        badge: 'BIG',
-        maxZoom: 16,
     },
 
     // ── JALAN / NAVIGASI ──────────────────────────────────────────────────────
@@ -33,7 +29,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         thumbnail: '/icons/basemaps/osm.png',
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        icon: 'Navigation',
         group: 'Jalan',
     },
     {
@@ -42,7 +37,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
         thumbnail: '/icons/basemaps/esri-streets.png',
         attribution: '&copy; Esri, HERE, Garmin',
-        icon: 'Navigation',
         group: 'Jalan',
     },
     {
@@ -51,9 +45,7 @@ export const BASEMAP_OPTIONS = [
         url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
         thumbnail: '/icons/basemaps/hot-osm.png',
         attribution: '&copy; OpenStreetMap contributors, HOT',
-        icon: 'Navigation',
         group: 'Jalan',
-        badge: 'HOT',
     },
 
     // ── TOPOGRAFI ─────────────────────────────────────────────────────────────
@@ -63,7 +55,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
         thumbnail: '/icons/basemaps/esri-topo.png',
         attribution: '&copy; Esri, USGS, NOAA',
-        icon: 'Mountain',
         group: 'Topografi',
     },
     {
@@ -72,7 +63,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         thumbnail: '/icons/basemaps/opentopomap.png',
         attribution: '&copy; OpenTopoMap (CC-BY-SA)',
-        icon: 'Mountain',
         group: 'Topografi',
     },
 
@@ -83,7 +73,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         thumbnail: '/icons/basemaps/carto-light.png',
         attribution: '&copy; CartoDB',
-        icon: 'Map',
         group: 'Minimalis',
     },
     {
@@ -92,7 +81,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         thumbnail: '/icons/basemaps/carto-dark.png',
         attribution: '&copy; CartoDB',
-        icon: 'Map',
         group: 'Minimalis',
     },
     {
@@ -101,7 +89,6 @@ export const BASEMAP_OPTIONS = [
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
         thumbnail: '/icons/basemaps/esri-gray.png',
         attribution: '&copy; Esri, HERE, Garmin',
-        icon: 'Map',
         group: 'Minimalis',
     },
 ];
@@ -118,18 +105,6 @@ const GROUP_COLORS = {
 };
 
 export default function BasemapPanel({ onSelect, activeUrl }) {
-    const getIcon = (iconName, size = 16) => {
-        const p = { size };
-        switch (iconName) {
-            case 'Satellite':  return <Satellite {...p} />;
-            case 'Map':        return <Map {...p} />;
-            case 'Navigation': return <Navigation {...p} />;
-            case 'Globe':      return <Globe {...p} />;
-            case 'Mountain':   return <Mountain {...p} />;
-            default:           return <MapIcon {...p} />;
-        }
-    };
-
     return (
         <div
             className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
@@ -196,9 +171,6 @@ export default function BasemapPanel({ onSelect, activeUrl }) {
                                             {/* Info */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                                    <span className={isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400'}>
-                                                        {getIcon(map.icon)}
-                                                    </span>
                                                     <span className={`text-sm font-bold truncate ${
                                                         isActive
                                                             ? 'text-cyan-700 dark:text-cyan-400'
