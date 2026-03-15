@@ -32,11 +32,15 @@ urlpatterns = [
     path('download-rasio-xlsx/', education_views.download_rasio_xlsx, name='download-rasio-xlsx'),
 
     # HEALTH ANALYSIS (BPS API)
-    path('analyze-health-bps/', health_views.analyze_health_bps, name='analyze-health-bps'),
+    path('check-health-data/', health_views.check_health_year_data, name='check-health-data'),
+    path('analyze-health-bps/', health_views.analyze_health_bps,  name='analyze-health-bps'),
     path('save-health-analysis/', health_views.save_health_analysis, name='save-health-analysis'),
     path('health-analysis/list/', health_views.get_health_analysis_list, name='get-health-analysis-list'),
     path('health-analysis/<str:analysis_id>/', health_views.get_health_analysis_detail, name='get-health-analysis-detail'),
     path('health-analysis/<str:analysis_id>/delete/', health_views.delete_health_analysis, name='delete-health-analysis'),
+    path('download-ahh-xlsx/', health_views.download_ahh_xlsx,  name='download-ahh-xlsx'),
+    path('download-imunisasi-xlsx/', health_views.download_imunisasi_xlsx, name='download-imunisasi-xlsx'),
+    path('download-sanitasi-xlsx/', health_views.download_sanitasi_xlsx,  name='download-sanitasi-xlsx'),
 
     # EKONOMI ANALYSIS (BPS API)
     path('analyze-ekonomi-bps/', economy_views.analyze_ekonomi_bps, name='analyze-ekonomi-bps'),

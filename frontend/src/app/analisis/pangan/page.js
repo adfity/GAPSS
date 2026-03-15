@@ -1,690 +1,498 @@
-'use client';
-import { useState, useCallback, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+"use client";
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import {
+  Search, Calendar, Loader2, Home,
+  Info, FileText, BookOpen, Activity, History,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import HeaderBar from '@/components/layout/HeaderBar';
 import SideBar from "@/components/layout/sideBar";
 import Footerauth from '@/components/layout/footerauth';
-import {
-  BarChart3, Map, Info, RefreshCw, Play, Search, ArrowUpDown,
-  Satellite, Wheat, UtensilsCrossed, AlertTriangle,
-  TrendingUp, TrendingDown, Save, RotateCcw,
-  Building2, Trees, Waves, Route, FileText, History,
-  ChevronRight, Home,
-} from 'lucide-react';
 
-import {
-  PROVINSI_LIST, TABS,
-  getSt, formatProduksi,
-  Card, SectionLabel, Toast, StatCard,
-  ScoreBar, ProporsiBar, IkpgGauge,
-  FormulaBox, MetSection, RiwayatCard,
-} from '@/components/analisis/pangan';
+import PetaSection, { cn, Card, Btn, Modal, ModalCekData } from '@/components/analisis/pangan/petaSection';
+import { TabInfo, TabTabel, TabMetadata, TabRiwayat, TabTrend } from '@/components/analisis/pangan/tabPangan';
 
-const PanganMap = dynamic(
-  () => import('@/components/analisis/pangan').then((m) => m.PanganMap),
-  { ssr: false }
-);
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-
-// ─── Floating Right Sidebar ───────────────────────────────────────────────────
-
-const SIDEBAR_TABS = [
-  { id: 'dashboard',  Icon: BarChart3, label: 'Dashboard'     },
-  { id: 'analisis',   Icon: FileText,  label: 'Analisis IKPG' },
-  { id: 'metodologi', Icon: Info,      label: 'Metodologi'    },
-  { id: 'riwayat',    Icon: History,   label: 'Riwayat'       },
+// ─── Constants
+const API = 'http://127.0.0.1:8000/api';
+const TAHUN_TERSEDIA = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
+const TABS = [
+  { id: 'info',     label: 'Info',     Icon: Info       },
+  { id: 'tabel',    label: 'Tabel',    Icon: FileText   },
+  { id: 'metadata', label: 'Metadata', Icon: BookOpen   },
+  { id: 'trend',    label: 'Tren',     Icon: Activity   },
+  { id: 'riwayat',  label: 'Riwayat',  Icon: History    },
 ];
 
-function FloatingSidebar({ tab, setTab }) {
-  const [tooltip, setTooltip] = useState(null);
-  return (
-    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-[1100]
-                    flex flex-col items-center gap-3 py-4 px-2
-                    bg-white dark:bg-slate-800 rounded-2xl
-                    shadow-2xl shadow-black/20
-                    border border-slate-200 dark:border-slate-700/60">
-      {SIDEBAR_TABS.map(({ id, Icon, label }) => {
-        const active = tab === id;
-        return (
-          <div key={id} className="relative flex items-center">
-            {tooltip === id && (
-              <div className="absolute right-full mr-3 whitespace-nowrap
-                              bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold
-                              px-3 py-1.5 rounded-lg shadow-lg pointer-events-none
-                              before:content-[''] before:absolute before:left-full before:top-1/2
-                              before:-translate-y-1/2 before:border-4 before:border-transparent
-                              before:border-l-slate-900 dark:before:border-l-slate-700">
-                {label}
-              </div>
-            )}
-            <button
-              onClick={() => setTab(id)}
-              onMouseEnter={() => setTooltip(id)}
-              onMouseLeave={() => setTooltip(null)}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center
-                          transition-all duration-200 active:scale-95
-                          ${active
-                            ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/40 scale-110'
-                            : 'bg-slate-100 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400'
-                          }`}
-            >
-              <Icon size={18} />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Page title metadata ──────────────────────────────────────────────────────
-
-const TAB_META = {
-  dashboard:  { title: 'Ketahanan Pangan Nasional', sub: 'IKPG · BPS Web API · Hasil Deteksi Citra 4 Kelas' },
-  analisis:   { title: 'Analisis IKPG Provinsi',    sub: 'Pilih provinsi untuk melihat skor ketahanan pangan' },
-  metodologi: { title: 'Metodologi IKPG',            sub: 'Formula, bobot, dan sumber data yang digunakan' },
-  riwayat:    { title: 'Riwayat Analisis',           sub: 'Analisis IKPG yang telah disimpan' },
-};
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function PanganPage() {
-  const [tab,             setTab]             = useState('dashboard');
-  const [toast,           setToast]           = useState(null);
-  const [analisisProv,    setAnalisisProv]    = useState('');
-  const [analisisResult,  setAnalisisResult]  = useState(null);
-  const [analisisLoading, setAnalisisLoading] = useState(false);
-  const [dashData,        setDashData]        = useState(null);
-  const [dashLoading,     setDashLoading]     = useState(false);
-  const [history,         setHistory]         = useState([]);
-  const [histLoading,     setHistLoading]     = useState(false);
-  const [searchProv,      setSearchProv]      = useState('');
-  const [sortCol,         setSortCol]         = useState('ikpg');
-  const [sortDir,         setSortDir]         = useState('asc');
+  const [hasilAnalisis, setHasilAnalisis]           = useState(null);
+  const [statusTerpilih, setStatusTerpilih]         = useState('SEMUA');
+  const [isClient, setIsClient]                     = useState(false);
+  const [activeTab, setActiveTab]                   = useState('info');
+  const [daftarTersimpan, setDaftarTersimpan]       = useState([]);
+  const [trendData,        setTrendData]            = useState(null);
+  const [trendLoading,     setTrendLoading]         = useState(false);
+  const [trendError,       setTrendError]           = useState(null);
+  const [sedangMuatAwal, setSedangMuatAwal]         = useState(true);
+  const [dataBaruDariBPS, setDataBaruDariBPS]       = useState(false);
+  const [tahunTerpilih, setTahunTerpilih]           = useState(2025);
+  const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
+  const [sedangCekData, setSedangCekData]           = useState(false);
+  const [hasilCekData, setHasilCekData]             = useState(null);
+  const [modalAnalisis, setModalAnalisis]           = useState(false);
+  const [modalSave, setModalSave]                   = useState(false);
+  const [namaSimpan, setNamaSimpan]                 = useState('');
+  const [sedangMenyimpan, setSedangMenyimpan]       = useState(false);
+  const [pernahAnalisis, setPernahAnalisis]         = useState(false);
+  const [basemap, setBasemap]                       = useState('OSM');
+  const [koordinat, setKoordinat]                   = useState({ lat: '0.0000', lng: '0.0000' });
+  const [provinsiHL, setProvinsiHL]                 = useState(null);
+  const [searchOpen, setSearchOpen]                 = useState(false);
+  const [searchQuery, setSearchQuery]               = useState('');
+  const [suggestions, setSuggestions]               = useState([]);
+  const [loadingDataset, setLoadingDataset]         = useState({ PADI: false, KONSUMSI: false, PENDUDUK: false, IKP: false });
+  const [leafletReady, setLeafletReady]             = useState(false);
+  const [MapCont, setMapCont]                       = useState(null);
+  const [TileLay, setTileLay]                       = useState(null);
+  const [GeoComp, setGeoComp]                       = useState(null);
 
-  const showToast = (message, type = 'info') => setToast({ message, type });
-
-  const loadDashboard = useCallback(async () => {
-    setDashLoading(true);
-    try {
-      const res = await axios.post(`${API}/analyze-all-provinces-bps/`);
-      setDashData(res.data);
-      showToast('Data nasional berhasil dimuat', 'success');
-    } catch (e) {
-      showToast('Gagal memuat: ' + (e.response?.data?.error ?? e.message), 'error');
-    } finally {
-      setDashLoading(false);
-    }
-  }, []);
-
-  const loadHistory = useCallback(async () => {
-    setHistLoading(true);
-    try {
-      const res = await axios.get(`${API}/food-security-analysis/list/?limit=50`);
-      setHistory(res.data.results ?? []);
-    } catch {
-      showToast('Gagal memuat riwayat', 'error');
-    } finally {
-      setHistLoading(false);
-    }
-  }, []);
+  const petaRef    = useRef(null);
+  const pendingRef = useRef(null);
 
   useEffect(() => {
-    if (tab === 'riwayat') loadHistory();
-  }, [tab, loadHistory]);
-
-  const runAnalisis = async () => {
-    if (!analisisProv) return showToast('Pilih provinsi terlebih dahulu', 'error');
-    setAnalisisLoading(true);
-    setAnalisisResult(null);
-    try {
-      const res = await axios.post(`${API}/analyze-food-security-bps/`, { provinsi: analisisProv });
-      setAnalisisResult(res.data);
-      showToast(`IKPG ${analisisProv}: ${res.data.ikpg} (${res.data.status})`, 'success');
-    } catch (e) {
-      showToast('Gagal: ' + (e.response?.data?.error ?? e.message), 'error');
-    } finally {
-      setAnalisisLoading(false);
-    }
-  };
-
-  const saveAnalisis = async () => {
-    if (!analisisResult) return;
-    try {
-      await axios.post(`${API}/save-food-security-analysis/`, analisisResult);
-      showToast('Analisis berhasil disimpan', 'success');
-    } catch {
-      showToast('Gagal menyimpan', 'error');
-    }
-  };
-
-  const deleteHistory = async (id) => {
-    try {
-      await axios.delete(`${API}/food-security-analysis/${id}/delete/`);
-      setHistory((h) => h.filter((x) => x.analysis_id !== id));
-      showToast('Data dihapus', 'info');
-    } catch {
-      showToast('Gagal menghapus', 'error');
-    }
-  };
-
-  // ── Sorted table ────────────────────────────────────────────────────────────
-
-  const provTable = (() => {
-    const src = dashData?.summary ?? [];
-    const filtered = searchProv
-      ? src.filter((p) => p.nama_provinsi.toLowerCase().includes(searchProv.toLowerCase()))
-      : src;
-    return [...filtered].sort((a, b) => {
-      const g = (o, col) => {
-        if (col === 'prov')  return o.nama_provinsi ?? '';
-        if (col === 'ikpg')  return o.ikpg ?? -1;
-        if (col === 'geoai') return o.komponen?.geoai_weighted ?? -1;
-        if (col === 'prod')  return o.komponen?.production_score ?? -1;
-        if (col === 'kal')   return o.komponen?.calorie_score ?? -1;
-        if (col === 'insec') return o.komponen?.insecurity_score ?? -1;
-        return 0;
-      };
-      const va = g(a, sortCol), vb = g(b, sortCol);
-      if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      return sortDir === 'asc' ? va - vb : vb - va;
+    setIsClient(true);
+    import('leaflet/dist/leaflet.css');
+    import('react-leaflet').then(rl => {
+      setMapCont(() => rl.MapContainer);
+      setTileLay(() => rl.TileLayer);
+      setGeoComp(() => rl.GeoJSON);
+      setLeafletReady(true);
     });
-  })();
+  }, []);
 
-  const toggleSort = (col) => {
-    if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortCol(col); setSortDir('asc'); }
+  useEffect(() => { if (isClient) muatDariDB(); }, [isClient]);
+
+  const loadTrendData = async (list) => {
+    if (!list?.length) return;
+    setTrendLoading(true);
+    setTrendError(null);
+    const sorted = [...list].sort((a, b) => a.tahun - b.tahun);
+    try {
+      const results = await Promise.all(
+        sorted.map(item =>
+          axios.get(`${API}/pangan-analysis/${item.analysis_id}/`)
+            .then(r => ({
+              tahun:       r.data.tahun,
+              is_ai:       r.data.is_ai_prediction,
+              analysis_id: item.analysis_id,
+              name:        item.name,
+              status_dist: r.data.status_distribusi || {},
+              summary:     (r.data.analysis_summary || []).filter(p => p.ikp != null),
+            }))
+            .catch(() => null)
+        )
+      );
+      const valid = results.filter(Boolean).sort((a, b) => a.tahun - b.tahun);
+      setTrendData(valid);
+    } catch {
+      setTrendError('Gagal memuat data tren');
+    } finally {
+      setTrendLoading(false);
+    }
   };
 
-  const SortTh = ({ col, label }) => (
-    <th onClick={() => toggleSort(col)}
-      className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 select-none whitespace-nowrap">
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <ArrowUpDown size={9} className={sortCol === col ? 'text-indigo-500' : 'text-slate-300 dark:text-slate-600'} />
-      </span>
-    </th>
-  );
+  const refreshDB = async () => {
+    try {
+      const r    = await axios.get(`${API}/pangan-analysis/list/`);
+      const list = r.data.results || [];
+      setDaftarTersimpan(list);
+      loadTrendData(list);
+    } catch {}
+  };
 
-  // ── Tab: Dashboard ──────────────────────────────────────────────────────────
+  const muatDariDB = async () => {
+    setSedangMuatAwal(true);
+    try {
+      const r    = await axios.get(`${API}/pangan-analysis/list/`);
+      const list = r.data.results || [];
+      setDaftarTersimpan(list);
+      loadTrendData(list);
+      if (!list.length) return;
+      const bpsOnly = list.filter(item => !item.is_ai_prediction);
+      const target  = bpsOnly.length > 0 ? bpsOnly : list;
+      const sorted  = [...target].sort((a, b) =>
+        b.tahun !== a.tahun ? b.tahun - a.tahun : (b.timestamp || '').localeCompare(a.timestamp || '')
+      );
+      await muatDetail(sorted[0].analysis_id, sorted[0].tahun, true);
+    } catch {}
+    finally { setSedangMuatAwal(false); }
+  };
 
-  const renderDashboard = () => {
-    const d    = dashData;
-    const dist = d?.status_distribusi ?? {};
-    return (
-      <div className="space-y-6">
-        {!d && !dashLoading && (
-          <Card className="p-10 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mx-auto mb-5">
-              <Play size={26} className="text-indigo-500 dark:text-indigo-400" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-2">Mulai Analisis Nasional</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">
-              Klik tombol di bawah untuk mengambil data BPS dan menghitung IKPG seluruh provinsi Indonesia.
-            </p>
-            <button onClick={loadDashboard}
-              className="inline-flex items-center gap-2 px-7 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm">
-              <Play size={15} /> Jalankan Analisis
-            </button>
-          </Card>
-        )}
+  const muatDetail = async (id, tahun, silent = false) => {
+    const tid = silent ? null : toast.loading('Memuat analisis...');
+    try {
+      const r = await axios.get(`${API}/pangan-analysis/${id}/`);
+      if (tid) toast.dismiss(tid);
+      setHasilAnalisis(r.data);
+      setTahunTerpilih(tahun || r.data.tahun || 2025);
+      setStatusTerpilih('SEMUA');
+      setPernahAnalisis(true);
+      setProvinsiHL(null);
+      setDataBaruDariBPS(false);
+      if (!silent) toast.success(`Data pangan dimuat: Tahun ${tahun}`);
+    } catch (e) {
+      if (tid) toast.dismiss(tid);
+      if (!silent) toast.error('Gagal memuat detail analisis');
+      throw e;
+    }
+  };
 
-        {dashLoading && (
-          <Card className="p-10 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
-              <RefreshCw size={26} className="text-indigo-400 animate-spin" />
-            </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Mengambil data BPS dan menghitung IKPG...</p>
-          </Card>
-        )}
+  // ── Cek data BPS dulu
+  const cekDanAnalisis = async (tahun = null) => {
+    const t = tahun || tahunTerpilih;
+    pendingRef.current = { t };
+    setModalAnalisis(false);
+    setSedangCekData(true);
+    setHasilCekData(null);
+    try {
+      const r = await axios.post(`${API}/check-year-data-pangan/`, { tahun: t });
+      setHasilCekData(r.data);
+    } catch {
+      toast.error('Gagal memeriksa ketersediaan data');
+    } finally {
+      setSedangCekData(false);
+    }
+  };
 
-        {d && (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Rata-rata IKPG Nasional" value={d.national_avg_ikpg} Icon={BarChart3}    sub="Seluruh Provinsi" colorCls="text-indigo-600 dark:text-indigo-400" />
-              <StatCard label="Ketahanan Tinggi"         value={dist.Tinggi ?? '-'}  Icon={TrendingUp}   sub="IKPG >= 70"       colorCls="text-emerald-600 dark:text-emerald-400" />
-              <StatCard label="Perlu Perhatian"          value={dist.Sedang ?? '-'}  Icon={BarChart3}    sub="IKPG 40-69"       colorCls="text-amber-600 dark:text-amber-400" />
-              <StatCard label="Kerawanan Tinggi"         value={dist.Rendah ?? '-'}  Icon={TrendingDown} sub="IKPG < 40"        colorCls="text-red-600 dark:text-red-400" />
-            </div>
+  // ── Lanjut BPS (semua data tersedia)
+  const lanjutkanBPS = async () => {
+    if (!pendingRef.current) return;
+    const { t } = pendingRef.current;
+    setHasilCekData(null);
+    setSedangMenganalisis(true);
+    setStatusTerpilih('SEMUA');
+    const tid = toast.loading(`Mengambil data BPS ${t}...`);
+    try {
+      const r = await axios.post(`${API}/analyze-pangan-bps/`, { tahun: t, mode: 'bps' });
+      toast.dismiss(tid);
+      if (r.data.status === 'success') {
+        setHasilAnalisis(r.data);
+        setTahunTerpilih(t);
+        setPernahAnalisis(true);
+        setDataBaruDariBPS(true);
+        setActiveTab('info');
+        if (r.data.ada_data_kosong)
+          toast(`${r.data.total_data_kosong} provinsi data tidak lengkap`, { icon: '⚠️', duration: 6000 });
+        toast.success(`Berhasil: ${r.data.total_provinsi || r.data.total_success} provinsi (${t})`, { duration: 5000 });
+      }
+    } catch (e) {
+      toast.dismiss(tid);
+      toast.error(e.response?.data?.error || 'Gagal terhubung ke server');
+    } finally {
+      setSedangMenganalisis(false);
+    }
+  };
 
-            <Card className="p-5">
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Formula IKPG — 4 Kelas YOLO</p>
-              <p className="font-mono text-sm text-slate-700 dark:text-slate-300 leading-loose">
-                <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
-                {' = (0.5 x '}<span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
-                {') + (0.3 x '}<span className="text-emerald-600 dark:text-emerald-400">Produksi</span>
-                {') + (0.1 x '}<span className="text-amber-600 dark:text-amber-400">Kalori</span>
-                {') + (0.1 x '}<span className="text-pink-600 dark:text-pink-400">Insecurity</span>{')'}
-              </p>
-              <p className="font-mono text-xs text-slate-500 dark:text-slate-500 mt-1.5">
-                <span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
-                {' = clamp((+0.40 x Pepohonan%) + (+0.30 x Perairan%) - (0.20 x Bangunan%) - (0.10 x Jalan%) + 30, 0, 100)'}
-              </p>
-            </Card>
+  // ── Lanjut AI (data BPS kosong sebagian/semua → user pilih AI)
+  const lanjutkanAI = async () => {
+    if (!pendingRef.current) return;
+    const { t } = pendingRef.current;
+    setHasilCekData(null);
+    setSedangMenganalisis(true);
+    setStatusTerpilih('SEMUA');
+    const tid = toast.loading(`🤖 Memprediksi IKP ${t} dengan AI...`);
+    try {
+      const r = await axios.post(`${API}/analyze-pangan-bps/`, {
+        tahun: t, mode: 'ai',
+        historical_data: hasilAnalisis || {},
+      });
+      toast.dismiss(tid);
+      if (r.data.status === 'success') {
+        setHasilAnalisis(r.data);
+        setTahunTerpilih(t);
+        setPernahAnalisis(true);
+        setDataBaruDariBPS(false);
+        setActiveTab('info');
+        toast.success(`Prediksi AI selesai: ${r.data.total_dipetakan} provinsi (${t})`, { icon: '🤖', duration: 5000 });
+      }
+    } catch (e) {
+      toast.dismiss(tid);
+      toast.error(e.response?.data?.error || 'Gagal prediksi AI');
+    } finally {
+      setSedangMenganalisis(false);
+    }
+  };
 
-            <Card className="overflow-hidden">
-              <div className="px-5 pt-4 pb-2 flex items-center justify-between flex-wrap gap-3 border-b border-slate-100 dark:border-slate-700/50">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  <Map size={15} className="text-slate-400 dark:text-slate-500" /> Peta Ketahanan Pangan per Provinsi
-                </div>
-                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                  {[['#10b981','Tinggi ≥70'],['#f59e0b','Sedang 40-69'],['#ef4444','Rendah <40']].map(([c, l]) => (
-                    <span key={l} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c }} />{l}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div style={{ height: 420 }}>
-                <PanganMap geojson={d.geojson} onProvinceClick={(prov) => { setAnalisisProv(prov); setTab('analisis'); }} />
-              </div>
-            </Card>
+  const simpan = async () => {
+    if (!namaSimpan.trim()) return toast.error('Nama tidak boleh kosong');
+    setSedangMenyimpan(true);
+    const tid = toast.loading('Menyimpan...');
+    try {
+      const r = await axios.post(`${API}/save-pangan-analysis/`, { name: namaSimpan, analysis_data: hasilAnalisis });
+      toast.dismiss(tid);
+      if (r.data.status === 'success') {
+        toast.success(`"${namaSimpan}" berhasil disimpan!`);
+        setModalSave(false);
+        setNamaSimpan('');
+        setDataBaruDariBPS(false);
+        await refreshDB();
+      }
+    } catch {
+      toast.dismiss(tid);
+      toast.error('Gagal menyimpan');
+    } finally {
+      setSedangMenyimpan(false);
+    }
+  };
 
-            <Card className="overflow-hidden">
-              <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap border-b border-slate-100 dark:border-slate-700/50">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  <FileText size={15} className="text-slate-400 dark:text-slate-500" /> Tabel Semua Provinsi
-                </div>
-                <div className="relative">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-                  <input type="text" placeholder="Cari provinsi..." value={searchProv}
-                    onChange={(e) => setSearchProv(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400 w-52 placeholder:text-slate-400 dark:placeholder:text-slate-600" />
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 dark:bg-slate-900/60">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase w-8">#</th>
-                      <SortTh col="prov"  label="Provinsi"   />
-                      <SortTh col="ikpg"  label="IKPG"       />
-                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                      <SortTh col="geoai" label="GeoAI"      />
-                      <SortTh col="prod"  label="Produksi"   />
-                      <SortTh col="kal"   label="Kalori"     />
-                      <SortTh col="insec" label="Insecurity" />
-                      <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Data</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
-                    {provTable.length === 0 ? (
-                      <tr><td colSpan={10} className="text-center py-10 text-slate-400 dark:text-slate-500 text-sm">Tidak ada data.</td></tr>
-                    ) : provTable.map((p, i) => {
-                      const k  = p.komponen ?? {};
-                      const sc = getSt(p.status);
-                      return (
-                        <tr key={p.nama_provinsi}
-                          onClick={() => { setAnalisisProv(p.nama_provinsi); setTab('analisis'); }}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer">
-                          <td className="px-4 py-3 text-slate-400 dark:text-slate-600 text-xs">{i + 1}</td>
-                          <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{p.nama_provinsi}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-14 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                <div className="h-full rounded-full" style={{ width: `${p.ikpg}%`, backgroundColor: p.warna }} />
-                              </div>
-                              <span className="font-bold font-mono text-sm" style={{ color: p.warna }}>{p.ikpg}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${sc.badge}`}>{p.status}</span>
-                          </td>
-                          {[k.geoai_weighted, k.production_score, k.calorie_score, k.insecurity_score].map((v, vi) => (
-                            <td key={vi} className="px-4 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs">
-                              {v != null ? v.toFixed(1) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                            </td>
-                          ))}
-                          <td className="px-4 py-3 text-xs">
-                            {p.has_geoai_data
-                              ? <span className="text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-400/10 px-2 py-0.5 rounded-full font-medium">GeoAI</span>
-                              : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs text-indigo-500 dark:text-indigo-400">Detail</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {provTable.length > 0 && (
-                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-400 dark:text-slate-500">
-                  Menampilkan {provTable.length} dari {dashData?.summary?.length ?? 0} provinsi
-                  {searchProv && <> — filter: <span className="text-slate-600 dark:text-slate-300">{searchProv}</span></>}
-                </div>
-              )}
-            </Card>
-          </>
-        )}
-      </div>
+  const unduhBlob = (blob, nama) => {
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nama });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const makeUnduh = (key, endpoint, namaFile) => async () => {
+    const data = hasilAnalisis?.raw_datasets?.[key];
+    if (!data) return toast.error(`Data ${key} tidak tersedia`);
+    setLoadingDataset(p => ({ ...p, [key]: true }));
+    const tid = toast.loading(`Membuat file ${key}...`);
+    try {
+      const r = await axios.post(`${API}/${endpoint}/`,
+        { [`${key.toLowerCase()}_data`]: data, timestamp: hasilAnalisis.raw_datasets.timestamp, tahun: hasilAnalisis.tahun || tahunTerpilih },
+        { responseType: 'blob' }
+      );
+      unduhBlob(new Blob([r.data]), `${namaFile}_${hasilAnalisis.tahun || tahunTerpilih}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.dismiss(tid); toast.success(`${key} berhasil diunduh!`);
+    } catch {
+      toast.dismiss(tid); toast.error(`Gagal unduh ${key}`);
+    } finally {
+      setLoadingDataset(p => ({ ...p, [key]: false }));
+    }
+  };
+
+  const unduhFns = {
+    padi:     makeUnduh('PADI',     'download-padi-xlsx',     'Dataset_Padi_BPS'),
+    konsumsi: makeUnduh('KONSUMSI', 'download-konsumsi-xlsx', 'Dataset_Konsumsi_BPS'),
+    penduduk: makeUnduh('PENDUDUK', 'download-penduduk-xlsx', 'Dataset_Penduduk_BPS'),
+    ikp:      makeUnduh('IKP',      'download-ikp-xlsx',      'IKP_Ketahanan_Pangan'),
+  };
+
+  const eksporData = (format) => {
+    if (!hasilAnalisis) return toast.error('Data tidak tersedia');
+    const r   = hasilAnalisis.analysis_summary || [];
+    const tgl = new Date().toISOString().split('T')[0];
+    const thn = hasilAnalisis.tahun || tahunTerpilih;
+    const isAI = hasilAnalisis.is_ai_prediction;
+
+    if (format === 'EXCEL') {
+      const ws = XLSX.utils.json_to_sheet(r.map(i => ({
+        Provinsi: i.provinsi, 'Status IKP': i.status, IKP: i.ikp ?? '-',
+        'RPP (ton/jiwa)': i.rpp ?? '-', 'PL (ton/ha)': i.pl ?? '-',
+        IK: i.ik ?? '-', IA: i.ia ?? '-',
+        'Data Lengkap': i.has_complete_data ? 'Ya' : 'Tidak',
+        Sumber: isAI ? `Prediksi AI (${hasilAnalisis.model_version || 'rf_v1.0'})` : 'BPS Web API',
+      })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'IKP Ketahanan Pangan');
+      XLSX.writeFile(wb, `IKP_Ketahanan_Pangan_${thn}_${tgl}${isAI ? '_AI' : ''}.xlsx`);
+      toast.success('Excel berhasil diunduh');
+    } else if (format === 'JSON') {
+      unduhBlob(new Blob([JSON.stringify(hasilAnalisis, null, 2)], { type: 'application/json' }),
+        `IKP_${thn}_${tgl}${isAI ? '_AI' : ''}.json`);
+      toast.success('JSON berhasil diunduh');
+    } else if (format === 'CSV') {
+      const csv = [
+        ['Provinsi','Status','IKP','RPP','PL','IK','IA','Data Lengkap','Sumber'].join(','),
+        ...r.map(s => [s.provinsi, s.status, s.ikp??'-', s.rpp??'-', s.pl??'-', s.ik??'-', s.ia??'-',
+          s.has_complete_data?'Ya':'Tidak', isAI?'Prediksi AI':'BPS Web API'].join(',')),
+      ].join('\n');
+      unduhBlob(new Blob([csv], { type: 'text/csv' }), `IKP_${thn}_${tgl}${isAI?'_AI':''}.csv`);
+      toast.success('CSV berhasil diunduh');
+    } else if (format === 'GEOJSON') {
+      unduhBlob(new Blob([JSON.stringify(hasilAnalisis.matched_features, null, 2)], { type: 'application/json' }),
+        `Spasial_Pangan_${thn}_${tgl}${isAI?'_AI':''}.geojson`);
+      toast.success('GeoJSON berhasil diunduh');
+    }
+  };
+
+  const hitungStatus = () => {
+    const f = hasilAnalisis?.matched_features?.features || [];
+    const count = s => f.filter(x => x.properties?.pangan_analysis?.status === s).length;
+    return { TINGGI: count('TINGGI'), SEDANG: count('SEDANG'), RENDAH: count('RENDAH') };
+  };
+
+  useEffect(() => {
+    if (!hasilAnalisis?.matched_features?.features || !searchQuery.trim()) { setSuggestions([]); return; }
+    setSuggestions(
+      hasilAnalisis.matched_features.features
+        .filter(f => f.properties?.pangan_analysis?.nama_provinsi?.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map(f => ({ nama: f.properties.pangan_analysis.nama_provinsi, status: f.properties.pangan_analysis.status, warna: f.properties.pangan_analysis.warna }))
+        .slice(0, 5)
     );
-  };
+  }, [searchQuery, hasilAnalisis]);
 
-  // ── Tab: Analisis ───────────────────────────────────────────────────────────
-
-  const renderAnalisis = () => {
-    const r   = analisisResult;
-    const k   = r?.komponen ?? {};
-    const b   = r?.bobot_used ?? {};
-    const p   = r?.proporsi_lahan ?? {};
-    const raw = r?.bps_raw ?? {};
-    const sc  = getSt(r?.status);
-
-    return (
-      <div className="space-y-5">
-        <Card className="p-5">
-          <SectionLabel>Pilih Provinsi</SectionLabel>
-          <div className="flex gap-3">
-            <select value={analisisProv}
-              onChange={(e) => { setAnalisisProv(e.target.value); setAnalisisResult(null); }}
-              className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-400">
-              <option value="">-- Pilih Provinsi --</option>
-              {PROVINSI_LIST.map((pv) => <option key={pv} value={pv}>{pv}</option>)}
-            </select>
-            <button onClick={runAnalisis} disabled={analisisLoading || !analisisProv}
-              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm transition-colors">
-              {analisisLoading
-                ? <><RefreshCw size={14} className="animate-spin" /> Menganalisis...</>
-                : <><Play size={14} /> Analisis</>}
-            </button>
-          </div>
-        </Card>
-
-        {r && (
-          <div className="space-y-5">
-            <Card className="p-6">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <IkpgGauge ikpg={r.ikpg} status={r.status} />
-                <div className="flex-1 space-y-3">
-                  <div>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Indeks Ketahanan Pangan Gabungan</p>
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{r.provinsi}</h2>
-                    <span className={`inline-flex items-center mt-2 px-3 py-1 rounded-full border text-sm font-semibold ${sc.badge}`}>{r.status}</span>
-                    {!r.has_geoai_data && (
-                      <div className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded-lg px-3 py-2">
-                        <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
-                        Tanpa data GeoAI — bobot: Produksi 60%, Kalori 20%, Insecurity 20%
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
-                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${r.ikpg}%`, backgroundColor: sc.bar }} />
-                      <div className="absolute top-0 h-full w-px bg-amber-400/60"   style={{ left: '40%' }} />
-                      <div className="absolute top-0 h-full w-px bg-emerald-400/60" style={{ left: '70%' }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-slate-400 dark:text-slate-600 mt-1">
-                      <span>0</span><span className="text-amber-500">40</span><span className="text-emerald-500">70</span><span>100</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <div className="grid md:grid-cols-2 gap-5">
-              <div className="space-y-3">
-                <SectionLabel>Komponen Skor</SectionLabel>
-                <ScoreBar label="GeoAI Weighted (4 kelas)" Icon={Satellite}
-                  score={k.geoai_weighted} weight={b.geoai ?? 0.5}
-                  detail={r.has_geoai_data ? 'pepohonan · perairan · bangunan · jalan' : null}
-                  noDataMsg={!r.has_geoai_data ? 'Data GeoAI tidak tersedia' : null} />
-                <ScoreBar label="Produksi Padi" Icon={Wheat}
-                  score={k.production_score} weight={b.produksi ?? 0.3}
-                  detail={raw.produksi_padi_ton != null ? `${formatProduksi(raw.produksi_padi_ton)} (2024)` : null} />
-                <ScoreBar label="Konsumsi Kalori" Icon={UtensilsCrossed}
-                  score={k.calorie_score} weight={b.kalori ?? 0.1}
-                  detail={raw.kalori_kkal_perhari ? `${raw.kalori_kkal_perhari} kkal/kapita/hari (2025)` : null} />
-                <ScoreBar label="Ketahanan Pangan" Icon={AlertTriangle}
-                  score={k.insecurity_score} weight={b.insecurity ?? 0.1}
-                  detail={raw.prevalensi_insecurity_persen != null ? `Prevalensi: ${raw.prevalensi_insecurity_persen}% (2025)` : null} />
-              </div>
-              <div>
-                <SectionLabel>Proporsi Tutupan (4 Kelas GeoAI)</SectionLabel>
-                {r.has_geoai_data && Object.keys(p).length > 0 ? (
-                  <Card className="p-4 space-y-3">
-                    <ProporsiBar label="Pepohonan / Vegetasi" Icon={Trees}     pct={p.pepohonan} color="#22c55e" />
-                    <ProporsiBar label="Perairan"             Icon={Waves}     pct={p.perairan}  color="#3b82f6" />
-                    <ProporsiBar label="Bangunan"             Icon={Building2} pct={p.bangunan}  color="#ef4444" />
-                    <ProporsiBar label="Jalan"                Icon={Route}     pct={p.jalan}     color="#8b5cf6" />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-700 leading-relaxed font-mono">
-                      GeoAI = (+0.40 x {p.pepohonan?.toFixed(1)}%) + (+0.30 x {p.perairan?.toFixed(1)}%)
-                      {' - '}(0.20 x {p.bangunan?.toFixed(1)}%) - (0.10 x {p.jalan?.toFixed(1)}%)
-                      {' + 30 = '}
-                      <span className="text-cyan-600 dark:text-cyan-400 font-bold">{k.geoai_weighted?.toFixed(1)}</span>
-                    </p>
-                  </Card>
-                ) : (
-                  <Card className="p-8 flex flex-col items-center justify-center text-center gap-3 min-h-48">
-                    <Satellite size={32} className="text-slate-300 dark:text-slate-600" />
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Belum ada data GeoAI untuk provinsi ini.<br />
-                      Simpan hasil deteksi ke{' '}
-                      <code className="text-xs bg-slate-100 dark:bg-slate-700 px-1 rounded">ai_features</code>{' '}
-                      terlebih dahulu.
-                    </p>
-                  </Card>
-                )}
-              </div>
-            </div>
-
-            {r.rekomendasi?.length > 0 && (
-              <div>
-                <SectionLabel>Rekomendasi Kebijakan</SectionLabel>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {r.rekomendasi.map((rek, i) => (
-                    <Card key={i} className="p-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Info size={12} className="text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{rek.kategori}</span>
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{rek.pesan}</p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button onClick={saveAnalisis}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-colors">
-                <Save size={14} /> Simpan Analisis
-              </button>
-              <button onClick={() => { setAnalisisResult(null); setAnalisisProv(''); }}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm transition-colors">
-                <RotateCcw size={14} /> Reset
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+  const handleSearch = (nama) => {
+    const n = nama || searchQuery;
+    if (!n.trim()) return;
+    const f = hasilAnalisis?.matched_features?.features?.find(
+      feat => feat.properties?.pangan_analysis?.nama_provinsi?.toLowerCase() === n.toLowerCase()
     );
+    if (f && petaRef.current) {
+      const coords = f.geometry.coordinates;
+      let lat, lng;
+      if (f.geometry.type === 'MultiPolygon') {
+        const poly = coords[0][0];
+        lat = poly.reduce((s, c) => s + c[1], 0) / poly.length;
+        lng = poly.reduce((s, c) => s + c[0], 0) / poly.length;
+      } else {
+        const poly = coords[0];
+        lat = poly.reduce((s, c) => s + c[1], 0) / poly.length;
+        lng = poly.reduce((s, c) => s + c[0], 0) / poly.length;
+      }
+      petaRef.current.setView([lat, lng], 7);
+      setProvinsiHL(f.properties.pangan_analysis.nama_provinsi);
+      toast.success(`Ditemukan: ${n}`, { duration: 3000 });
+      setSearchOpen(false); setSearchQuery(''); setSuggestions([]);
+    } else {
+      toast.error('Provinsi tidak ditemukan');
+    }
   };
 
-  // ── Tab: Metodologi ─────────────────────────────────────────────────────────
+  const jumlahStatus = hitungStatus();
+  if (!isClient) return null;
 
-  const renderMetodologi = () => (
-    <div className="space-y-6">
-      <MetSection title="Indeks Ketahanan Pangan Gabungan (IKPG)" Icon={Info}>
-        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-          IKPG adalah indeks komposit yang menggabungkan{' '}
-          <strong className="text-slate-800 dark:text-slate-200">data spasial dari model YOLO custom (4 kelas)</strong>{' '}
-          dengan <strong className="text-slate-800 dark:text-slate-200">statistik BPS</strong> untuk penilaian
-          ketahanan pangan per provinsi. Nilai berkisar 0–100; semakin tinggi semakin baik.
-        </p>
-        <div className="grid grid-cols-3 gap-3 text-xs text-center">
-          {[{label:'Tinggi',range:'IKPG >= 70',st:'Tinggi'},{label:'Sedang',range:'40 <= IKPG < 70',st:'Sedang'},{label:'Rendah',range:'IKPG < 40',st:'Rendah'}].map((c) => {
-            const sc = getSt(c.st);
-            return (
-              <div key={c.label} className={`rounded-xl border p-3 ${sc.badge}`}>
-                <div className={`font-bold text-sm mb-0.5 ${sc.text}`}>{c.label}</div>
-                <div className="text-slate-500 dark:text-slate-400">{c.range}</div>
-              </div>
-            );
-          })}
-        </div>
-      </MetSection>
-      <MetSection title="Formula Utama IKPG" Icon={BarChart3}>
-        <FormulaBox accent="indigo">
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">Dengan data GeoAI:</span>
-          <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
-          {' = (0.50 x '}<span className="text-cyan-600 dark:text-cyan-400">GeoAI</span>
-          {') + (0.30 x '}<span className="text-emerald-600 dark:text-emerald-400">Production</span>
-          {') + (0.10 x '}<span className="text-amber-600 dark:text-amber-400">Calorie</span>
-          {') + (0.10 x '}<span className="text-pink-600 dark:text-pink-400">Insecurity</span>{')'}
-        </FormulaBox>
-        <FormulaBox accent="amber">
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block mb-2">Fallback — tanpa data GeoAI:</span>
-          <span className="text-indigo-600 dark:text-indigo-400 font-bold">IKPG</span>
-          {' = (0.60 x '}<span className="text-emerald-600 dark:text-emerald-400">Production</span>
-          {') + (0.20 x '}<span className="text-amber-600 dark:text-amber-400">Calorie</span>
-          {') + (0.20 x '}<span className="text-pink-600 dark:text-pink-400">Insecurity</span>{')'}
-        </FormulaBox>
-      </MetSection>
-      <MetSection title="Formula GeoAI Weighted — 4 Kelas YOLO Custom" Icon={Satellite}>
-        <FormulaBox accent="cyan">
-          <span className="text-cyan-600 dark:text-cyan-400 font-bold">GeoAI</span>
-          {' = clamp( (+0.40 × Pepohonan%) + (+0.30 × Perairan%) − (0.20 × Bangunan%) − (0.10 × Jalan%) + 30, 0, 100 )'}
-        </FormulaBox>
-      </MetSection>
-      <MetSection title="Komponen BPS" Icon={BarChart3}>
-        <div className="space-y-4">
-          {[
-            { Icon: Wheat,           label: 'Produksi Padi — Production_Score',          bobot: '30%', accent: 'emerald', colorCls: 'text-emerald-600 dark:text-emerald-400',
-              formula: (<><span className="text-emerald-600 dark:text-emerald-400">Production_Score</span>{' = (Produksi_Prov - Min) / (Max - Min) x 100'}</>),
-              desc: 'Min-Max Normalisasi. Produksi padi (ton) dipetakan ke skala 0-100.', src: 'BPS Web API — mms/557, Tahun 2024' },
-            { Icon: UtensilsCrossed, label: 'Konsumsi Kalori — Calorie_Score',           bobot: '10%', accent: 'amber',   colorCls: 'text-amber-600 dark:text-amber-400',
-              formula: (<><span className="text-amber-600 dark:text-amber-400">Calorie_Score</span>{' = min( (Kalori / 2100) x 100, 100 )'}</>),
-              desc: 'Rasio terhadap Angka Kecukupan Gizi 2100 kkal/kapita/hari.', src: 'BPS Web API — Var 951, Tahun 2025' },
-            { Icon: AlertTriangle,   label: 'Ketidakcukupan Pangan — Insecurity_Score',  bobot: '10%', accent: 'pink',    colorCls: 'text-pink-600 dark:text-pink-400',
-              formula: (<><span className="text-pink-600 dark:text-pink-400">Insecurity_Score</span>{' = max(100 - Prevalensi_Persen, 0)'}</>),
-              desc: 'Inversi prevalensi: makin tinggi prevalensi, skor makin rendah.', src: 'BPS Web API — Var 1473, Tahun 2025' },
-          ].map((item) => (
-            <div key={item.label} className="border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/20">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <item.Icon size={14} className="text-slate-400 dark:text-slate-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm">{item.label}</span>
-                </div>
-                <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 ${item.colorCls}`}>Bobot {item.bobot}</span>
-              </div>
-              <FormulaBox accent={item.accent}>{item.formula}</FormulaBox>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{item.desc}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1"><strong className="text-slate-500 dark:text-slate-400">Sumber:</strong> {item.src}</p>
-            </div>
-          ))}
-        </div>
-      </MetSection>
-    </div>
-  );
-
-  // ── Tab: Riwayat ────────────────────────────────────────────────────────────
-
-  const renderRiwayat = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionLabel>Riwayat Analisis IKPG</SectionLabel>
-        <button onClick={loadHistory}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-colors">
-          <RefreshCw size={11} /> Refresh
-        </button>
-      </div>
-      {histLoading && (
-        <Card className="p-10 text-center">
-          <RefreshCw size={22} className="text-slate-300 dark:text-slate-600 animate-spin mx-auto mb-3" />
-          <p className="text-sm text-slate-400 dark:text-slate-500">Memuat riwayat...</p>
-        </Card>
-      )}
-      {!histLoading && history.length === 0 && (
-        <Card className="p-14 text-center">
-          <FileText size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada analisis tersimpan.</p>
-        </Card>
-      )}
-      <div className="grid md:grid-cols-2 gap-4">
-        {history.map((item) => (
-          <RiwayatCard key={item.analysis_id} item={item} onDelete={deleteHistory} />
-        ))}
-      </div>
-    </div>
-  );
-
-  // ── Layout ──────────────────────────────────────────────────────────────────
-
-  const meta = TAB_META[tab];
-
-  /*
-   * HEADER OFFSET GUIDE:
-   *   HeaderBar   = fixed, h-[60px]   → top-[60px]
-   *   Title bar   = sticky, h-14(56px) → top-[60px] (sticks right below header)
-   *   Main pt     = 60 + 56 = 116px   → pt-[116px]
-   */
+  const petaProps = {
+    hasilAnalisis, tahunTerpilih, statusTerpilih, setStatusTerpilih,
+    sedangMenganalisis, sedangCekData, pernahAnalisis, dataBaruDariBPS,
+    onAnalisis: () => pernahAnalisis ? cekDanAnalisis() : setModalAnalisis(true),
+    onSimpan:   () => { setNamaSimpan(''); setModalSave(true); },
+    onReset:    () => {
+      setHasilAnalisis(null); setStatusTerpilih('SEMUA'); setProvinsiHL(null);
+      setPernahAnalisis(false); setDataBaruDariBPS(false);
+      toast.success('Analisis direset');
+    },
+    onPilihTahunDenganTahun: (th) => { setTahunTerpilih(th); setModalAnalisis(true); },
+    leafletReady, MapCont, TileLay, GeoComp,
+    petaRef, basemap, setBasemap,
+    koordinat, setKoordinat,
+    provinsiHL, setProvinsiHL,
+    searchOpen, setSearchOpen, searchQuery, setSearchQuery, suggestions, handleSearch,
+    daftarTersimpan, onMuatTahun: muatDetail,
+    TAHUN_TERSEDIA,
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
-
-      {/* ① Fixed top header */}
       <HeaderBar />
-
-      {/* ② Left overlay sidebar */}
       <SideBar />
 
-      {/*
-        ③ Main content — pushed down by HeaderBar (60px) only.
-           Title lives inside the content flow with generous padding — no separate bar.
-      */}
-      <main className="pt-[60px] pb-12 min-h-screen">
-        <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 sm:pr-20">
+      <ModalCekData
+        tahun={pendingRef.current?.t || tahunTerpilih}
+        hasilCek={hasilCekData}
+        sedangCek={sedangCekData}
+        onTutup={() => setHasilCekData(null)}
+        onLanjutBPS={lanjutkanBPS}
+        onLanjutAI={lanjutkanAI}
+      />
 
-          {/* Page title — floats freely, no background box */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pt-8 pb-6">
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 leading-tight">
-                {meta.title}
-              </h1>
-              <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-1">
-                {meta.sub}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0 sm:pt-1">
-              {dashData && tab === 'dashboard' && (
-                <button onClick={loadDashboard} disabled={dashLoading}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5
-                             bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700
-                             border border-slate-200 dark:border-slate-700
-                             disabled:opacity-40 text-slate-600 dark:text-slate-300 rounded-lg transition-colors shadow-sm">
-                  <RefreshCw size={11} className={dashLoading ? 'animate-spin' : ''} />
-                  {dashLoading ? 'Memuat...' : 'Refresh'}
-                </button>
-              )}
-              <nav className="hidden md:flex items-center gap-1 text-[12px] text-slate-400 dark:text-slate-500">
-                <Home size={12} />
-                <ChevronRight size={11} />
-                <span>Analisis</span>
-                <ChevronRight size={11} />
-                <span className="text-slate-600 dark:text-slate-300 font-medium">Ketahanan Pangan</span>
-              </nav>
-            </div>
+      {/* Modal pilih tahun */}
+      <Modal show={modalAnalisis} onClose={() => setModalAnalisis(false)} title="Pilih Tahun Analisis">
+        <div className="mb-6">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
+            <Calendar size={13} /> Tahun Data
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {TAHUN_TERSEDIA.map(th => (
+              <button key={th} onClick={() => setTahunTerpilih(th)}
+                className={cn('px-3 py-2.5 rounded-xl text-sm font-bold border-2 transition-all',
+                  tahunTerpilih === th ? 'bg-green-600 border-green-600 text-white'
+                                       : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-green-300'
+                )}>
+                {th}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
+            Sistem akan cek ketersediaan data BPS terlebih dahulu. Jika tidak tersedia, akan ada opsi Prediksi AI.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Btn variant="ghost" className="flex-1 justify-center" onClick={() => setModalAnalisis(false)}>Batal</Btn>
+          <Btn variant="primary" className="flex-1 justify-center" onClick={() => cekDanAnalisis()} disabled={sedangMenganalisis}>
+            <Search size={13} /> Cek Ketersediaan Data
+          </Btn>
+        </div>
+      </Modal>
+
+      {/* Modal simpan */}
+      <Modal show={modalSave} onClose={() => setModalSave(false)} title="Simpan Analisis">
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">Nama Analisis</label>
+          <input type="text" value={namaSimpan} onChange={e => setNamaSimpan(e.target.value)}
+            placeholder={`IKP Ketahanan Pangan ${hasilAnalisis?.tahun || tahunTerpilih}`}
+            onKeyPress={e => e.key === 'Enter' && simpan()}
+            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-green-500 outline-none text-sm" />
+        </div>
+        <div className="flex gap-3">
+          <Btn variant="ghost" className="flex-1 justify-center" onClick={() => setModalSave(false)}>Batal</Btn>
+          <Btn variant="primary" className="flex-1 justify-center" onClick={simpan} disabled={sedangMenyimpan || !namaSimpan.trim()}>
+            {sedangMenyimpan ? 'Menyimpan...' : 'Simpan'}
+          </Btn>
+        </div>
+      </Modal>
+
+      <main className="pt-[60px] pb-16 min-h-screen">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-2">
+          <div className="flex items-start justify-between pt-7 pb-5">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Ketahanan Pangan Nasional</h1>
+            <nav className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+              <Home size={12} /> <span>›</span> <span>Analisis</span> <span>›</span>
+              <span className="text-slate-600 dark:text-slate-300 font-semibold">Ketahanan Pangan</span>
+            </nav>
           </div>
 
-          {/* Tab content */}
-          {tab === 'dashboard'  && renderDashboard()}
-          {tab === 'analisis'   && renderAnalisis()}
-          {tab === 'metodologi' && renderMetodologi()}
-          {tab === 'riwayat'    && renderRiwayat()}
-
+          {sedangMuatAwal ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={28} className="text-green-500 animate-spin" />
+                <p className="text-sm text-slate-500">Memuat data...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <PetaSection {...petaProps} />
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div className="flex border-b border-slate-100 dark:border-slate-700">
+                  {TABS.map(({ id, label, Icon }) => {
+                    const active = activeTab === id;
+                    return (
+                      <button key={id} onClick={() => setActiveTab(id)}
+                        className={cn(
+                          'flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all relative flex-1',
+                          active ? 'text-green-600 dark:text-green-400 bg-green-50/50 dark:bg-green-900/10'
+                                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                        )}>
+                        <Icon size={15} />
+                        <span className="hidden sm:inline">{label}</span>
+                        {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-500 rounded-t-full" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="p-5">
+                  {activeTab === 'info'     && <TabInfo     hasilAnalisis={hasilAnalisis} jumlahStatus={jumlahStatus} />}
+                  {activeTab === 'tabel'    && <TabTabel    hasilAnalisis={hasilAnalisis} statusTerpilih={statusTerpilih} setStatusTerpilih={setStatusTerpilih} eksporData={eksporData} />}
+                  {activeTab === 'metadata' && <TabMetadata hasilAnalisis={hasilAnalisis} unduhFns={unduhFns} loadingDataset={loadingDataset} />}
+                  {activeTab === 'trend'    && <TabTrend    trendData={trendData} trendLoading={trendLoading} trendError={trendError} />}
+                  {activeTab === 'riwayat'  && <TabRiwayat  daftarTersimpan={daftarTersimpan} onMuat={muatDetail} hasilAnalisis={hasilAnalisis} />}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
       <Footerauth />
-      <Toast toast={toast} onClose={() => setToast(null)} />
-
-      {/* ⑤ Floating right sidebar tab navigation */}
-      <FloatingSidebar tab={tab} setTab={setTab} />
     </div>
   );
 }
