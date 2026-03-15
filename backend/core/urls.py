@@ -4,6 +4,7 @@ from . import education_views
 from . import health_views
 from . import economy_views
 from core import pangan_views
+from . import views_area_scan
 
 urlpatterns = [
     # AI DETECTION & FEATURES -

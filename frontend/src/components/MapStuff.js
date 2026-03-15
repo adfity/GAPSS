@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { GeoJSON, Polygon, Popup, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import {
   Home, Map as MapIcon, Layers, LocateFixed,
-  Eye, EyeOff, Plus, Minus
+  Eye, EyeOff, Plus, Minus, Grid
 } from 'lucide-react';
 import { useBoundaryData, BoundaryLayer } from './panel/layers';
 import { toast } from 'react-hot-toast';
@@ -23,7 +23,7 @@ const TOP_ZOOM   = NAVBAR_H + 12;
 const TOP_CLEAN  = TOP_ZOOM + 90 + 8;
 
 
-// Detection Preview Box (butuh useMap, harus di dalam MapContainer)
+// Detection Preview Box
 
 export function DetectionPreviewBox({ show, size }) {
   const map = useMap();
@@ -67,7 +67,7 @@ export function DetectionPreviewBox({ show, size }) {
   );
 }
 
-// Zoom Watcher — kirim zoom level ke luar MapContainer
+// Zoom Watcher
 
 export function ZoomWatcher({ onZoomChange }) {
   useMapEvents({
@@ -76,7 +76,7 @@ export function ZoomWatcher({ onZoomChange }) {
   return null;
 }
 
-// Zoom Buttons─
+// Zoom Buttons
 
 export function ZoomButtons({ modeBersih }) {
   const map = useMap();
@@ -103,7 +103,7 @@ export function ZoomButtons({ modeBersih }) {
   );
 }
 
-// Mouse Coordinate
+// ✅ FIX: Mouse Coordinate — ganti φ/λ dengan teks "Lat" / "Lng"
 
 export function MouseCoordinate({ modeBersih }) {
   const [coords, setCoords] = useState({ lat: 0, lng: 0 });
@@ -113,12 +113,14 @@ export function MouseCoordinate({ modeBersih }) {
   if (modeBersih) return null;
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-      <div className={`${glass} rounded-full px-4 py-1.5 flex items-center gap-3`}>
+      <div className={`${glass} rounded-full px-4 py-1.5 flex items-center gap-2.5`}>
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-        <span className="font-mono text-[11px] tracking-wide text-black dark:text-white select-none whitespace-nowrap">
-          <span className="text-sky-500 font-semibold">φ</span>{" "}{coords.lat}
-          <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
-          <span className="text-sky-500 font-semibold">λ</span>{" "}{coords.lng}
+        <span className="font-mono text-[11px] tracking-wide text-black dark:text-white select-none whitespace-nowrap flex items-center gap-1.5">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lat</span>
+          <span className="text-sky-500 font-bold">{coords.lat}</span>
+          <span className="mx-1 text-slate-300 dark:text-slate-600">|</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lng</span>
+          <span className="text-sky-500 font-bold">{coords.lng}</span>
         </span>
       </div>
     </div>
@@ -145,7 +147,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
   );
 }
 
-// Map Reset─
+// Map Reset
 
 export function MapReset({ trigger, onDone }) {
   const map = useMap();
@@ -157,7 +159,7 @@ export function MapReset({ trigger, onDone }) {
   return null;
 }
 
-// Sidebar Buttons─
+// Sidebar Buttons
 
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
   const [isMobile, setIsMobile] = useState(false);
@@ -188,6 +190,11 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
       label: 'GeoAI',
     },
+    {
+      id: 'areascan',
+      icon: <Grid size={17} />,
+      label: 'Area Scan',
+    },
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
   ];
 
@@ -203,10 +210,11 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   if (modeBersih) return null;
 
-  const activeIcon = (btn) =>
-    ['radius', 'geoai'].includes(btn.id)
-      ? <img src={`/icons/${btn.id === 'radius' ? 'Wradius' : 'wgeo'}.png`} className="w-[18px] h-[18px] object-contain" alt={btn.label} />
-      : btn.icon;
+  const activeIcon = (btn) => {
+    if (btn.id === 'radius') return <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />;
+    if (btn.id === 'geoai')  return <img src="/icons/wgeo.png"    className="w-[18px] h-[18px] object-contain" alt="GeoAI" />;
+    return btn.icon;
+  };
 
   /* Mobile */
   if (isMobile) {
@@ -239,9 +247,10 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       <div className={`${glass} rounded-[22px] p-1.5 flex flex-col gap-1`}>
         {buttons.map((btn, i) => {
           const active = activePanel === btn.id;
+          const isLast = i === buttons.length - 1;
           return (
             <div key={btn.id} className="relative group">
-              {i === buttons.length - 1 && (
+              {isLast && (
                 <div className="w-6 h-px bg-slate-200 dark:bg-slate-700 mx-auto my-1" />
               )}
               <button
@@ -487,7 +496,6 @@ export function AnalysisLayer({ activeAnalysisData }) {
 
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
-  // modeBersih dikelola di MainMap, diterima via props
   const modeBersih    = props.modeBersih;
   const setModeBersih = props.setModeBersih;
 

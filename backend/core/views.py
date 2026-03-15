@@ -27,6 +27,9 @@ client = MongoClient(MONGO_URI)
 mongo_db = client[DB_MONGO_NAME]
 mongo_collection = mongo_db["ai_features"]
 
+# YOLO selalu output dalam ruang 640x640
+YOLO_TARGET_SIZE = 640
+
 # HELPER FUNCTIONS
 
 def calculate_polygon_area(coords):
@@ -53,15 +56,16 @@ def calculate_polygon_area(coords):
         
     return abs(area) / 2
 
-def calculate_pixel_polygon_area(segmentation_pixels, lat, lng, capture_size):
+def calculate_pixel_polygon_area(segmentation_pixels, lat, lng, capture_size=640):
     """
-    Hitung luas dari koordinat pixel segmentasi
+    Hitung luas dari koordinat pixel segmentasi (dalam ruang YOLO_TARGET_SIZE).
     Returns: Luas dalam m²
     """
     if len(segmentation_pixels) < 3:
         return 0
     
-    avg_zoom = 19
+    # Hitung resolusi meter/pixel pada zoom tertentu (approx zoom 18)
+    avg_zoom = 18
     meters_per_pixel = (40075016.686 * abs(math.cos(lat * math.pi / 180))) / (256 * pow(2, avg_zoom))
     
     # Hitung luas dalam pixel menggunakan Shoelace formula
@@ -80,21 +84,10 @@ def calculate_pixel_polygon_area(segmentation_pixels, lat, lng, capture_size):
 
 def get_province_from_coords(lat, lng, boundary_data=None):
     """
-    ✅ NEW FUNCTION - CORRECTED
-    Menentukan provinsi dari koordinat lat/lng menggunakan data boundary polygon
-    
-    ⚠️ PERHATIAN: Field nama provinsi adalah 'name' (bukan 'Propinsi')
-    
-    Args:
-        lat (float): Latitude (-90 to 90)
-        lng (float): Longitude (-180 to 180)
-        boundary_data (list, optional): GeoJSON features list dari MongoDB
-    
-    Returns:
-        str: Nama provinsi atau None jika koordinat tidak ditemukan dalam boundary
+    Menentukan provinsi dari koordinat lat/lng menggunakan data boundary polygon.
+    Field nama provinsi adalah 'name' (bukan 'Propinsi').
     """
     try:
-        # Jika tidak ada boundary data, ambil dari MongoDB
         if boundary_data is None:
             provinsi_collection = mongo_db["batas_provinsi"]
             boundary_data = list(provinsi_collection.find({}, {'_id': 0}))
@@ -103,22 +96,16 @@ def get_province_from_coords(lat, lng, boundary_data=None):
                 print("⚠️  Warning: Collection batas_provinsi kosong")
                 return None
         
-        # Buat point dari koordinat (GeoJSON format: [lng, lat])
         point = Point(lng, lat)
         
-        # Iterasi setiap feature (provinsi) di boundary data
         for feature in boundary_data:
             try:
                 geometry = feature.get('geometry', {})
                 geom_type = geometry.get('type')
                 
                 if geom_type in ['Polygon', 'MultiPolygon']:
-                    # Konversi GeoJSON geometry ke Shapely shape
                     geom = shape(geometry)
-                    
-                    # Cek apakah point berada dalam polygon
                     if geom.contains(point):
-                        # ✅ PENTING: Field adalah 'name' bukan 'Propinsi'
                         provinsi_name = feature.get('properties', {}).get('name', 'Unknown')
                         return provinsi_name
                         
@@ -135,20 +122,14 @@ def get_province_from_coords(lat, lng, boundary_data=None):
 
 def calculate_centroid(coords_list):
     """
-    NEW FUNCTION
-    Hitung titik tengah (centroid) dari polygon koordinat
-    
-    Args:
-        coords_list (list): List koordinat [[lng1, lat1], [lng2, lat2], ...]
-    
-    Returns:
-        tuple: (lat, lng) centroid atau None jika list kosong
+    Hitung titik tengah (centroid) dari polygon koordinat.
+    Input: [[lng1, lat1], [lng2, lat2], ...]
+    Returns: (lat, lng) atau None
     """
     if not coords_list or len(coords_list) < 3:
         return None
     
     try:
-        # Jangan hitung point terakhir jika itu duplikat dari point pertama
         coords_to_calc = coords_list[:-1] if coords_list[0] == coords_list[-1] else coords_list
         
         avg_lng = sum(c[0] for c in coords_to_calc) / len(coords_to_calc)
@@ -163,7 +144,7 @@ def calculate_centroid(coords_list):
 
 @api_view(['GET'])
 def feature_list(request):
-    """List semua features yang terdeteksi (ORIGINAL)"""
+    """List semua features yang terdeteksi"""
     try:
         cursor = mongo_collection.find({}, {'_id': 0}).sort('created_at', -1)
         return Response(list(cursor))
@@ -172,11 +153,25 @@ def feature_list(request):
 
 @api_view(['POST'])
 def run_detection(request):
-    """Jalankan YOLO detection (ORIGINAL)"""
+    """
+    Jalankan YOLO detection.
+
+    ✅ FIX: Koordinat mask segmentasi TIDAK di-scale.
+    Backend selalu me-resize input ke YOLO_TARGET_SIZE (640px) dan
+    mengembalikan koordinat dalam ruang 640px.
+    Frontend (pixelsToLatLng) yang bertanggung jawab untuk scaling
+    dari 640px ke ukuran capture aktual, lalu proyeksi ke LatLng.
+
+    Alasan: Jika backend meng-scale koordinat dengan (capture_size/640),
+    lalu frontend juga meng-scale lagi, terjadi double scaling yang
+    menyebabkan polygon meleset jauh dari posisi sebenarnya.
+    """
     image_file = request.FILES.get('image')
     lat = float(request.data.get('lat'))
     lng = float(request.data.get('lng'))
-    capture_size = int(request.data.get('capture_size', 640))
+    # capture_size diterima tapi hanya dipakai untuk metadata,
+    # bukan untuk scale koordinat
+    capture_size = int(request.data.get('capture_size', YOLO_TARGET_SIZE))
     
     categories_raw = request.data.get('categories', '')
     selected_categories = [c.strip().lower() for c in categories_raw.split(',') if c]
@@ -187,19 +182,14 @@ def run_detection(request):
     try:
         img = Image.open(image_file)
         
-        # Resize gambar untuk deteksi optimal
-        target_size = 640
-        if img.size != (target_size, target_size):
-            img_resized = img.resize((target_size, target_size), Image.LANCZOS)
+        # Resize gambar ke YOLO_TARGET_SIZE untuk deteksi
+        if img.size != (YOLO_TARGET_SIZE, YOLO_TARGET_SIZE):
+            img_resized = img.resize((YOLO_TARGET_SIZE, YOLO_TARGET_SIZE), Image.LANCZOS)
         else:
             img_resized = img
         
         results = model.predict(source=img_resized, save=False)
         detected_data = []
-
-        # Scale factor
-        scale_x = capture_size / target_size
-        scale_y = capture_size / target_size
 
         for result in results:
             if result.masks is not None:
@@ -209,50 +199,51 @@ def run_detection(request):
                     confidence = float(result.boxes.conf[i])
 
                     if raw_label in selected_categories:
-                        # Scale koordinat mask
-                        segment_list = [[pt[0] * scale_x, pt[1] * scale_y] for pt in mask.tolist()]
+                        # ✅ FIX: Kembalikan koordinat asli dalam ruang YOLO (640px)
+                        # JANGAN di-scale di sini. Frontend yang akan scale + project.
+                        segment_list = [[float(pt[0]), float(pt[1])] for pt in mask.tolist()]
                         
-                        # Hitung luas dari segmentasi
-                        luas_m2 = calculate_pixel_polygon_area(segment_list, lat, lng, capture_size)
+                        # Hitung luas menggunakan koordinat 640px
+                        luas_m2 = calculate_pixel_polygon_area(
+                            segment_list, lat, lng, YOLO_TARGET_SIZE
+                        )
 
                         detected_data.append({
                             "nama": f"{raw_label.capitalize()} Terdeteksi",
                             "kategori": raw_label,
-                            "segmentation": segment_list,
+                            "segmentation": segment_list,   # ruang 640px
                             "confidence_score": round(confidence, 2),
                             "luas_m2": luas_m2,
                             "lat": lat,
                             "lng": lng,
-                            "capture_size": capture_size
+                            "capture_size": YOLO_TARGET_SIZE  # selalu 640
                         })
             else:
-                # Bounding box fallback
+                # Bounding box fallback (tidak ada mask)
                 for box in result.boxes:
                     raw_label = result.names[int(box.cls[0])].lower()
                     if raw_label in selected_categories:
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        # ✅ FIX: bbox juga dalam ruang 640px, tanpa scale
                         detected_data.append({
                             "nama": f"{raw_label.capitalize()} Terdeteksi",
                             "kategori": raw_label,
                             "bbox": [
-                                int(x1 * scale_x), 
-                                int(y1 * scale_y), 
-                                int(x2 * scale_x), 
-                                int(y2 * scale_y)
+                                int(x1), int(y1),
+                                int(x2), int(y2)
                             ],
                             "confidence_score": round(float(box.conf[0]), 2),
                             "lat": lat,
                             "lng": lng,
-                            "capture_size": capture_size
+                            "capture_size": YOLO_TARGET_SIZE
                         })
 
         return Response({
             "status": "success",
             "results": detected_data,
             "metadata": {
-                "capture_size": capture_size,
-                "detection_size": target_size,
-                "scale_factor": scale_x
+                "yolo_size": YOLO_TARGET_SIZE,
+                "capture_size_received": capture_size,
             }
         })
 
@@ -315,7 +306,6 @@ def save_detection(request):
                 "created_at": datetime.now().isoformat()
             }
             
-            # Insert ke MongoDB
             mongo_collection.insert_one(mongo_document)
             print(f"✓ Data {item.get('kategori')} di {provinsi} berhasil disimpan")
 
@@ -343,7 +333,7 @@ def delete_feature(request, feature_id):
 
 @api_view(['PUT', 'PATCH'])
 def update_feature_mongo(request, feature_id):
-    """Update feature di MongoDB (ORIGINAL)"""
+    """Update feature di MongoDB"""
     try:
         new_nama = request.data.get('nama')
         new_kategori = request.data.get('kategori')
@@ -363,7 +353,7 @@ def update_feature_mongo(request, feature_id):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-# OPTIONAL: ENDPOINTS FOR PROVINCE FEATURES
+# ENDPOINTS FOR PROVINCE FEATURES
 
 @api_view(['GET'])
 def features_by_province(request):
@@ -373,7 +363,6 @@ def features_by_province(request):
         if not provinsi:
             return Response({"error": "Parameter 'provinsi' diperlukan"}, status=400)
         
-        # Query MongoDB
         cursor = mongo_collection.find(
             {"provinsi": provinsi},
             {'_id': 0}
@@ -393,7 +382,6 @@ def features_by_province(request):
 @api_view(['GET'])
 def provinces_summary(request):
     try:
-        # Aggregate deteksi per provinsi
         pipeline = [
             {
                 "$group": {
@@ -422,7 +410,7 @@ def provinces_summary(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-# RBI DATA ENDPOINTS (ORIGINAL)
+# RBI DATA ENDPOINTS
 
 @api_view(['GET'])
 def rbi_pendidikan_list(request):
@@ -442,7 +430,7 @@ def rbi_pendidikan_list(request):
 
 @api_view(['GET'])
 def rbi_kesehatan_list(request):
-    """List RBI Kesehatan (ORIGINAL)"""
+    """List RBI Kesehatan"""
     wilayah_query = request.query_params.get('wilayah', None)
     
     query = {}
@@ -457,7 +445,7 @@ def rbi_kesehatan_list(request):
         "features": features
     })
 
-# BOUNDARY DATA ENDPOINTS (ORIGINAL)
+# BOUNDARY DATA ENDPOINTS
 
 @api_view(['GET'])
 def batas_provinsi(request):

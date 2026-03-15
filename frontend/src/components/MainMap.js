@@ -12,26 +12,59 @@ import LayersPanel from './panel/layers';
 import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
+import GeoAreaScanPanel, { AreaScanOverlay } from './panel/GeoAreaScanPanel';
 
 export default function MainMap({ activePanel, setActivePanel }) {
   const mapRef = useRef(null);
 
-  // Simpan seluruh objek basemap agar attribution & maxZoom ikut terbawa
   const [currentBasemap, setCurrentBasemap] = useState(BASEMAP_OPTIONS[0]);
-
   const [activeLayers,       setActiveLayers]       = useState([]);
   const [data,               setData]               = useState(null);
   const [previewData,        setPreviewData]        = useState([]);
   const [goHome,             setGoHome]             = useState(false);
   const [activeRadius,       setActiveRadius]       = useState(null);
   const [modeBersih,         setModeBersih]         = useState(false);
-
   const [zoomLevel,          setZoomLevel]          = useState(5);
   const [showPreviewBox,     setShowPreviewBox]     = useState(true);
   const [detectionSize,      setDetectionSize]      = useState(640);
-
   const [activeAnalysisId,   setActiveAnalysisId]   = useState(null);
   const [activeAnalysisData, setActiveAnalysisData] = useState(null);
+
+  // ── AREA SCAN STATE ──────────────────────────────────────────────────────
+  const [isDrawingArea,   setIsDrawingArea]   = useState(false);
+  const [drawnBounds,     setDrawnBounds]     = useState(null);
+  const [tileGrid,        setTileGrid]        = useState([]);
+  const [scanningTileIdx, setScanningTileIdx] = useState(-1);
+  const [previewResults,  setPreviewResults]  = useState([]);
+  const [tileStats,       setTileStats]       = useState({ total: 0, done: 0, objects: 0 });
+  const [isScanning,      setIsScanning]      = useState(false);
+
+  const handleTileClick = (tile) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo([tile.centerLat, tile.centerLng], 19, { animate: true, duration: 0.6 });
+  };
+
+  // ✅ FIX: Saat panel areascan ditutup, bersihkan semua state overlay
+  // agar garis area tidak tersisa di peta.
+  const prevPanelRef = useRef(activePanel);
+  useEffect(() => {
+    const wasAreaScan = prevPanelRef.current === 'areascan';
+    const isAreaScan  = activePanel === 'areascan';
+    prevPanelRef.current = activePanel;
+
+    if (wasAreaScan && !isAreaScan && !isScanning) {
+      setIsDrawingArea(false);
+      setDrawnBounds(null);
+      setTileGrid([]);
+      setPreviewResults([]);
+      setScanningTileIdx(-1);
+      setTileStats({ total: 0, done: 0, objects: 0 });
+    }
+
+    if (!isAreaScan) setIsDrawingArea(false);
+  }, [activePanel]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -106,10 +139,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
 
       {activePanel === 'basemap' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
-          <BasemapPanel
-            activeUrl={currentBasemap.url}
-            onSelect={setCurrentBasemap}
-          />
+          <BasemapPanel activeUrl={currentBasemap.url} onSelect={setCurrentBasemap} />
         </aside>
       )}
 
@@ -147,6 +177,23 @@ export default function MainMap({ activePanel, setActivePanel }) {
         </aside>
       )}
 
+      {activePanel === 'areascan' && (
+        <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
+          <GeoAreaScanPanel
+            mapRef={mapRef}
+            zoomLevel={zoomLevel}
+            onNewData={refreshData}
+            isDrawingArea={isDrawingArea}     setIsDrawingArea={setIsDrawingArea}
+            drawnBounds={drawnBounds}         setDrawnBounds={setDrawnBounds}
+            tileGrid={tileGrid}               setTileGrid={setTileGrid}
+            previewResults={previewResults}   setPreviewResults={setPreviewResults}
+            scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
+            tileStats={tileStats}             setTileStats={setTileStats}
+            isScanning={isScanning}           setIsScanning={setIsScanning}
+          />
+        </aside>
+      )}
+
       <SearchLocation mapRef={mapRef} modeBersih={modeBersih} />
 
       <MapContainer
@@ -159,7 +206,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
         zoomControl={false}
         doubleClickZoom={false}
       >
-        {/* Basemap — key={url} paksa re-render saat ganti tile provider */}
         <TileLayer
           key={currentBasemap.url}
           url={currentBasemap.url}
@@ -180,7 +226,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
           showPreviewBox={showPreviewBox}
           detectionSize={detectionSize}
           onZoomChange={setZoomLevel}
-
           setGoHome={setGoHome}
           setPreviewData={setPreviewData}
           setActivePanel={setActivePanel}
@@ -188,11 +233,24 @@ export default function MainMap({ activePanel, setActivePanel }) {
           onRefreshData={refreshData}
         />
 
+        {/* ✅ isActive: overlay hanya tampil saat panel areascan aktif */}
+        <AreaScanOverlay
+          isActive={activePanel === 'areascan'}
+          isDrawing={isDrawingArea}
+          onBoundsSet={setDrawnBounds}
+          drawnBounds={drawnBounds}
+          tileGrid={tileGrid}
+          scanningTileIdx={scanningTileIdx}
+          previewResults={previewResults}
+          onTileClick={handleTileClick}
+          isScanning={isScanning}
+        />
+
         {activePanel === 'radius' && (
-          <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
+          <div className="leaflet-top leaflet-right" style={{ pointerEvents:'none' }}>
             <aside
               className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}
-              style={{ pointerEvents: 'auto' }}
+              style={{ pointerEvents:'auto' }}
             >
               <RadiusPanel
                 activeRadius={activeRadius}
@@ -204,7 +262,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
           </div>
         )}
 
-        <ScaleControl position="bottomleft" />
+        <ScaleControl position="bottomleft"/>
       </MapContainer>
     </div>
   );
