@@ -1,25 +1,3 @@
-"""
-views_area_scan.py
-──────────────────
-Endpoint tambahan untuk fitur Area Scan (SAS Planet style).
-Daftarkan di urls.py:
-    from .views_area_scan import area_scan_session, area_scan_status, area_scan_summary
-
-    urlpatterns += [
-        path('api/area-scan/start/',   area_scan_session, name='area_scan_start'),
-        path('api/area-scan/status/',  area_scan_status,  name='area_scan_status'),
-        path('api/area-scan/summary/', area_scan_summary, name='area_scan_summary'),
-    ]
-
-NOTE:
-  - Endpoint run-detection dan save-detection yang sudah ada di views.py
-    tetap digunakan oleh frontend (tile per tile).
-  - File ini hanya menambahkan:
-      1. area_scan_session  → menyimpan metadata sesi scan
-      2. area_scan_status   → ringkasan progres sesi
-      3. area_scan_summary  → statistik per kategori / provinsi hasil sesi
-"""
-
 import os
 import uuid
 import math

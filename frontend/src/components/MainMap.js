@@ -12,7 +12,7 @@ import LayersPanel from './panel/layers';
 import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
-import GeoAreaScanPanel, { AreaScanOverlay } from './panel/GeoAreaScanPanel';
+import GeoAreaScanPanel, { AreaScanOverlay, KabupatenMapOverlay } from './panel/GeoAreaScanPanel';
 
 export default function MainMap({ activePanel, setActivePanel }) {
   const mapRef = useRef(null);
@@ -39,44 +39,46 @@ export default function MainMap({ activePanel, setActivePanel }) {
   const [tileStats,       setTileStats]       = useState({ total: 0, done: 0, objects: 0 });
   const [isScanning,      setIsScanning]      = useState(false);
 
+  // ── KABUPATEN OVERLAY STATE ──────────────────────────────────────────────
+  // handleSelect dari panel — fungsi yang SAMA dipakai dropdown & klik peta
+  const [kabState, setKabState] = useState({
+    scanMode: 'manual',
+    kabupatenList: [],
+    selectedKabupaten: null,
+    isKabupatenClickMode: false,
+    handleSelect: null,
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleTileClick = (tile) => {
     const map = mapRef.current;
     if (!map) return;
     map.flyTo([tile.centerLat, tile.centerLng], 19, { animate: true, duration: 0.6 });
   };
 
-  // ✅ FIX: Saat panel areascan ditutup, bersihkan semua state overlay
-  // agar garis area tidak tersisa di peta.
   const prevPanelRef = useRef(activePanel);
   useEffect(() => {
     const wasAreaScan = prevPanelRef.current === 'areascan';
     const isAreaScan  = activePanel === 'areascan';
     prevPanelRef.current = activePanel;
-
     if (wasAreaScan && !isAreaScan && !isScanning) {
-      setIsDrawingArea(false);
-      setDrawnBounds(null);
-      setTileGrid([]);
-      setPreviewResults([]);
-      setScanningTileIdx(-1);
+      setIsDrawingArea(false); setDrawnBounds(null); setTileGrid([]);
+      setPreviewResults([]); setScanningTileIdx(-1);
       setTileStats({ total: 0, done: 0, objects: 0 });
+      setKabState({ scanMode:'manual', kabupatenList:[], selectedKabupaten:null, isKabupatenClickMode:false, handleSelect:null });
     }
-
     if (!isAreaScan) setIsDrawingArea(false);
   }, [activePanel]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
+    check(); window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
   useEffect(() => {
-    if (activePanel !== 'geoai') setShowPreviewBox(false);
-    else setShowPreviewBox(true);
+    if (activePanel !== 'geoai') setShowPreviewBox(false); else setShowPreviewBox(true);
   }, [activePanel]);
 
   useEffect(() => {
@@ -85,28 +87,16 @@ export default function MainMap({ activePanel, setActivePanel }) {
         const res = await fetch('http://127.0.0.1:8000/api/features/');
         if (!res.ok) throw new Error('Gagal mengambil data');
         setData(await res.json());
-      } catch (err) {
-        console.error('Error:', err);
-        toast.error('Gagal memuat data peta');
-      }
+      } catch (err) { console.error('Error:', err); toast.error('Gagal memuat data peta'); }
     };
     fetchData();
   }, []);
 
   useEffect(() => {
     if (!activeAnalysisId) { setActiveAnalysisData(null); return; }
-    const fetch_ = async () => {
-      try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/analysis/${activeAnalysisId}/`);
-        setActiveAnalysisData(res.data);
-        toast.success('Data analisis dimuat');
-      } catch (err) {
-        console.error('Error fetching analysis:', err);
-        toast.error('Gagal memuat detail analisis');
-        setActiveAnalysisId(null);
-      }
-    };
-    fetch_();
+    axios.get(`http://127.0.0.1:8000/api/analysis/${activeAnalysisId}/`)
+      .then(res => { setActiveAnalysisData(res.data); toast.success('Data analisis dimuat'); })
+      .catch(err => { console.error(err); toast.error('Gagal memuat detail analisis'); setActiveAnalysisId(null); });
   }, [activeAnalysisId]);
 
   const getCategoryColor = (cat) => {
@@ -120,19 +110,14 @@ export default function MainMap({ activePanel, setActivePanel }) {
   };
 
   const toggleLayer = (layerId) =>
-    setActiveLayers(prev =>
-      prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]
-    );
+    setActiveLayers(prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]);
 
   const refreshData = () =>
-    fetch('http://127.0.0.1:8000/api/features/')
-      .then(r => r.json())
-      .then(json => setData(json));
+    fetch('http://127.0.0.1:8000/api/features/').then(r => r.json()).then(json => setData(json));
 
   const getPanelClasses = () =>
-    isMobile
-      ? 'fixed top-16 bottom-20 left-0 right-0 w-full rounded-none'
-      : 'fixed top-20 bottom-20 right-20 w-80 rounded-2xl';
+    isMobile ? 'fixed top-16 bottom-20 left-0 right-0 w-full rounded-none'
+             : 'fixed top-20 bottom-20 right-20 w-80 rounded-2xl';
 
   return (
     <div className="h-screen w-full relative overflow-hidden bg-slate-900">
@@ -142,47 +127,29 @@ export default function MainMap({ activePanel, setActivePanel }) {
           <BasemapPanel activeUrl={currentBasemap.url} onSelect={setCurrentBasemap} />
         </aside>
       )}
-
       {activePanel === 'layers' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
           <LayersPanel activeLayers={activeLayers} onToggleLayer={toggleLayer} />
         </aside>
       )}
-
       {activePanel === 'analysis' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
-          <AnalysisPanel
-            onClose={() => setActivePanel(null)}
-            activeAnalysisId={activeAnalysisId}
-            setActiveAnalysisId={setActiveAnalysisId}
-          />
+          <AnalysisPanel onClose={() => setActivePanel(null)} activeAnalysisId={activeAnalysisId} setActiveAnalysisId={setActiveAnalysisId}/>
         </aside>
       )}
-
       {activePanel === 'geoai' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
-          <GeoAI
-            mapRef={mapRef}
-            zoomLevel={zoomLevel}
-            showPreviewBox={showPreviewBox}
-            setShowPreviewBox={setShowPreviewBox}
-            detectionSize={detectionSize}
-            setDetectionSize={setDetectionSize}
-            onNewData={refreshData}
-            onDetectionComplete={(res) => setPreviewData(res)}
-            onClearPreview={() => setPreviewData([])}
-            previewData={previewData}
-            setPreviewData={setPreviewData}
-          />
+          <GeoAI mapRef={mapRef} zoomLevel={zoomLevel} showPreviewBox={showPreviewBox} setShowPreviewBox={setShowPreviewBox}
+            detectionSize={detectionSize} setDetectionSize={setDetectionSize} onNewData={refreshData}
+            onDetectionComplete={(res) => setPreviewData(res)} onClearPreview={() => setPreviewData([])}
+            previewData={previewData} setPreviewData={setPreviewData}/>
         </aside>
       )}
 
       {activePanel === 'areascan' && (
         <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}>
           <GeoAreaScanPanel
-            mapRef={mapRef}
-            zoomLevel={zoomLevel}
-            onNewData={refreshData}
+            mapRef={mapRef} zoomLevel={zoomLevel} onNewData={refreshData}
             isDrawingArea={isDrawingArea}     setIsDrawingArea={setIsDrawingArea}
             drawnBounds={drawnBounds}         setDrawnBounds={setDrawnBounds}
             tileGrid={tileGrid}               setTileGrid={setTileGrid}
@@ -190,74 +157,47 @@ export default function MainMap({ activePanel, setActivePanel }) {
             scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
             tileStats={tileStats}             setTileStats={setTileStats}
             isScanning={isScanning}           setIsScanning={setIsScanning}
+            onKabupatenStateChange={setKabState}
           />
         </aside>
       )}
 
       <SearchLocation mapRef={mapRef} modeBersih={modeBersih} />
 
-      <MapContainer
-        ref={mapRef}
-        center={[-2.5, 118]}
-        zoom={5}
-        minZoom={3}
-        maxZoom={22}
-        className="h-full w-full z-0"
-        zoomControl={false}
-        doubleClickZoom={false}
-      >
-        <TileLayer
-          key={currentBasemap.url}
-          url={currentBasemap.url}
-          attribution={currentBasemap.attribution}
-          maxZoom={currentBasemap.maxZoom ?? 22}
-          maxNativeZoom={currentBasemap.maxZoom ?? 19}
-        />
+      <MapContainer ref={mapRef} center={[-2.5, 118]} zoom={5} minZoom={3} maxZoom={22}
+        className="h-full w-full z-0" zoomControl={false} doubleClickZoom={false}>
+        <TileLayer key={currentBasemap.url} url={currentBasemap.url} attribution={currentBasemap.attribution}
+          maxZoom={currentBasemap.maxZoom ?? 22} maxNativeZoom={currentBasemap.maxZoom ?? 19}/>
 
-        <MapStuff
-          activePanel={activePanel}
-          activeLayers={activeLayers}
-          data={data}
-          previewData={previewData}
-          goHome={goHome}
-          activeAnalysisData={activeAnalysisData}
-          modeBersih={modeBersih}
-          setModeBersih={setModeBersih}
-          showPreviewBox={showPreviewBox}
-          detectionSize={detectionSize}
-          onZoomChange={setZoomLevel}
-          setGoHome={setGoHome}
-          setPreviewData={setPreviewData}
-          setActivePanel={setActivePanel}
-          getCategoryColor={getCategoryColor}
-          onRefreshData={refreshData}
-        />
+        <MapStuff activePanel={activePanel} activeLayers={activeLayers} data={data} previewData={previewData}
+          goHome={goHome} activeAnalysisData={activeAnalysisData} modeBersih={modeBersih} setModeBersih={setModeBersih}
+          showPreviewBox={showPreviewBox} detectionSize={detectionSize} onZoomChange={setZoomLevel}
+          setGoHome={setGoHome} setPreviewData={setPreviewData} setActivePanel={setActivePanel}
+          getCategoryColor={getCategoryColor} onRefreshData={refreshData}/>
 
-        {/* ✅ isActive: overlay hanya tampil saat panel areascan aktif */}
         <AreaScanOverlay
           isActive={activePanel === 'areascan'}
-          isDrawing={isDrawingArea}
-          onBoundsSet={setDrawnBounds}
-          drawnBounds={drawnBounds}
-          tileGrid={tileGrid}
-          scanningTileIdx={scanningTileIdx}
-          previewResults={previewResults}
-          onTileClick={handleTileClick}
-          isScanning={isScanning}
+          isDrawing={isDrawingArea} onBoundsSet={setDrawnBounds} drawnBounds={drawnBounds}
+          tileGrid={tileGrid} scanningTileIdx={scanningTileIdx} previewResults={previewResults}
+          onTileClick={handleTileClick} isScanning={isScanning}
         />
+
+        {/* KabupatenMapOverlay — onSelect = handleSelect dari panel (SAMA dengan dropdown) */}
+        {activePanel === 'areascan' && kabState.scanMode === 'kabupaten' && (
+          <KabupatenMapOverlay
+            kabupatenList={kabState.kabupatenList}
+            selectedKabupaten={kabState.selectedKabupaten}
+            isClickMode={kabState.isKabupatenClickMode}
+            isActive={true}
+            onSelect={kabState.handleSelect}
+          />
+        )}
 
         {activePanel === 'radius' && (
           <div className="leaflet-top leaflet-right" style={{ pointerEvents:'none' }}>
-            <aside
-              className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`}
-              style={{ pointerEvents:'auto' }}
-            >
-              <RadiusPanel
-                activeRadius={activeRadius}
-                setActiveRadius={setActiveRadius}
-                onRadiusCreated={(r) => console.log('Radius dibuat:', r)}
-                onRadiusCleared={(id) => console.log('Radius dihapus:', id)}
-              />
+            <aside className={`${getPanelClasses()} shadow-2xl z-[1050] bg-white dark:bg-slate-900 overflow-hidden`} style={{ pointerEvents:'auto' }}>
+              <RadiusPanel activeRadius={activeRadius} setActiveRadius={setActiveRadius}
+                onRadiusCreated={(r) => console.log('Radius dibuat:', r)} onRadiusCleared={(id) => console.log('Radius dihapus:', id)}/>
             </aside>
           </div>
         )}
