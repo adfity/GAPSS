@@ -6,6 +6,13 @@ from . import economy_views
 from core import pangan_views
 from . import views_area_scan
 
+from core.scripts.waypoint_sarana_prasarana import (
+        WaypointSaranaPrasaranaView,
+        WaypointHotelView,
+        WaypointKantorView,
+        WaypointPerbelanjaanView,
+    )
+
 urlpatterns = [
     # AI DETECTION & FEATURES
     path('features/', views.feature_list, name='feature-list'),
@@ -61,4 +68,10 @@ urlpatterns = [
     path('area-scan/status/',   views_area_scan.area_scan_status,       name='area-scan-status'),
     path('area-scan/summary/',  views_area_scan.area_scan_summary,      name='area-scan-summary'),
     path('area-scan/sessions/', views_area_scan.area_scan_sessions_list, name='area-scan-sessions'),
+
+    # WAYPOINT SARANA PRASARANA
+    path('waypoint/sarana-prasarana/', WaypointSaranaPrasaranaView.as_view()),
+    path('waypoint/hotel/',            WaypointHotelView.as_view()),
+    path('waypoint/kantor/',           WaypointKantorView.as_view()),
+    path('waypoint/perbelanjaan/',     WaypointPerbelanjaanView.as_view()),
 ]

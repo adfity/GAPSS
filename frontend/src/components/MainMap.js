@@ -13,6 +13,7 @@ import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
 import GeoAreaScanPanel, { AreaScanOverlay, KabupatenMapOverlay } from './panel/GeoAreaScanPanel';
+import { useWaypointData, WaypointLayer } from './panel/layers';
 
 export default function MainMap({ activePanel, setActivePanel }) {
   const mapRef = useRef(null);
@@ -109,6 +110,8 @@ export default function MainMap({ activePanel, setActivePanel }) {
     }
   };
 
+  const { waypointData } = useWaypointData(activeLayers);
+
   const toggleLayer = (layerId) =>
     setActiveLayers(prev => prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]);
 
@@ -203,6 +206,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
         )}
 
         <ScaleControl position="bottomleft"/>
+        <WaypointLayer activeLayers={activeLayers} waypointData={waypointData} />
       </MapContainer>
     </div>
   );

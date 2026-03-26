@@ -185,15 +185,15 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       icon: <img src={isDark ? '/icons/Wradius.png' : '/icons/bradius.png'} className="w-[18px] h-[18px] object-contain" alt="Radius" />,
       label: 'Radius',
     },
-    {
-      id: 'geoai',
-      icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
-      label: 'GeoAI',
-    },
+    // {
+    //   id: 'geoai',
+    //   icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
+    //   label: 'GeoAI',
+    // },
     {
       id: 'areascan',
-      icon: <Grid size={17} />,
-      label: 'Area Scan',
+      icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
+      label: 'GeoAI',
     },
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
   ];
@@ -212,7 +212,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   const activeIcon = (btn) => {
     if (btn.id === 'radius') return <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />;
-    if (btn.id === 'geoai')  return <img src="/icons/wgeo.png"    className="w-[18px] h-[18px] object-contain" alt="GeoAI" />;
+    // if (btn.id === 'geoai')  return <img src="/icons/wgeo.png"    className="w-[18px] h-[18px] object-contain" alt="GeoAI" />;
     return btn.icon;
   };
 
