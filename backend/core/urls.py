@@ -6,12 +6,13 @@ from . import economy_views
 from core import pangan_views
 from . import views_area_scan
 
-from core.scripts.waypoint_sarana_prasarana import (
-        WaypointSaranaPrasaranaView,
-        WaypointHotelView,
-        WaypointKantorView,
-        WaypointPerbelanjaanView,
-    )
+from core.scripts.waypoint_pendidikan import (
+    WaypointPendidikanView,
+    WaypointSchoolView,
+    WaypointKindergartenView,
+    WaypointCollegeView,
+    WaypointUniversityView,
+)
 
 urlpatterns = [
     # AI DETECTION & FEATURES
@@ -69,9 +70,12 @@ urlpatterns = [
     path('area-scan/summary/',  views_area_scan.area_scan_summary,      name='area-scan-summary'),
     path('area-scan/sessions/', views_area_scan.area_scan_sessions_list, name='area-scan-sessions'),
 
-    # WAYPOINT SARANA PRASARANA
-    path('waypoint/sarana-prasarana/', WaypointSaranaPrasaranaView.as_view()),
-    path('waypoint/hotel/',            WaypointHotelView.as_view()),
-    path('waypoint/kantor/',           WaypointKantorView.as_view()),
-    path('waypoint/perbelanjaan/',     WaypointPerbelanjaanView.as_view()),
+     # ── WAYPOINT PENDIDIKAN ──────────────────────────────────────────────────
+    # Semua kategori sekaligus
+    path('waypoint/pendidikan/',             WaypointPendidikanView.as_view()),
+    # Per sub-kategori
+    path('waypoint/pendidikan/school/',      WaypointSchoolView.as_view()),
+    path('waypoint/pendidikan/kindergarten/',WaypointKindergartenView.as_view()),
+    path('waypoint/pendidikan/college/',     WaypointCollegeView.as_view()),
+    path('waypoint/pendidikan/university/',  WaypointUniversityView.as_view()),
 ]
