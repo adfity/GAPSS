@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
   Search, Calendar, Loader2, Home,
-  Info, FileText, BookOpen, Activity, History,
+  Info, ShieldCheck, BookOpen, Activity,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -12,17 +12,16 @@ import SideBar from "@/components/layout/sideBar";
 import Footerauth from '@/components/layout/footerauth';
 
 import PetaSection, { cn, Card, Btn, Modal, ModalCekData } from '@/components/analisis/pangan/petaSection';
-import { TabInfo, TabTabel, TabMetadata, TabRiwayat, TabTrend } from '@/components/analisis/pangan/tabPangan';
+import { TabInfo, TabKebijakan, TabMetadata, TabTrend } from '@/components/analisis/pangan/tabPangan';
 
 // ─── Constants
 const API = 'http://127.0.0.1:8000/api';
 const TAHUN_TERSEDIA = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
 const TABS = [
-  { id: 'info',     label: 'Info',     Icon: Info       },
-  { id: 'tabel',    label: 'Tabel',    Icon: FileText   },
-  { id: 'metadata', label: 'Metadata', Icon: BookOpen   },
-  { id: 'trend',    label: 'Tren',     Icon: Activity   },
-  { id: 'riwayat',  label: 'Riwayat',  Icon: History    },
+  { id: 'info',      label: 'Info',      Icon: Info        },
+  { id: 'kebijakan', label: 'Kebijakan', Icon: ShieldCheck },
+  { id: 'metadata',  label: 'Metadata',  Icon: BookOpen    },
+  { id: 'trend',     label: 'Tren',      Icon: Activity    },
 ];
 
 export default function PanganPage() {
@@ -148,7 +147,6 @@ export default function PanganPage() {
     }
   };
 
-  // ── Cek data BPS dulu
   const cekDanAnalisis = async (tahun = null) => {
     const t = tahun || tahunTerpilih;
     pendingRef.current = { t };
@@ -165,7 +163,6 @@ export default function PanganPage() {
     }
   };
 
-  // ── Lanjut BPS (semua data tersedia)
   const lanjutkanBPS = async () => {
     if (!pendingRef.current) return;
     const { t } = pendingRef.current;
@@ -194,7 +191,6 @@ export default function PanganPage() {
     }
   };
 
-  // ── Lanjut AI (data BPS kosong sebagian/semua → user pilih AI)
   const lanjutkanAI = async () => {
     if (!pendingRef.current) return;
     const { t } = pendingRef.current;
@@ -444,9 +440,9 @@ export default function PanganPage() {
       <main className="pt-[60px] pb-16 min-h-screen">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-2">
           <div className="flex items-start justify-between pt-7 pb-5">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Ketahanan Pangan Nasional</h1>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Indeks Ketahanan Pangan</h1>
             <nav className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-              <Home size={12} /> <span>›</span> <span>Analisis</span> <span>›</span>
+              <Home size={12} /> <span>›</span>
               <span className="text-slate-600 dark:text-slate-300 font-semibold">Ketahanan Pangan</span>
             </nav>
           </div>
@@ -480,11 +476,10 @@ export default function PanganPage() {
                   })}
                 </div>
                 <div className="p-5">
-                  {activeTab === 'info'     && <TabInfo     hasilAnalisis={hasilAnalisis} jumlahStatus={jumlahStatus} />}
-                  {activeTab === 'tabel'    && <TabTabel    hasilAnalisis={hasilAnalisis} statusTerpilih={statusTerpilih} setStatusTerpilih={setStatusTerpilih} eksporData={eksporData} />}
-                  {activeTab === 'metadata' && <TabMetadata hasilAnalisis={hasilAnalisis} unduhFns={unduhFns} loadingDataset={loadingDataset} />}
-                  {activeTab === 'trend'    && <TabTrend    trendData={trendData} trendLoading={trendLoading} trendError={trendError} />}
-                  {activeTab === 'riwayat'  && <TabRiwayat  daftarTersimpan={daftarTersimpan} onMuat={muatDetail} hasilAnalisis={hasilAnalisis} />}
+                  {activeTab === 'info'      && <TabInfo      hasilAnalisis={hasilAnalisis} jumlahStatus={jumlahStatus} eksporData={eksporData} />}
+                  {activeTab === 'kebijakan' && <TabKebijakan hasilAnalisis={hasilAnalisis} statusTerpilih={statusTerpilih} setStatusTerpilih={setStatusTerpilih} />}
+                  {activeTab === 'metadata'  && <TabMetadata  hasilAnalisis={hasilAnalisis} unduhFns={unduhFns} loadingDataset={loadingDataset} />}
+                  {activeTab === 'trend'     && <TabTrend     trendData={trendData} trendLoading={trendLoading} trendError={trendError} />}
                 </div>
               </div>
             </div>

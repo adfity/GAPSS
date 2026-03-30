@@ -36,9 +36,9 @@ export const INDIKATOR_COLORS = {
   ALL: '#6366f1', RLS: '#8b5cf6', APS: '#3b82f6', RASIO: '#10b981',
 };
 export const BASEMAPS = {
+  OSM:            { label: "OpenStreetMap", url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",                          attribution: '&copy; OpenStreetMap',              preview: "bg-green-100" },
   CARTO_LIGHT:    { label: "Carto Light",   url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",              attribution: '&copy; OpenStreetMap &copy; CARTO', preview: "bg-slate-100" },
   CARTO_DARK:     { label: "Carto Dark",    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",               attribution: '&copy; OpenStreetMap &copy; CARTO', preview: "bg-slate-800" },
-  OSM:            { label: "OpenStreetMap", url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",                          attribution: '&copy; OpenStreetMap',              preview: "bg-green-100" },
   ESRI_SATELLITE: { label: "Satelit",       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: 'Tiles &copy; Esri', preview: "bg-stone-700" },
   TOPO:           { label: "Topografi",     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",                            attribution: '&copy; OpenTopoMap',               preview: "bg-amber-100" },
   CARTO_VOYAGER:  { label: "Voyager",       url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",    attribution: '&copy; OpenStreetMap &copy; CARTO', preview: "bg-blue-50"  },
@@ -122,7 +122,7 @@ export function ModalCekData({ tahun, indikator, hasilCek, sedangCek, onTutup, o
             ? keysLoading.map(k => (
                 <div key={k} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-800">
                   <Loader2 size={13} className="text-blue-400 animate-spin flex-shrink-0" />
-                  <span className="text-xs text-slate-500 flex-1">{DATASET_LABELS[k]}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-1">{DATASET_LABELS[k]}</span>
                   <span className="text-[10px] font-semibold text-slate-400 uppercase">Mengecek...</span>
                 </div>
               ))
@@ -146,7 +146,7 @@ export function ModalCekData({ tahun, indikator, hasilCek, sedangCek, onTutup, o
         </div>
         {!sedangCek && (
           <div className="px-6 pb-5 flex gap-3">
-            <button onClick={onTutup} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors">
+            <button onClick={onTutup} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
               {bisa_dieksekusi ? 'Batal' : 'Pilih Tahun Lain'}
             </button>
             {bisa_dieksekusi && (
@@ -176,10 +176,10 @@ export function ModalAlertKomboTidakAda({ info, onTutup, onAmbilDariBPS }) {
             <div className="font-bold text-slate-900 dark:text-white text-sm">Data Belum Tersedia di Database</div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-slate-400">{INDIKATOR_ICON_MAP[indikator]}</span>
-              <span className="text-xs text-slate-500">{INDIKATOR_LABELS[indikator]}</span>
-              <span className="text-slate-300 text-xs">·</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{INDIKATOR_LABELS[indikator]}</span>
+              <span className="text-slate-300 dark:text-slate-600 text-xs">·</span>
               <Calendar size={11} className="text-slate-400" />
-              <span className="text-xs text-slate-500">Tahun {tahun}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Tahun {tahun}</span>
             </div>
           </div>
         </div>
@@ -193,7 +193,7 @@ export function ModalAlertKomboTidakAda({ info, onTutup, onAmbilDariBPS }) {
           </div>
         </div>
         <div className="px-6 pb-5 flex gap-3">
-          <button onClick={onTutup} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors">Batal</button>
+          <button onClick={onTutup} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Batal</button>
           <button onClick={() => onAmbilDariBPS(tahun, indikator)} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm">
             <Play size={13} /> Ambil dari BPS
           </button>
@@ -228,11 +228,12 @@ export function SelectorAnalisis({ hasilAnalisis, kombinasiTersedia, tahunTerpil
     <div ref={wrapRef} className="flex items-stretch shadow-md rounded-lg">
       {/* Indikator */}
       <div className="relative">
-        <button onClick={() => { setTerbukaIndikator(!terbukaIndikator); setTerbukaTahun(false); }}
-          className={`flex items-center gap-2.5 h-10 px-4 min-w-[195px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-l-lg text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-50 transition-colors select-none ${terbukaIndikator ? 'bg-slate-50' : ''}`}>
-          <span className="text-slate-400 flex-shrink-0">{INDIKATOR_ICON_MAP[activeInd]}</span>
+        <button
+          onClick={() => { setTerbukaIndikator(!terbukaIndikator); setTerbukaTahun(false); }}
+          className={`flex items-center gap-2.5 h-10 px-4 min-w-[195px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-l-lg text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors select-none ${terbukaIndikator ? 'bg-slate-50 dark:bg-slate-700' : ''}`}>
+          <span className="text-slate-400 dark:text-slate-400 flex-shrink-0">{INDIKATOR_ICON_MAP[activeInd]}</span>
           <span className="flex-1 text-left truncate">{INDIKATOR_LABELS[activeInd]}</span>
-          <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform duration-150 ${terbukaIndikator ? 'rotate-180' : ''}`} />
+          <ChevronDown size={13} className={`text-slate-400 dark:text-slate-400 flex-shrink-0 transition-transform duration-150 ${terbukaIndikator ? 'rotate-180' : ''}`} />
         </button>
         {terbukaIndikator && (
           <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-white dark:bg-slate-800 rounded-lg shadow-xl z-[1010] border border-slate-200 dark:border-slate-700 overflow-hidden py-1">
@@ -240,9 +241,15 @@ export function SelectorAnalisis({ hasilAnalisis, kombinasiTersedia, tahunTerpil
               const ada = TAHUN_TERSEDIA.some(th => !!kombinasiTersedia[`${th}|${ind}`]);
               const isActive = activeInd === ind;
               return (
-                <button key={ind} onClick={() => { setTerbukaIndikator(false); onPilih(activeThn, ind); }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-left transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'}`}>
-                  <span className={isActive ? 'text-blue-500' : 'text-slate-400'}>{INDIKATOR_ICON_MAP[ind]}</span>
+                <button
+                  key={ind}
+                  onClick={() => { setTerbukaIndikator(false); onPilih(activeThn, ind); }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-left transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}>
+                  <span className={isActive ? 'text-blue-500' : 'text-slate-400 dark:text-slate-400'}>{INDIKATOR_ICON_MAP[ind]}</span>
                   <span className="flex-1">{INDIKATOR_LABELS[ind]}</span>
                   <span className="flex items-center gap-1.5 flex-shrink-0">
                     {ada && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
@@ -257,11 +264,12 @@ export function SelectorAnalisis({ hasilAnalisis, kombinasiTersedia, tahunTerpil
       <div className="w-px bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
       {/* Tahun */}
       <div className="relative">
-        <button onClick={() => { setTerbukaTahun(!terbukaTahun); setTerbukaIndikator(false); }}
-          className={`flex items-center gap-2.5 h-10 px-4 min-w-[130px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-l-0 rounded-r-lg text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-50 transition-colors select-none ${terbukaTahun ? 'bg-slate-50' : ''}`}>
-          <Calendar size={13} className="text-slate-400 flex-shrink-0" />
+        <button
+          onClick={() => { setTerbukaTahun(!terbukaTahun); setTerbukaIndikator(false); }}
+          className={`flex items-center gap-2.5 h-10 px-4 min-w-[130px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-l-0 rounded-r-lg text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors select-none ${terbukaTahun ? 'bg-slate-50 dark:bg-slate-700' : ''}`}>
+          <Calendar size={13} className="text-slate-400 dark:text-slate-400 flex-shrink-0" />
           <span className="flex-1 text-left">Tahun {activeThn}</span>
-          <ChevronDown size={13} className={`text-slate-400 flex-shrink-0 transition-transform duration-150 ${terbukaTahun ? 'rotate-180' : ''}`} />
+          <ChevronDown size={13} className={`text-slate-400 dark:text-slate-400 flex-shrink-0 transition-transform duration-150 ${terbukaTahun ? 'rotate-180' : ''}`} />
         </button>
         {terbukaTahun && (
           <div className="absolute top-full right-0 mt-1 min-w-[160px] bg-white dark:bg-slate-800 rounded-lg shadow-xl z-[1010] border border-slate-200 dark:border-slate-700 overflow-hidden py-1">
@@ -269,8 +277,14 @@ export function SelectorAnalisis({ hasilAnalisis, kombinasiTersedia, tahunTerpil
               const ada = ['ALL','RLS','APS','RASIO'].some(ind => !!kombinasiTersedia[`${th}|${ind}`]);
               const isActive = activeThn === th;
               return (
-                <button key={th} onClick={() => { setTerbukaTahun(false); onPilih(th, activeInd); }}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm font-medium text-left transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'}`}>
+                <button
+                  key={th}
+                  onClick={() => { setTerbukaTahun(false); onPilih(th, activeInd); }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm font-medium text-left transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}>
                   <span>{th}</span>
                   <span className="flex items-center gap-1.5">
                     {ada && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
@@ -339,27 +353,31 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
             <TrendingUp className="text-indigo-500" size={22} />
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Panel Tren Pendidikan</h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">{daftarTersimpan.length} analisis · {tahunCovered.length} tahun ({tahunCovered.join(', ')})</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{daftarTersimpan.length} analisis · {tahunCovered.length} tahun ({tahunCovered.join(', ')})</p>
             </div>
           </div>
-          <button onClick={onTutup} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={17} className="text-slate-500" /></button>
+          {onTutup && (
+            <button onClick={onTutup} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={17} className="text-slate-500" />
+            </button>
+          )}
         </div>
 
         {daftarTersimpan.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mb-4"><TrendingUp size={28} className="text-indigo-400" /></div>
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Belum ada data tersimpan</p>
-            <p className="text-xs text-slate-400 mt-1">Jalankan analisis dan simpan untuk melihat tren</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Jalankan analisis dan simpan untuk melihat tren</p>
           </div>
         ) : (
           <>
             {/* KPI */}
             <div className="grid grid-cols-4 gap-3 mb-5">
               {[
-                { label:'Total Analisis',      val: daftarTersimpan.length,  color:'indigo' },
-                { label:'Tahun Tercakup',       val: tahunCovered.length,     color:'blue'   },
-                { label:'BAIK Terbaru',         val: latestData?.BAIK ?? '-', color:'green', delta: delta?.BAIK,   positif: true  },
-                { label:'KRITIS Terbaru',       val: latestData?.KRITIS??'-', color:'red',   delta: delta?.KRITIS, positif: false },
+                { label:'Total Analisis',  val: daftarTersimpan.length,  color:'indigo' },
+                { label:'Tahun Tercakup',  val: tahunCovered.length,     color:'blue'   },
+                { label:'BAIK Terbaru',    val: latestData?.BAIK ?? '-', color:'green', delta: delta?.BAIK,   positif: true  },
+                { label:'KRITIS Terbaru',  val: latestData?.KRITIS??'-', color:'red',   delta: delta?.KRITIS, positif: false },
               ].map(c => (
                 <div key={c.label} className={`bg-${c.color}-50 dark:bg-${c.color}-900/20 rounded-xl p-3 border border-${c.color}-200 dark:border-${c.color}-800`}>
                   <div className={`text-[10px] font-semibold text-${c.color}-600 dark:text-${c.color}-400 mb-1`}>{c.label}</div>
@@ -376,7 +394,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                   const ada = indsAvailable.includes(ind);
                   return (
                     <button key={ind} onClick={() => ada && setFilterInd(ind)}
-                      className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${filterInd === ind ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : ada ? 'text-slate-500 hover:text-slate-700' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${filterInd === ind ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : ada ? 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200' : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'}`}>
                       <span style={{ color: filterInd === ind ? INDIKATOR_COLORS[ind] : undefined }}>{INDIKATOR_ICON_MAP[ind]}</span>
                       {ind === 'ALL' ? 'Semua' : ind}
                     </button>
@@ -386,7 +404,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 ml-auto">
                 {[['distribusi','Bar',<BarChart2 size={12}/>],['area','Area',<TrendingUp size={12}/>],['radar','Radar',<Activity size={12}/>],['table','Tabel',<Table size={12}/>]].map(([key,lbl,icon]) => (
                   <button key={key} onClick={() => setChartMode(key)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${chartMode === key ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${chartMode === key ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
                     {icon} {lbl}
                   </button>
                 ))}
@@ -397,7 +415,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
                 {chartData.length === 0 ? (
-                  <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Tidak ada data untuk indikator ini</div>
+                  <div className="h-48 flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">Tidak ada data untuk indikator ini</div>
                 ) : (
                   <>
                     <div className="flex items-center justify-between mb-3">
@@ -408,11 +426,11 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                           {chartMode === 'radar' && 'Perbandingan Lintas Indikator'}
                           {chartMode === 'table' && 'Riwayat Analisis Tersimpan'}
                         </div>
-                        <div className="text-[10px] text-slate-500">{INDIKATOR_LABELS[filterInd]} · {chartData.length} titik data</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">{INDIKATOR_LABELS[filterInd]} · {chartData.length} titik data</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {[['bg-green-400','BAIK'],['bg-amber-400','SEDANG'],['bg-red-400','KRITIS']].map(([cls,lbl]) => (
-                          <div key={lbl} className="flex items-center gap-1"><div className={`w-2 h-2 rounded-full ${cls}`}/><span className="text-[10px] text-slate-500">{lbl}</span></div>
+                          <div key={lbl} className="flex items-center gap-1"><div className={`w-2 h-2 rounded-full ${cls}`}/><span className="text-[10px] text-slate-500 dark:text-slate-400">{lbl}</span></div>
                         ))}
                       </div>
                     </div>
@@ -469,7 +487,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                       <div className="overflow-x-auto max-h-52 overflow-y-auto">
                         <table className="w-full text-left min-w-[400px]">
                           <thead className="sticky top-0 bg-slate-100 dark:bg-slate-700">
-                            <tr className="text-[10px] font-semibold text-slate-500 uppercase">
+                            <tr className="text-[10px] font-semibold text-slate-500 dark:text-slate-300 uppercase">
                               {['Tahun','Indikator','BAIK','SEDANG','KRITIS','Total'].map(h => <th key={h} className="px-3 py-2">{h}</th>)}
                             </tr>
                           </thead>
@@ -478,10 +496,10 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                               <tr key={i} className="hover:bg-white dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-3 py-2 text-xs font-bold text-slate-900 dark:text-white">{row.tahun}</td>
                                 <td className="px-3 py-2"><span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: INDIKATOR_COLORS[filterInd]+'20', color: INDIKATOR_COLORS[filterInd] }}>{filterInd}</span></td>
-                                <td className="px-3 py-2 text-xs font-bold text-green-600">{row.BAIK}</td>
-                                <td className="px-3 py-2 text-xs font-bold text-amber-600">{row.SEDANG}</td>
-                                <td className="px-3 py-2 text-xs font-bold text-red-600">{row.KRITIS}</td>
-                                <td className="px-3 py-2 text-xs font-semibold text-slate-600">{row.TOTAL}</td>
+                                <td className="px-3 py-2 text-xs font-bold text-green-600 dark:text-green-400">{row.BAIK}</td>
+                                <td className="px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400">{row.SEDANG}</td>
+                                <td className="px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400">{row.KRITIS}</td>
+                                <td className="px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">{row.TOTAL}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -495,7 +513,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
               {/* Sidebar */}
               <div className="flex flex-col gap-3">
                 <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">% Provinsi BAIK (Terbaru)</div>
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">% Provinsi BAIK (Terbaru)</div>
                   <div className="space-y-2.5">
                     {indsAvailable.map(ind => {
                       const last  = trendData[ind].at(-1);
@@ -513,7 +531,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                           <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                             <div className="h-full rounded-full" style={{ width:`${pct}%`, background:'linear-gradient(90deg,#10b981,#34d399)' }} />
                           </div>
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5"><span>{last.BAIK} BAIK</span><span>{last.KRITIS} KRITIS</span></div>
+                          <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 mt-0.5"><span>{last.BAIK} BAIK</span><span>{last.KRITIS} KRITIS</span></div>
                         </div>
                       );
                     })}
@@ -533,12 +551,12 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
                 )}
 
                 <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Cakupan Tahun</div>
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Cakupan Tahun</div>
                   <div className="flex flex-wrap gap-1.5">
                     {TAHUN_TERSEDIA.map(thn => {
                       const ada = tahunCovered.includes(thn);
                       return (
-                        <div key={thn} className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border ${ada ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'}`}>
+                        <div key={thn} className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border ${ada ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500'}`}>
                           {thn}{ada && ' ✓'}
                         </div>
                       );
@@ -552,7 +570,7 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
             {chartData.length >= 2 && (
               <div className="mt-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
                 <div className="text-xs font-bold text-slate-900 dark:text-white mb-0.5">Total Provinsi Teranalisis per Tahun</div>
-                <div className="text-[10px] text-slate-500 mb-3">{INDIKATOR_LABELS[filterInd]}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mb-3">{INDIKATOR_LABELS[filterInd]}</div>
                 <ResponsiveContainer width="100%" height={90}>
                   <LineChart data={chartData} margin={{ top:4, right:16, left:-20, bottom:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.5} />
@@ -574,13 +592,17 @@ export function TrendPanel({ daftarTersimpan, onTutup }) {
 
 // ─── PANEL METADATA ──────────────────────────────────────────
 export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih, loadingDataset, onTutup, onUnduhDataset, menuDatasetTerbuka, setMenuDatasetTerbuka }) {
+  const [localMenuTerbuka, setLocalMenuTerbuka] = useState(false);
+  const isMenuOpen = menuDatasetTerbuka !== undefined ? menuDatasetTerbuka : localMenuTerbuka;
+  const setIsMenuOpen = setMenuDatasetTerbuka || setLocalMenuTerbuka;
+
   const ind = hasilAnalisis?.indikator || 'ALL';
 
   const ScoreBox = ({ label, range, score, color }) => (
     <div className={`bg-white dark:bg-slate-900 rounded-lg p-3 border border-${color}-200 dark:border-${color}-700`}>
       <div className={`text-[10px] font-bold text-${color}-600 dark:text-${color}-400 mb-0.5`}>{label}</div>
       <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{range}</div>
-      <div className={`mt-1 text-[10px] font-black text-${color}-600`}>Skor {score}</div>
+      <div className={`mt-1 text-[10px] font-black text-${color}-600 dark:text-${color}-400`}>Skor {score}</div>
     </div>
   );
 
@@ -594,32 +616,45 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
             <FileText className="text-blue-500" size={22} />
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Metadata & Metode Analisis</h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">Penjelasan lengkap indikator, bobot, dan cara perhitungan</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Penjelasan lengkap indikator, bobot, dan cara perhitungan</p>
             </div>
           </div>
           <div className="flex gap-2">
             <div className="relative">
-              <button onClick={() => setMenuDatasetTerbuka(!menuDatasetTerbuka)}
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm">
                 <Download size={12} /> Dataset
               </button>
-              {menuDatasetTerbuka && (
+              {isMenuOpen && (
                 <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] overflow-hidden border border-slate-200 dark:border-slate-700 py-1">
-                  {[['ALL','Semua Dataset',<Database size={12} className="text-purple-500"/>],['RLS','Dataset RLS',<BookOpen size={12} className="text-purple-500"/>],['APS','Dataset APS',<GraduationCap size={12} className="text-blue-500"/>],['RASIO','Dataset Rasio',<Users size={12} className="text-green-500"/>]].map(([k,lbl,icon]) => (
-                    <button key={k} onClick={() => onUnduhDataset(k)} className="w-full text-left px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2">
-                      {icon} {lbl} {loadingDataset[k] && '(Memproses...)'}
+                  {[
+                    ['ALL',   'Semua Dataset',  <Database size={12} className="text-purple-500"/>],
+                    ['RLS',   'Dataset RLS',    <BookOpen size={12} className="text-purple-500"/>],
+                    ['APS',   'Dataset APS',    <GraduationCap size={12} className="text-blue-500"/>],
+                    ['RASIO', 'Dataset Rasio',  <Users size={12} className="text-green-500"/>],
+                  ].map(([k,lbl,icon]) => (
+                    <button key={k} onClick={() => { onUnduhDataset(k); setIsMenuOpen(false); }}
+                      className="w-full text-left px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+                      {icon} {lbl} {loadingDataset[k] && <span className="text-slate-400 dark:text-slate-500">(Memproses...)</span>}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button onClick={onTutup} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={17} className="text-slate-500" /></button>
+            {onTutup && (
+              <button onClick={onTutup} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={17} className="text-slate-500" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* ── Sumber Data ── */}
         <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-          <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1.5"><Database size={13} className="text-slate-500"/> Sumber Data — BPS Web API Tahun {hasilAnalisis?.tahun || tahunTerpilih}</div>
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1.5">
+            <Database size={13} className="text-slate-500 dark:text-slate-400"/> Sumber Data — BPS Web API Tahun {hasilAnalisis?.tahun || tahunTerpilih}
+          </div>
           <div className="space-y-1.5">
             {(ind === 'ALL' || ind === 'RLS') && <div className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 flex-shrink-0"/><span><strong>RLS</strong> — BPS Susenas, Variabel 459. Data rata-rata lama sekolah penduduk 25 tahun ke atas, dipilah menurut jenis kelamin per provinsi.</span></div>}
             {(ind === 'ALL' || ind === 'APS') && <div className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"/><span><strong>APS</strong> — BPS Susenas, Variabel 2211. Persentase penduduk yang masih bersekolah pada kelompok umur 7–12, 13–15, 16–18, dan 19–23 tahun.</span></div>}
@@ -646,7 +681,7 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
               ))}
             </div>
             <div className="mt-3 p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-              <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-mono font-semibold">SPT = (RLS × 0.30) + (APS × 0.50) + (Rasio × 0.20)</p>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-mono font-semibold">IPK = (RLS × 0.30) + (APS × 0.50) + (Rasio × 0.20)</p>
               <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1">Rentang skor: 1.0 (sangat kritis) — 3.0 (sangat baik) &nbsp;|&nbsp; BAIK ≥ 2.4 &nbsp;·&nbsp; SEDANG ≥ 1.8 &nbsp;·&nbsp; KRITIS &lt; 1.8</p>
             </div>
           </div>
@@ -663,7 +698,7 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
                 <span className="text-[10px] px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded font-semibold">{ind === 'ALL' ? 'Bobot 30%' : 'Indikator Tunggal'}</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 mb-3 border border-purple-200 dark:border-purple-700">
-                <div className="text-[10px] font-bold text-purple-600 mb-1.5">📐 CARA HITUNG</div>
+                <div className="text-[10px] font-bold text-purple-600 dark:text-purple-400 mb-1.5">📐 CARA HITUNG</div>
                 <ol className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">1.</span> Ambil nilai RLS laki-laki dan RLS perempuan dari BPS Susenas per provinsi.</li>
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">2.</span> Hitung rata-rata: <code className="bg-purple-100 dark:bg-purple-900/30 px-1 rounded text-purple-700 dark:text-purple-300">(RLS_L + RLS_P) / 2</code></li>
@@ -687,7 +722,7 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
                 <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded font-semibold">{ind === 'ALL' ? 'Bobot 50%' : 'Indikator Tunggal'}</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 mb-3 border border-blue-200 dark:border-blue-700">
-                <div className="text-[10px] font-bold text-blue-600 mb-1.5">📐 CARA HITUNG</div>
+                <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-1.5">📐 CARA HITUNG</div>
                 <ol className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">1.</span> Ambil nilai APS dari BPS untuk 4 kelompok umur per provinsi.</li>
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">2.</span> Konversi tiap kelompok ke skor: &gt;80%→3, 70–80%→2, &lt;70%→1.</li>
@@ -718,13 +753,13 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
                 <span className="text-[10px] px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded font-semibold">{ind === 'ALL' ? 'Bobot 20%' : 'Indikator Tunggal'}</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 mb-3 border border-green-200 dark:border-green-700">
-                <div className="text-[10px] font-bold text-green-600 mb-1.5">📐 CARA HITUNG</div>
+                <div className="text-[10px] font-bold text-green-600 dark:text-green-400 mb-1.5">📐 CARA HITUNG</div>
                 <ol className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">1.</span> Untuk tiap jenjang (SD/SMP/SMA/SMK): <code className="bg-green-100 dark:bg-green-900/30 px-1 rounded text-green-700 dark:text-green-300">Rasio_jenjang = Jumlah_Murid / Jumlah_Guru</code></li>
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">2.</span> Hitung rata-rata 4 jenjang: <code className="bg-green-100 dark:bg-green-900/30 px-1 rounded text-green-700 dark:text-green-300">(R_SD + R_SMP + R_SMA + R_SMK) / 4</code></li>
                   <li><span className="font-semibold text-slate-800 dark:text-slate-200">3.</span> Konversi ke skor: &lt;12→3, 12–16→2, &gt;16→1.</li>
                 </ol>
-                <p className="text-[10px] text-slate-500 mt-2">⚠️ Semakin kecil rasio = guru lebih mencukupi = skor lebih baik. Guru negeri dan swasta dihitung bersama (data Dapodik).</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">⚠️ Semakin kecil rasio = guru lebih mencukupi = skor lebih baik. Guru negeri dan swasta dihitung bersama (data Dapodik).</p>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <ScoreBox label="BAIK" range="< 12 murid/guru" score={3} color="green"/>
@@ -735,7 +770,7 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
                 {['SD','SMP','SMA','SMK'].map(j => (
                   <div key={j} className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-green-200 dark:border-green-700 text-center">
                     <div className="text-xs font-black text-green-700 dark:text-green-300">{j}</div>
-                    <div className="text-[9px] text-slate-500 mt-0.5">Negeri + Swasta</div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">Negeri + Swasta</div>
                   </div>
                 ))}
               </div>
@@ -749,7 +784,7 @@ export function MetadataPanel({ hasilAnalisis, indikatorTerpilih, tahunTerpilih,
           <ul className="space-y-1 text-[11px] text-amber-700 dark:text-amber-300">
             <li>• Data BPS Susenas diambil melalui API resmi; nilai bisa berbeda jika BPS merilis revisi data di luar siklus tahunan.</li>
             <li>• Rasio Murid-Guru dari Dapodik mencakup guru aktif terdaftar, tidak mempertimbangkan guru yang bertugas rangkap atau tidak mengajar.</li>
-            <li>• Pembobotan SPT bersifat normatif dan dapat disesuaikan dengan kebijakan masing-masing instansi pengguna.</li>
+            <li>• Pembobotan IPK bersifat normatif dan dapat disesuaikan dengan kebijakan masing-masing instansi pengguna.</li>
             <li>• Provinsi dengan data tidak lengkap (salah satu dataset kosong) tetap dihitung menggunakan dataset yang tersedia.</li>
           </ul>
         </div>
