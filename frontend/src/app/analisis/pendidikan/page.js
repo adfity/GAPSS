@@ -1,92 +1,327 @@
 "use client";
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
-  Play, Download, Plus, Minus, ChevronDown, Filter, Save, X,
-  GraduationCap, RotateCcw, ChevronUp, Info, Table, FileText,
-  ClipboardList, Search, Eye, EyeOff, Activity, Map, Calendar, Loader2,
+  Play, Download, ChevronDown, Filter, Save, X,
+  GraduationCap, RotateCcw, Info, FileText,
+  Search, Map, Calendar, Loader2,
   BarChart2, BookOpen, Users, Check, TrendingUp,
+  Home, ClipboardList,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import HeaderBar from '@/components/layout/HeaderBar';
 import SideBar from "@/components/layout/sideBar";
+import Footerauth from '@/components/layout/footerauth';
 import {
-  KATEGORI, TAHUN_TERSEDIA, DATASET_LABELS, INDIKATOR_LABELS, INDIKATOR_ICON_MAP,
-  BASEMAPS, PUSAT_DEFAULT, ZOOM_DEFAULT, PANEL_HEIGHT_DEFAULT, PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX,
+  KATEGORI, TAHUN_TERSEDIA, DATASET_LABELS, INDIKATOR_LABELS,
+  BASEMAPS, PUSAT_DEFAULT, ZOOM_DEFAULT,
   dbToUI, getWarnaByIndikator, getKategoriByIndikator,
   ModalCekData, ModalAlertKomboTidakAda, SelectorAnalisis, TrendPanel, MetadataPanel,
 } from '@/components/analisis/sdm/educate';
 
-export default function PendidikanPage() {
-  const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
-  const [hasilAnalisis, setHasilAnalisis]           = useState(null);
-  const [kategoriTerpilih, setKategoriTerpilih]     = useState('SEMUA');
-  const [indikatorTerpilih, setIndikatorTerpilih]   = useState('SEMUA');
-  const [adalahClient, setAdalahClient]             = useState(false);
-  const [petaSedangMemuat, setPetaSedangMemuat]     = useState(true);
+// ─── Helpers
+const cn = (...cls) => cls.filter(Boolean).join(' ');
 
-  const [daftarTersimpan, setDaftarTersimpan]       = useState([]);
-  const [sedangMuatAwal, setSedangMuatAwal]         = useState(true);
-  const [alertKomboTidakAda, setAlertKomboTidakAda] = useState(null);
-  const [dataBaruDariBPS, setDataBaruDariBPS]       = useState(false);
+const Card = ({ children, className = '' }) => (
+  <div className={cn('bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm', className)}>
+    {children}
+  </div>
+);
 
-  const [tahunTerpilih, setTahunTerpilih]           = useState(2024);
-  const [sedangCekData, setSedangCekData]           = useState(false);
-  const [hasilCekData, setHasilCekData]             = useState(null);
-  const pendingAnalisisRef                           = useRef(null);
+const Btn = ({ children, variant = 'primary', className = '', ...props }) => {
+  const v = {
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    ghost:   'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
+    danger:  'bg-slate-600 hover:bg-slate-700 text-white',
+    save:    'bg-green-600 hover:bg-green-700 text-white',
+  };
+  return (
+    <button className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-50', v[variant], className)} {...props}>
+      {children}
+    </button>
+  );
+};
 
-  const [menuUnduhTerbuka, setMenuUnduhTerbuka]     = useState(false);
-  const [menuFilterTerbuka, setMenuFilterTerbuka]   = useState(false);
-  const [menuDatasetTerbuka, setMenuDatasetTerbuka] = useState(false);
-  const [menuPilihanIndikatorTerbuka, setMenuPilihanIndikatorTerbuka] = useState(false);
-  const [menuBasemapTerbuka, setMenuBasemapTerbuka] = useState(false);
-  const [basemapTerpilih, setBasemapTerpilih]       = useState('CARTO_LIGHT');
+const MapBtn = ({ children, onClick, className = '' }) => (
+  <button onClick={onClick} className={cn('w-9 h-9 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl flex items-center justify-center shadow-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors', className)}>
+    {children}
+  </button>
+);
 
-  const [panelInfoTerbuka, setPanelInfoTerbuka]         = useState(false);
-  const [panelTabelTerbuka, setPanelTabelTerbuka]       = useState(false);
-  const [panelMetadataTerbuka, setPanelMetadataTerbuka] = useState(false);
-  const [panelKebijakanTerbuka, setPanelKebijakanTerbuka] = useState(false);
-  const [panelTrendTerbuka, setPanelTrendTerbuka]       = useState(false);
+const TABS = [
+  { id: 'info',      label: 'Info',      Icon: Info          },
+  { id: 'kebijakan', label: 'Kebijakan', Icon: ClipboardList },
+  { id: 'metadata',  label: 'Metadata',  Icon: FileText      },
+  { id: 'tren',      label: 'Tren',      Icon: TrendingUp    },
+];
 
-  const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT_DEFAULT);
-  const [isDragging, setIsDragging]   = useState(false);
-  const dragStartY                     = useRef(null);
-  const dragStartHeight               = useRef(null);
-  const panelRef                       = useRef(null);
+const PRIORITY_STYLE = {
+  Tinggi: { bar: 'bg-red-500',   badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
+  Sedang: { bar: 'bg-amber-500', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
+  Rendah: { bar: 'bg-green-500', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700' },
+};
 
-  const [koordinatCursor, setKoordinatCursor] = useState({ lat: 0, lng: 0 });
-  const [currentZoom, setCurrentZoom]         = useState(ZOOM_DEFAULT);
-  const [modalSaveTerbuka, setModalSaveTerbuka] = useState(false);
-  const [namaSimpan, setNamaSimpan]           = useState('');
-  const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
-  const [modalAnalisisTerbuka, setModalAnalisisTerbuka] = useState(false);
-  const [pilihanIndikator, setPilihanIndikator] = useState('ALL');
-  const [pernahAnalisis, setPernahAnalisis]   = useState(false);
-  const [searchQuery, setSearchQuery]         = useState('');
-  const [searchTerbuka, setSearchTerbuka]     = useState(false);
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const [provinsiDipilih, setProvinsiDipilih] = useState(null);
-  const [modeBersih, setModeBersih]           = useState(false);
-  const [loadingDataset, setLoadingDataset]   = useState({ RLS: false, APS: false, RASIO: false });
-
-  const petaRef = useRef(null);
-  const [KontainerPeta, setKontainerPeta] = useState(null);
-  const [LapisanPeta, setLapisanPeta]     = useState(null);
-  const [GeoJSON, setGeoJSON]             = useState(null);
-  const [useMapEvents, setUseMapEvents]   = useState(null);
-
-  // ── Computed ──
-  const kombinasiTersedia = useMemo(() => {
-    const map = {};
-    daftarTersimpan.forEach(a => {
-      const ind = a.indikator || 'ALL';
-      const key = `${a.tahun}|${ind}`;
-      if (!map[key] || a.timestamp > map[key].timestamp)
-        map[key] = { timestamp: a.timestamp, analysis_id: a.analysis_id };
+// ── MapEventHandler
+function MapEventHandler({ setKoordinatCursor, setCurrentZoom }) {
+  const [rl, setRl] = useState(null);
+  useEffect(() => { import('react-leaflet').then(m => setRl(m)); }, []);
+  if (!rl) return null;
+  const { useMapEvents } = rl;
+  const Inner = () => {
+    useMapEvents({
+      mousemove: e => setKoordinatCursor({ lat: e.latlng.lat.toFixed(4), lng: e.latlng.lng.toFixed(4) }),
+      zoomend:   e => setCurrentZoom(e.target.getZoom()),
     });
-    return map;
-  }, [daftarTersimpan]);
+    return null;
+  };
+  return <Inner />;
+}
+
+// ══════════════════════════════════════════
+// PETA SECTION
+// ══════════════════════════════════════════
+function PetaSection({
+  hasilAnalisis, tahunTerpilih, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih,
+  sedangMenganalisis, sedangCekData, dataBaruDariBPS, pernahAnalisis,
+  onAnalisis, onSimpan, onReset,
+  leafletReady, MapCont, TileLay, GeoComp,
+  petaRef, basemap, setBasemap,
+  koordinatCursor, setKoordinatCursor, currentZoom, setCurrentZoom,
+  provinsiDipilih, setProvinsiDipilih,
+  searchOpen, setSearchOpen, searchQuery, setSearchQuery,
+  suggestions, handleSearch,
+  kombinasiTersedia, onPilihKombo, sedangMuatAwal,
+  jumlahKategori,
+}) {
+  const [showBasemap, setShowBasemap] = useState(false);
+  const [menuFilter,  setMenuFilter]  = useState(false);
+
+  const hitungScaleKm = (zoom) => ({5:1000,6:500,7:200,8:100,9:50,10:25})[Math.floor(zoom)] || 1000;
+
+  const getButtonText = () => {
+    if (sedangMenganalisis) return 'Memproses...';
+    if (sedangCekData)      return 'Memeriksa...';
+    if (!pernahAnalisis)    return 'Analisis';
+    return { SEMUA:'Semua Indikator', RLS:'Analisis RLS', APS:'Analisis APS', RASIO:'Analisis Rasio' }[indikatorTerpilih] || 'Analisis';
+  };
+
+  return (
+    <Card className="overflow-hidden border-2">
+      <div className="relative" style={{ height: 520 }}>
+        {/* Loading */}
+        {sedangMuatAwal && (
+          <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 size={28} className="text-blue-500 animate-spin"/>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Memuat data dari database...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Leaflet Map */}
+        {leafletReady && MapCont && (
+          <MapCont center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
+            <TileLay key={basemap} url={BASEMAPS[basemap].url} attribution={BASEMAPS[basemap].attribution}/>
+            <MapEventHandler setKoordinatCursor={setKoordinatCursor} setCurrentZoom={setCurrentZoom}/>
+            {hasilAnalisis?.matched_features?.features && (
+              <GeoComp
+                key={`${hasilAnalisis.tahun}-${indikatorTerpilih}-${kategoriTerpilih}-${provinsiDipilih}`}
+                data={{ type: 'FeatureCollection', features: hasilAnalisis.matched_features.features }}
+                style={(fitur) => {
+                  const a   = fitur.properties?.education_analysis || {};
+                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+                  const vis = kategoriTerpilih === 'SEMUA' || kat === kategoriTerpilih;
+                  const hl  = provinsiDipilih === a.nama_provinsi;
+                  return { fillColor: w, weight: hl ? 3 : 1.5, opacity: (vis && w !== '#cbd5e1') ? 1 : 0, color: hl ? '#fff' : 'rgba(255,255,255,0.6)', fillOpacity: (vis && w !== '#cbd5e1') ? 0.82 : 0 };
+                }}
+                onEachFeature={(fitur, lapisan) => {
+                  const a   = fitur.properties?.education_analysis || {};
+                  const dp  = a.data_pendidikan || {};
+                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+                  const wawasan = a.insights?.map(i => `<div style="margin-bottom:3px;padding-left:6px;border-left:2px solid ${w};font-size:9px;">${i}</div>`).join('') || '';
+                  lapisan.bindTooltip(
+                    `<div style="font-family:inherit;padding:3px;min-width:140px;">
+                       <div style="font-weight:900;font-size:11px;text-transform:uppercase;color:#0f172a;">${a.nama_provinsi || ''}</div>
+                       <div style="font-size:9px;font-weight:700;color:${w};margin-top:2px;">${kat || '-'}</div>
+                       <div style="font-size:8px;color:#64748b;margin-top:1px;">Skor: <strong>${a.skor_total ?? '-'}</strong></div>
+                     </div>`, { sticky: true, opacity: 0.96 }
+                  );
+                  let indHTML = '';
+                  if (indikatorTerpilih === 'SEMUA') {
+                    indHTML = `<div style="display:grid;gap:3px;">
+                      <div style="background:#f5f3ff;padding:5px;border-radius:5px;border-left:2px solid #8b5cf6;"><div style="font-size:7px;font-weight:700;color:#4c1d95;">LAMA SEKOLAH</div><div style="font-size:11px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' th' : '-'}</div></div>
+                      <div style="background:#eff6ff;padding:5px;border-radius:5px;border-left:2px solid #3b82f6;"><div style="font-size:7px;font-weight:700;color:#1e3a8a;">SKOR APS</div><div style="font-size:11px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>
+                      <div style="background:#f0fdf4;padding:5px;border-radius:5px;border-left:2px solid #10b981;"><div style="font-size:7px;font-weight:700;color:#14532d;">RASIO M/G</div><div style="font-size:11px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>
+                    </div>`;
+                  } else if (indikatorTerpilih === 'RLS') {
+                    indHTML = `<div style="background:#f5f3ff;padding:8px;border-radius:8px;border-left:3px solid #8b5cf6;"><div style="font-size:8px;font-weight:700;color:#4c1d95;">RATA-RATA LAMA SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' tahun' : '-'}</div></div>`;
+                  } else if (indikatorTerpilih === 'APS') {
+                    indHTML = `<div style="background:#eff6ff;padding:8px;border-radius:8px;border-left:3px solid #3b82f6;"><div style="font-size:8px;font-weight:700;color:#1e3a8a;">ANGKA PARTISIPASI SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>`;
+                  } else if (indikatorTerpilih === 'RASIO') {
+                    indHTML = `<div style="background:#f0fdf4;padding:8px;border-radius:8px;border-left:3px solid #10b981;"><div style="font-size:8px;font-weight:700;color:#14532d;">RASIO MURID-GURU</div><div style="font-size:16px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>`;
+                  }
+                  lapisan.bindPopup(
+                    `<div style="font-family:inherit;min-width:240px;">
+                       <div style="background:${w};color:white;padding:8px 10px;border-radius:8px 8px 0 0;margin:-1px -1px 8px -1px;">
+                         <div style="font-weight:900;font-size:12px;">${a.nama_provinsi || ''}</div>
+                         <div style="font-size:10px;font-weight:700;opacity:0.9;">${kat || '-'} · Skor: ${a.skor_total ?? '-'}</div>
+                       </div>
+                       <div style="padding:0 4px 4px;">
+                         <div style="margin-bottom:6px;">${indHTML}</div>
+                         <div style="font-size:9px;color:#334155;line-height:1.4;background:#f8fafc;padding:6px;border-radius:5px;">${wawasan}</div>
+                       </div>
+                     </div>`, { maxWidth: 280, maxHeight: 400 }
+                  );
+                }}
+              />
+            )}
+          </MapCont>
+        )}
+
+        {/* Kiri atas: Zoom + Basemap + Search */}
+        <div className="absolute top-3 left-3 z-[400] flex flex-col gap-1.5">
+          <MapBtn onClick={() => petaRef.current?.zoomIn()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">+</MapBtn>
+          <MapBtn onClick={() => petaRef.current?.zoomOut()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">−</MapBtn>
+          <div className="relative">
+            <MapBtn onClick={() => setShowBasemap(!showBasemap)}>
+              <Map size={14} className="text-slate-600 dark:text-slate-300"/>
+            </MapBtn>
+            {showBasemap && (
+              <div className="absolute left-full ml-2 top-0 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl z-[500] border border-slate-200 dark:border-slate-700 py-1">
+                <div className="px-3 py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">Basemap</div>
+                {Object.entries(BASEMAPS).map(([k, bm]) => (
+                  <button key={k} onClick={() => { setBasemap(k); setShowBasemap(false); }}
+                    className={cn('w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
+                      basemap === k ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-700 dark:text-slate-300')}>
+                    {bm.label} {basemap === k && <Check size={12}/>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {hasilAnalisis && (
+            <div className="relative">
+              {searchOpen ? (
+                <div className="absolute left-full ml-2 top-0 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 w-56">
+                  <div className="p-2 flex gap-1.5">
+                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && handleSearch()} placeholder="Cari provinsi..." autoFocus
+                      className="flex-1 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-blue-500 outline-none"/>
+                    <button onClick={() => handleSearch()} className="bg-blue-600 hover:bg-blue-700 text-white px-2 rounded-lg"><Search size={12}/></button>
+                    <button onClick={() => { setSearchOpen(false); setSearchQuery(''); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-600 px-2 rounded-lg text-slate-700 dark:text-slate-200"><X size={12}/></button>
+                  </div>
+                  {suggestions.length > 0 && (
+                    <div className="border-t border-slate-100 dark:border-slate-700 max-h-36 overflow-y-auto">
+                      {suggestions.map((s, i) => (
+                        <button key={i} onClick={() => handleSearch(s.nama)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between text-xs">
+                          <span className="text-slate-900 dark:text-slate-200">{s.nama}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold ml-2" style={{ backgroundColor: s.warna + '20', color: s.warna }}>{s.kategori}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <MapBtn onClick={() => setSearchOpen(true)}><Search size={13} className="text-slate-600 dark:text-slate-300"/></MapBtn>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Tengah atas: Selector */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
+          <SelectorAnalisis
+            hasilAnalisis={hasilAnalisis}
+            kombinasiTersedia={kombinasiTersedia}
+            tahunTerpilih={tahunTerpilih}
+            onPilih={onPilihKombo}
+            sedangMuatAwal={sedangMuatAwal}
+          />
+        </div>
+
+        {/* Kanan atas: Koordinat + Legenda */}
+        <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2 items-end">
+          <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-1.5 rounded-lg shadow border border-slate-200 dark:border-slate-600">
+            <div className="text-[10px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+              <span className="text-blue-600 dark:text-blue-400 font-bold">Lat:</span> {koordinatCursor.lat} |{' '}
+              <span className="text-blue-600 dark:text-blue-400 font-bold">Lng:</span> {koordinatCursor.lng}
+            </div>
+          </div>
+          <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+            <div className="h-1.5 bg-slate-300 dark:bg-slate-600 mb-1" style={{ width: '64px', borderLeft: '2px solid #64748b', borderRight: '2px solid #64748b', borderBottom: '2px solid #64748b' }}/>
+            <div className="text-[10px] font-medium text-center text-slate-700 dark:text-slate-300">{hitungScaleKm(currentZoom)} km</div>
+          </div>
+          {/* Status IKP legend */}
+          <div className="bg-white/95 dark:bg-slate-800/90 p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-600 min-w-[110px]">
+            <div className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Status IKP</div>
+            {Object.entries(KATEGORI).map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-2 mb-1.5 last:mb-0">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: v.warna }}/>
+                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{v.label}</span>
+                </div>
+                {hasilAnalisis && (
+                  <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-1.5 py-0.5 rounded">
+                    {jumlahKategori[k]}
+                  </span>
+                )}
+              </div>
+            ))}
+            {hasilAnalisis && (
+              <div className="relative mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                <button onClick={() => setMenuFilter(!menuFilter)}
+                  className="w-full flex items-center justify-between gap-1 px-2 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <Filter size={9}/> {kategoriTerpilih} <ChevronDown size={9}/>
+                </button>
+                {menuFilter && (
+                  <div className="absolute bottom-full mb-1 right-0 w-full bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-[500] py-1">
+                    {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => (
+                      <button key={k} onClick={() => { setKategoriTerpilih(k); setMenuFilter(false); }}
+                        className={cn('w-full text-left px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
+                          kategoriTerpilih === k ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200')}>
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bawah tengah: Action buttons */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] flex gap-2">
+          <Btn onClick={onAnalisis} disabled={sedangMenganalisis || sedangCekData} variant="primary"
+            className="px-5 uppercase tracking-wider text-xs shadow-xl whitespace-nowrap"
+            style={{ boxShadow: '0 10px 30px rgba(37,99,235,0.30)' }}>
+            {(sedangCekData || sedangMenganalisis) ? <Loader2 size={13} className="animate-spin"/> : <Play size={13}/>}
+            {getButtonText()}
+          </Btn>
+          {dataBaruDariBPS && hasilAnalisis && (
+            <Btn variant="save" onClick={onSimpan} className="px-5 uppercase tracking-wider text-xs shadow-xl">
+              <Save size={13}/> Simpan
+            </Btn>
+          )}
+          {hasilAnalisis && (
+            <Btn variant="danger" onClick={onReset} className="px-5 uppercase tracking-wider text-xs shadow-xl">
+              <RotateCcw size={13}/> Reset
+            </Btn>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ══════════════════════════════════════════
+// TAB INFO — stats + tabel (tanpa expand insight)
+// ══════════════════════════════════════════
+function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih, eksporData }) {
+  const [menuUnduh, setMenuUnduh] = useState(false);
 
   const dataTerfilter = useMemo(() => {
     if (!hasilAnalisis?.matched_features?.features) return [];
@@ -102,8 +337,333 @@ export default function PendidikanPage() {
     return f;
   }, [hasilAnalisis, kategoriTerpilih, indikatorTerpilih]);
 
+  if (!hasilAnalisis) return (
+    <div className="py-10 text-center">
+      <BarChart2 size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3"/>
+      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada data. Klik <strong>Analisis</strong> di peta untuk memulai.</p>
+    </div>
+  );
+
+  const statsConfig = [
+    { label: 'Total Provinsi',   val: hasilAnalisis.total_success || 0, cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300' },
+    { label: 'Tinggi / Baik',    val: jumlahKategori.BAIK,              cls: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300' },
+    { label: 'Sedang',           val: jumlahKategori.SEDANG,            cls: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300' },
+    { label: 'Rendah / Kritis',  val: jumlahKategori.KRITIS,            cls: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 text-red-700 dark:text-red-300' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Badge header */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {hasilAnalisis.timestamp && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+            <Calendar size={9}/> {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
+          </span>
+        )}
+        {hasilAnalisis.tahun && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
+            <Calendar size={9}/> Tahun {hasilAnalisis.tahun}
+          </span>
+        )}
+        {hasilAnalisis.indikator && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800">
+            <BarChart2 size={9}/> {INDIKATOR_LABELS[hasilAnalisis.indikator] || hasilAnalisis.indikator}
+          </span>
+        )}
+      </div>
+
+      {/* Dataset aktif */}
+      {hasilAnalisis.dataset_aktif?.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Dataset aktif:</span>
+          {hasilAnalisis.dataset_aktif.map(k => (
+            <span key={k} className="text-[10px] px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700">
+              {DATASET_LABELS[k] || k}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {statsConfig.map(s => (
+          <div key={s.label} className={cn('border rounded-xl p-3', s.cls)}>
+            <div className="text-[9px] font-semibold uppercase tracking-wider opacity-70 mb-1">{s.label}</div>
+            <div className="text-2xl font-black">{s.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Keterangan IKP */}
+      <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
+        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Dasar Penilaian IKP Pendidikan</div>
+        <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
+          Skor gabungan: RLS + APS + Rasio Murid-Guru (normalisasi per indikator).{' '}
+          <span className="font-bold text-green-600 dark:text-green-400">BAIK</span> ≥ 0.70 ·{' '}
+          <span className="font-bold text-amber-600 dark:text-amber-400">SEDANG</span> 0.50–0.70 ·{' '}
+          <span className="font-bold text-red-600 dark:text-red-400">KRITIS</span> {'< 0.50'}
+        </p>
+      </div>
+
+      {/* ── TABEL ── */}
+      <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            {dataTerfilter.length} provinsi · Tahun {hasilAnalisis.tahun}
+          </p>
+          <div className="flex items-center gap-2">
+            <select value={kategoriTerpilih} onChange={e => setKategoriTerpilih(e.target.value)}
+              className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+              {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+            <div className="relative">
+              <Btn variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setMenuUnduh(!menuUnduh)}>
+                <Download size={12}/> Unduh
+              </Btn>
+              {menuUnduh && (
+                <div className="absolute top-full mt-1 right-0 w-32 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
+                  {['EXCEL','CSV','JSON','GEOJSON'].map(fmt => (
+                    <button key={fmt} onClick={() => { eksporData(fmt); setMenuUnduh(false); }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                      <Download size={10} className="text-blue-500"/> {fmt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/60">
+              <tr className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                <th className="px-3 py-3 text-center w-8">No</th>
+                <th className="px-4 py-3 text-left">Provinsi</th>
+                <th className="px-4 py-3 text-center">Skor</th>
+                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && <th className="px-4 py-3 text-center">RLS (thn)</th>}
+                {indikatorTerpilih === 'SEMUA'  && <th className="px-4 py-3 text-center">Skor APS</th>}
+                {indikatorTerpilih === 'APS'    && (<><th className="px-4 py-3 text-center">7–12</th><th className="px-4 py-3 text-center">13–15</th><th className="px-4 py-3 text-center">16–18</th><th className="px-4 py-3 text-center">19–23</th></>)}
+                {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && <th className="px-4 py-3 text-center">Rasio M/G</th>}
+                {indikatorTerpilih === 'RASIO'  && <th className="px-4 py-3">Per Jenjang</th>}
+                <th className="px-4 py-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dataTerfilter.map((fitur, idx) => {
+                const d   = fitur.properties.education_analysis;
+                const dp  = d.data_pendidikan || {};
+                const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+                const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+
+                return (
+                  <tr
+                    key={d.nama_provinsi}
+                    className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="px-3 py-2.5 text-center text-xs text-slate-400 dark:text-slate-500">{idx + 1}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: w }}/>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{d.nama_provinsi}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">{d.skor_total ?? '-'}</span>
+                    </td>
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RLS') && <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.RLS ?? '-'}</td>}
+                    {indikatorTerpilih === 'SEMUA'  && <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.SKOR_APS ?? '-'}</td>}
+                    {indikatorTerpilih === 'APS'    && (<>
+                      <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.APS_7_12  != null ? `${dp.APS_7_12}%`  : '-'}</td>
+                      <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.APS_13_15 != null ? `${dp.APS_13_15}%` : '-'}</td>
+                      <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.APS_16_18 != null ? `${dp.APS_16_18}%` : '-'}</td>
+                      <td className="px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">{dp.APS_19_23 != null ? `${dp.APS_19_23}%` : '-'}</td>
+                    </>)}
+                    {(indikatorTerpilih === 'SEMUA' || indikatorTerpilih === 'RASIO') && <td className="px-4 py-2.5 text-center text-xs font-bold text-slate-900 dark:text-white">{dp.RASIO_RATA ?? '-'}</td>}
+                    {indikatorTerpilih === 'RASIO' && (
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {[['SD',dp.RASIO_SD,'blue'],['SMP',dp.RASIO_SMP,'green'],['SMA',dp.RASIO_SMA,'yellow'],['SMK',dp.RASIO_SMK,'purple']].map(([j,v,c])=>(
+                            <span key={j} className={`px-1.5 py-0.5 bg-${c}-100 dark:bg-${c}-900/30 text-${c}-700 dark:text-${c}-300 text-[9px] font-medium rounded`}>{j}:{v??'-'}</span>
+                          ))}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                        style={{ borderColor: w + '60', color: w, backgroundColor: w + '15' }}>{kat}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════
+// TAB KEBIJAKAN
+// ══════════════════════════════════════════
+function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih }) {
+  const dataTerfilter = useMemo(() => {
+    if (!hasilAnalisis?.matched_features?.features) return [];
+    let f = hasilAnalisis.matched_features.features;
+    if (kategoriTerpilih !== 'SEMUA') f = f.filter(x => getKategoriByIndikator(x, indikatorTerpilih) === kategoriTerpilih);
+    return f;
+  }, [hasilAnalisis, kategoriTerpilih, indikatorTerpilih]);
+
+  if (!hasilAnalisis) return (
+    <div className="py-10 text-center">
+      <ClipboardList size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3"/>
+      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada data analisis.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ClipboardList className="text-blue-500" size={18}/>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Rekomendasi Kebijakan</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{dataTerfilter.length} provinsi · Tahun {hasilAnalisis.tahun}</p>
+          </div>
+        </div>
+        <select value={kategoriTerpilih} onChange={e => setKategoriTerpilih(e.target.value)}
+          className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+          {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-900/60">
+            <tr className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              <th className="px-3 py-3 text-center w-8">No</th>
+              <th className="px-4 py-3 text-left">Provinsi</th>
+              <th className="px-4 py-3 text-center">Status</th>
+              <th className="px-4 py-3 text-center">Prioritas</th>
+              <th className="px-4 py-3 text-left">Rekomendasi Kebijakan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dataTerfilter.map((fitur, idx) => {
+              const d   = fitur.properties.education_analysis;
+              const rek = d.rekomendasi?.[0];
+              const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+              const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+              const pStyle = PRIORITY_STYLE[rek?.priority] || PRIORITY_STYLE['Sedang'];
+
+              return (
+                <tr key={d.nama_provinsi} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                  <td className="px-3 py-2.5 text-center text-xs text-slate-400 dark:text-slate-500">{idx + 1}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: w }}/>
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{d.nama_provinsi}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                      style={{ borderColor: w + '60', color: w, backgroundColor: w + '15' }}>{kat}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    {rek?.priority ? (
+                      <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold border uppercase', pStyle.badge)}>
+                        {rek.priority}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 max-w-md">
+                    <ul className="space-y-0.5">
+                      {rek?.actions?.map((action, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                          <Check size={10} className="text-blue-400 shrink-0 mt-0.5"/>
+                          {action}
+                        </li>
+                      )) || <li className="text-[10px] text-slate-400 italic">Pertahankan kondisi saat ini</li>}
+                    </ul>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════
+// MAIN PAGE
+// ══════════════════════════════════════════
+export default function PendidikanPage() {
+  const API = 'http://127.0.0.1:8000/api';
+
+  const [hasilAnalisis, setHasilAnalisis]           = useState(null);
+  const [kategoriTerpilih, setKategoriTerpilih]     = useState('SEMUA');
+  const [indikatorTerpilih, setIndikatorTerpilih]   = useState('SEMUA');
+  const [isClient, setIsClient]                     = useState(false);
+  const [activeTab, setActiveTab]                   = useState('info');
+  const [daftarTersimpan, setDaftarTersimpan]       = useState([]);
+  const [sedangMuatAwal, setSedangMuatAwal]         = useState(true);
+  const [dataBaruDariBPS, setDataBaruDariBPS]       = useState(false);
+  const [tahunTerpilih, setTahunTerpilih]           = useState(2024);
+  const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
+  const [sedangCekData, setSedangCekData]           = useState(false);
+  const [hasilCekData, setHasilCekData]             = useState(null);
+  const [pilihanIndikator, setPilihanIndikator]     = useState('ALL');
+  const [pernahAnalisis, setPernahAnalisis]         = useState(false);
+  const [alertKomboTidakAda, setAlertKomboTidakAda] = useState(null);
+  const [modalAnalisisTerbuka, setModalAnalisisTerbuka] = useState(false);
+  const [modalSaveTerbuka, setModalSaveTerbuka]     = useState(false);
+  const [namaSimpan, setNamaSimpan]                 = useState('');
+  const [sedangMenyimpan, setSedangMenyimpan]       = useState(false);
+  const [basemap, setBasemap]                       = useState('OSM');
+  const [koordinatCursor, setKoordinatCursor]       = useState({ lat: '0.0000', lng: '0.0000' });
+  const [currentZoom, setCurrentZoom]               = useState(ZOOM_DEFAULT);
+  const [provinsiDipilih, setProvinsiDipilih]       = useState(null);
+  const [searchOpen, setSearchOpen]                 = useState(false);
+  const [searchQuery, setSearchQuery]               = useState('');
+  const [suggestions, setSuggestions]               = useState([]);
+  const [loadingDataset, setLoadingDataset]         = useState({ RLS: false, APS: false, RASIO: false });
+  const [leafletReady, setLeafletReady]             = useState(false);
+  const [MapCont, setMapCont]                       = useState(null);
+  const [TileLay, setTileLay]                       = useState(null);
+  const [GeoComp, setGeoComp]                       = useState(null);
+
+  const petaRef    = useRef(null);
+  const pendingRef = useRef(null);
+
+  useEffect(() => {
+    setIsClient(true);
+    import('leaflet/dist/leaflet.css');
+    import('react-leaflet').then(rl => {
+      setMapCont(() => rl.MapContainer);
+      setTileLay(() => rl.TileLayer);
+      setGeoComp(() => rl.GeoJSON);
+      setLeafletReady(true);
+    });
+  }, []);
+  useEffect(() => { if (isClient) muatDariDB(); }, [isClient]);
+
+  const kombinasiTersedia = useMemo(() => {
+    const map = {};
+    daftarTersimpan.forEach(a => {
+      const ind = a.indikator || 'ALL';
+      const key = `${a.tahun}|${ind}`;
+      if (!map[key] || a.timestamp > map[key].timestamp)
+        map[key] = { timestamp: a.timestamp, analysis_id: a.analysis_id };
+    });
+    return map;
+  }, [daftarTersimpan]);
+
   const jumlahKategori = useMemo(() => {
-    if (!hasilAnalisis?.matched_features?.features) return { KRITIS:0, SEDANG:0, BAIK:0 };
+    if (!hasilAnalisis?.matched_features?.features) return { KRITIS: 0, SEDANG: 0, BAIK: 0 };
     const f = hasilAnalisis.matched_features.features;
     return {
       KRITIS: f.filter(x => getKategoriByIndikator(x, indikatorTerpilih) === 'KRITIS').length,
@@ -112,55 +672,33 @@ export default function PendidikanPage() {
     };
   }, [hasilAnalisis, indikatorTerpilih]);
 
-  const adaPanelTerbuka = panelInfoTerbuka || panelTabelTerbuka || panelMetadataTerbuka || panelKebijakanTerbuka || panelTrendTerbuka;
-  const bottomPanelH    = adaPanelTerbuka ? panelHeight : 48;
-  const actionBtnBottom = bottomPanelH + 16;
-
-  // ── Init ──
-  useEffect(() => {
-    setAdalahClient(true);
-    setPetaSedangMemuat(true);
-    import('react-leaflet').then(l => {
-      setKontainerPeta(() => l.MapContainer);
-      setLapisanPeta(() => l.TileLayer);
-      setGeoJSON(() => l.GeoJSON);
-      setUseMapEvents(() => l.useMapEvents);
-      setPetaSedangMemuat(false);
-    });
-    import('leaflet/dist/leaflet.css');
-  }, []);
-
-  useEffect(() => { if (adalahClient) muatDariDB(); }, [adalahClient]);
-
-  // ── DB ──
-  const refreshDaftarDB = async () => {
-    try { const r = await axios.get('http://127.0.0.1:8000/api/education-analysis/list/'); setDaftarTersimpan(r.data.results || []); }
-    catch (e) { console.error(e); }
+  const refreshDB = async () => {
+    try { const r = await axios.get(`${API}/education-analysis/list/`); setDaftarTersimpan(r.data.results || []); } catch {}
   };
 
   const muatDariDB = async () => {
     setSedangMuatAwal(true);
     try {
-      const res  = await axios.get('http://127.0.0.1:8000/api/education-analysis/list/');
+      const res  = await axios.get(`${API}/education-analysis/list/`);
       const list = res.data.results || [];
       setDaftarTersimpan(list);
       if (!list.length) return;
       const sorted = [...list].sort((a, b) => {
-        const ai = (a.indikator||'ALL')==='ALL'?0:1, bi = (b.indikator||'ALL')==='ALL'?0:1;
+        const ai = (a.indikator || 'ALL') === 'ALL' ? 0 : 1, bi = (b.indikator || 'ALL') === 'ALL' ? 0 : 1;
         if (ai !== bi) return ai - bi;
         if (b.tahun !== a.tahun) return b.tahun - a.tahun;
-        return (b.timestamp||'').localeCompare(a.timestamp||'');
+        return (b.timestamp || '').localeCompare(a.timestamp || '');
       });
-      await muatDetailDariDB(sorted[0].analysis_id, sorted[0].tahun, sorted[0].indikator||'ALL', true);
+      await muatDetail(sorted[0].analysis_id, sorted[0].tahun, sorted[0].indikator || 'ALL', true);
     } catch (e) { console.error(e); }
     finally { setSedangMuatAwal(false); }
   };
 
-  const muatDetailDariDB = async (analysisId, tahun, indikator, silent = false) => {
-    const t = silent ? null : toast.loading('Memuat analisis...');
+  const muatDetail = async (id, tahun, indikator, silent = false) => {
+    const tid = silent ? null : toast.loading('Memuat analisis...');
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/education-analysis/${analysisId}/`);
-      if (t) toast.dismiss(t);
+      const res = await axios.get(`${API}/education-analysis/${id}/`);
+      if (tid) toast.dismiss(tid);
       setHasilAnalisis(res.data);
       setTahunTerpilih(tahun || res.data.tahun || 2024);
       setIndikatorTerpilih(dbToUI(indikator || res.data.indikator || 'ALL'));
@@ -169,74 +707,30 @@ export default function PendidikanPage() {
       setPernahAnalisis(true);
       setProvinsiDipilih(null);
       setDataBaruDariBPS(false);
-      if (!silent) toast.success(`Data dimuat: ${INDIKATOR_LABELS[indikator||'ALL']} ${tahun}`);
+      if (!silent) toast.success(`Data dimuat: ${INDIKATOR_LABELS[indikator || 'ALL']} ${tahun}`);
     } catch (e) {
-      if (t) toast.dismiss(t);
+      if (tid) toast.dismiss(tid);
       if (!silent) toast.error('Gagal memuat detail analisis');
       throw e;
     }
   };
 
-  const handlePilihKomboSelector = async (tahun, indikator) => {
+  const handlePilihKombo = async (tahun, indikator) => {
     const key = `${tahun}|${indikator}`;
     if (!kombinasiTersedia[key]) { setAlertKomboTidakAda({ tahun, indikator }); return; }
-    await muatDetailDariDB(kombinasiTersedia[key].analysis_id, tahun, indikator);
+    await muatDetail(kombinasiTersedia[key].analysis_id, tahun, indikator);
   };
 
   const handleAmbilDariBPS = (tahun, indikator) => {
     setAlertKomboTidakAda(null);
     setTahunTerpilih(tahun);
     setPilihanIndikator(indikator);
-    cekDataLaluAnalisis(indikator, tahun);
+    cekDanAnalisis(indikator, tahun);
   };
-
-  // ── Drag panel ──
-  const handleDragStart = useCallback((e) => {
-    const y = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-    dragStartY.current = y; dragStartHeight.current = panelHeight; setIsDragging(true);
-  }, [panelHeight]);
-
-  const handleDragMove = useCallback((e) => {
-    if (!isDragging || dragStartY.current === null) return;
-    const y = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-    setPanelHeight(Math.max(PANEL_HEIGHT_MIN, Math.min(PANEL_HEIGHT_MAX, dragStartHeight.current + (dragStartY.current - y))));
-  }, [isDragging]);
-
-  const handleDragEnd = useCallback(() => {
-    if (!isDragging) return;
-    setIsDragging(false); dragStartY.current = null;
-    if (panelHeight < 100) toggleAllPanels();
-  }, [isDragging, panelHeight]);
 
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleDragMove);
-      window.addEventListener('mouseup', handleDragEnd);
-      window.addEventListener('touchmove', handleDragMove, { passive: false });
-      window.addEventListener('touchend', handleDragEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleDragMove);
-      window.removeEventListener('mouseup', handleDragEnd);
-      window.removeEventListener('touchmove', handleDragMove);
-      window.removeEventListener('touchend', handleDragEnd);
-    };
-  }, [isDragging, handleDragMove, handleDragEnd]);
-
-  const bukaPanel = (setter) => {
-    [setPanelInfoTerbuka, setPanelTabelTerbuka, setPanelMetadataTerbuka, setPanelKebijakanTerbuka, setPanelTrendTerbuka].forEach(s => s(false));
-    setter(true);
-    if (panelHeight < 200) setPanelHeight(PANEL_HEIGHT_DEFAULT);
-  };
-
-  const toggleAllPanels = () => {
-    [setPanelInfoTerbuka, setPanelTabelTerbuka, setPanelMetadataTerbuka, setPanelKebijakanTerbuka, setPanelTrendTerbuka].forEach(s => s(false));
-  };
-
-  // ── Search ──
-  useEffect(() => {
-    if (!hasilAnalisis?.matched_features?.features || !searchQuery.trim()) { setSearchSuggestions([]); return; }
-    setSearchSuggestions(
+    if (!hasilAnalisis?.matched_features?.features || !searchQuery.trim()) { setSuggestions([]); return; }
+    setSuggestions(
       hasilAnalisis.matched_features.features
         .filter(f => f.properties?.education_analysis?.nama_provinsi?.toLowerCase().includes(searchQuery.toLowerCase()))
         .map(f => ({ nama: f.properties.education_analysis.nama_provinsi, kategori: getKategoriByIndikator(f, indikatorTerpilih), warna: getWarnaByIndikator(f, indikatorTerpilih) }))
@@ -244,128 +738,107 @@ export default function PendidikanPage() {
     );
   }, [searchQuery, hasilAnalisis, indikatorTerpilih]);
 
-  const handleSearch = (namaProvinsi) => {
-    const nama = namaProvinsi || searchQuery;
-    if (!hasilAnalisis?.matched_features?.features || !nama.trim()) return;
-    const fitur = hasilAnalisis.matched_features.features.find(f => f.properties?.education_analysis?.nama_provinsi?.toLowerCase() === nama.toLowerCase());
-    if (fitur && petaRef.current) {
-      const coords = fitur.geometry.coordinates;
+  const handleSearch = (nama) => {
+    const n = nama || searchQuery;
+    if (!n.trim()) return;
+    const f = hasilAnalisis?.matched_features?.features?.find(feat => feat.properties?.education_analysis?.nama_provinsi?.toLowerCase() === n.toLowerCase());
+    if (f && petaRef.current) {
+      const coords = f.geometry.coordinates;
       let lat, lng;
-      if (fitur.geometry.type === "MultiPolygon") {
-        const p = coords[0][0]; lat = p.reduce((s,c)=>s+c[1],0)/p.length; lng = p.reduce((s,c)=>s+c[0],0)/p.length;
-      } else {
-        const p = coords[0];    lat = p.reduce((s,c)=>s+c[1],0)/p.length; lng = p.reduce((s,c)=>s+c[0],0)/p.length;
-      }
+      if (f.geometry.type === 'MultiPolygon') { const p = coords[0][0]; lat = p.reduce((s,c)=>s+c[1],0)/p.length; lng = p.reduce((s,c)=>s+c[0],0)/p.length; }
+      else { const p = coords[0]; lat = p.reduce((s,c)=>s+c[1],0)/p.length; lng = p.reduce((s,c)=>s+c[0],0)/p.length; }
       petaRef.current.setView([lat, lng], 7);
-      setProvinsiDipilih(fitur.properties.education_analysis.nama_provinsi);
-      toast.success(`Ditemukan: ${nama}`, { duration: 3000 });
-      setSearchTerbuka(false); setSearchQuery(''); setSearchSuggestions([]);
+      setProvinsiDipilih(f.properties.education_analysis.nama_provinsi);
+      toast.success(`Ditemukan: ${n}`, { duration: 3000 });
+      setSearchOpen(false); setSearchQuery(''); setSuggestions([]);
     } else toast.error('Provinsi tidak ditemukan');
   };
 
-  // ── Analisis ──
-  const cekDataLaluAnalisis = async (indikator = null, tahun = null) => {
+  const cekDanAnalisis = async (indikator = null, tahun = null) => {
     const pilihan = indikator || pilihanIndikator;
     const thn     = tahun    || tahunTerpilih;
-    pendingAnalisisRef.current = { pilihan, tahunFetch: thn };
-    setModalAnalisisTerbuka(false); setMenuPilihanIndikatorTerbuka(false);
+    pendingRef.current = { pilihan, tahunFetch: thn };
+    setModalAnalisisTerbuka(false);
     setSedangCekData(true); setHasilCekData(null);
-    try { const r = await axios.post('http://127.0.0.1:8000/api/check-year-data/', { tahun: thn, indikator: pilihan }); setHasilCekData(r.data); }
-    catch { toast.error('Gagal memeriksa ketersediaan data BPS'); }
+    try {
+      const r = await axios.post(`${API}/check-year-data/`, { tahun: thn, indikator: pilihan });
+      setHasilCekData(r.data);
+    } catch { toast.error('Gagal memeriksa ketersediaan data BPS'); }
     finally { setSedangCekData(false); }
   };
 
   const lanjutkanAnalisis = async () => {
-    if (!pendingAnalisisRef.current) return;
-    const { pilihan, tahunFetch } = pendingAnalisisRef.current;
+    if (!pendingRef.current) return;
+    const { pilihan, tahunFetch } = pendingRef.current;
     setHasilCekData(null); setSedangMenganalisis(true); setKategoriTerpilih('SEMUA');
-    const t = toast.loading(`Mengambil data BPS ${tahunFetch}...`);
+    const tid = toast.loading(`Mengambil data BPS ${tahunFetch}...`);
     try {
-      const r = await axios.post('http://127.0.0.1:8000/api/analyze-education-bps/', { provinces: 'ALL', indikator: pilihan, tahun: tahunFetch });
-      toast.dismiss(t);
+      const r = await axios.post(`${API}/analyze-education-bps/`, { provinces: 'ALL', indikator: pilihan, tahun: tahunFetch });
+      toast.dismiss(tid);
       if (r.data.status === 'success') {
         setHasilAnalisis(r.data);
         setIndikatorTerpilih(pilihan === 'ALL' ? 'SEMUA' : pilihan);
         setTahunTerpilih(tahunFetch); setPernahAnalisis(true); setDataBaruDariBPS(true);
+        setActiveTab('info');
         toast.success(`Berhasil: ${r.data.total_success} provinsi (${tahunFetch})!`, { duration: 5000 });
       }
-    } catch (e) { toast.dismiss(t); toast.error(e.response?.data?.error || 'Gagal terhubung ke server'); }
+    } catch (e) { toast.dismiss(tid); toast.error(e.response?.data?.error || 'Gagal terhubung ke server'); }
     finally { setSedangMenganalisis(false); }
   };
 
-  const resetAnalisis = () => {
-    setHasilAnalisis(null); setKategoriTerpilih('SEMUA'); setIndikatorTerpilih('SEMUA');
-    toggleAllPanels(); setProvinsiDipilih(null); setPernahAnalisis(false);
-    setModeBersih(false); setDataBaruDariBPS(false);
-    toast.success('Analisis berhasil direset');
-  };
-
-  const simpanAnalisis = async () => {
-    if (!namaSimpan.trim()) return toast.error("Nama analisis tidak boleh kosong");
+  const simpan = async () => {
+    if (!namaSimpan.trim()) return toast.error('Nama tidak boleh kosong');
     setSedangMenyimpan(true);
-    const t = toast.loading('Menyimpan...');
+    const tid = toast.loading('Menyimpan...');
     try {
-      const r = await axios.post('http://127.0.0.1:8000/api/save-education-analysis/', { name: namaSimpan, analysis_data: hasilAnalisis });
-      toast.dismiss(t);
+      const r = await axios.post(`${API}/save-education-analysis/`, { name: namaSimpan, analysis_data: hasilAnalisis });
+      toast.dismiss(tid);
       if (r.data.status === 'success') {
         toast.success(`"${namaSimpan}" berhasil disimpan!`);
         setModalSaveTerbuka(false); setNamaSimpan(''); setDataBaruDariBPS(false);
-        await refreshDaftarDB();
+        await refreshDB();
       }
-    } catch { toast.dismiss(t); toast.error('Gagal menyimpan'); }
+    } catch { toast.dismiss(tid); toast.error('Gagal menyimpan'); }
     finally { setSedangMenyimpan(false); }
   };
 
-  // ── Download ──
-  const unduhBlob = (blob, nama) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nama; a.click(); URL.revokeObjectURL(a.href); };
+  const unduhBlob = (blob, nama) => {
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nama });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
 
   const unduhDataset = async (jenis) => {
-    if (!hasilAnalisis?.raw_datasets) return toast.error("Dataset tidak tersedia");
-    setMenuDatasetTerbuka(false);
+    if (!hasilAnalisis?.raw_datasets) return toast.error('Dataset tidak tersedia');
     const ds  = hasilAnalisis.raw_datasets;
     const thn = hasilAnalisis.tahun || tahunTerpilih;
     const tgl = new Date().toISOString().split('T')[0];
-
-    const doRLS = async () => {
-      if (!ds?.RLS) return toast.error("Data RLS tidak tersedia");
-      setLoadingDataset(p => ({ ...p, RLS: true }));
-      const t = toast.loading('Membuat file RLS...');
-      try { const r = await axios.post('http://127.0.0.1:8000/api/download-rls-xlsx/', { rls_data: ds.RLS, timestamp: ds.timestamp, tahun: thn }, { responseType: 'blob' }); unduhBlob(new Blob([r.data]), `Dataset_RLS_BPS_${thn}_${tgl}.xlsx`); toast.dismiss(t); toast.success('Dataset RLS diunduh!'); }
-      catch { toast.dismiss(t); toast.error('Gagal unduh RLS'); }
-      finally { setLoadingDataset(p => ({ ...p, RLS: false })); }
+    const doDS = async (key, endpoint, filename) => {
+      setLoadingDataset(p => ({ ...p, [key]: true }));
+      const tid = toast.loading(`Membuat file ${key}...`);
+      try {
+        const payload = key === 'RASIO'
+          ? { rasio_sd: ds.RASIO_SD||{}, rasio_smp: ds.RASIO_SMP||{}, rasio_sma: ds.RASIO_SMA||{}, rasio_smk: ds.RASIO_SMK||{}, timestamp: ds.timestamp, tahun: thn }
+          : { [`${key.toLowerCase()}_data`]: ds[key], timestamp: ds.timestamp, tahun: thn };
+        const r = await axios.post(`${API}/${endpoint}/`, payload, { responseType: 'blob' });
+        unduhBlob(new Blob([r.data]), `${filename}_${thn}_${tgl}.xlsx`);
+        toast.dismiss(tid); toast.success(`${key} berhasil diunduh!`);
+      } catch { toast.dismiss(tid); toast.error(`Gagal unduh ${key}`); }
+      finally { setLoadingDataset(p => ({ ...p, [key]: false })); }
     };
-    const doAPS = async () => {
-      if (!ds?.APS) return toast.error("Data APS tidak tersedia");
-      setLoadingDataset(p => ({ ...p, APS: true }));
-      const t = toast.loading('Membuat file APS...');
-      try { const r = await axios.post('http://127.0.0.1:8000/api/download-aps-xlsx/', { aps_data: ds.APS, timestamp: ds.timestamp, tahun: thn }, { responseType: 'blob' }); unduhBlob(new Blob([r.data]), `Dataset_APS_BPS_${thn}_${tgl}.xlsx`); toast.dismiss(t); toast.success('Dataset APS diunduh!'); }
-      catch { toast.dismiss(t); toast.error('Gagal unduh APS'); }
-      finally { setLoadingDataset(p => ({ ...p, APS: false })); }
-    };
-    const doRasio = async () => {
-      if (!ds?.RASIO_SD) return toast.error("Data Rasio tidak tersedia");
-      setLoadingDataset(p => ({ ...p, RASIO: true }));
-      const t = toast.loading('Membuat file Rasio...');
-      try { const r = await axios.post('http://127.0.0.1:8000/api/download-rasio-xlsx/', { rasio_sd: ds.RASIO_SD||{}, rasio_smp: ds.RASIO_SMP||{}, rasio_sma: ds.RASIO_SMA||{}, rasio_smk: ds.RASIO_SMK||{}, timestamp: ds.timestamp, tahun: thn }, { responseType: 'blob' }); unduhBlob(new Blob([r.data]), `Dataset_Rasio_Murid_Guru_BPS_${thn}_${tgl}.xlsx`); toast.dismiss(t); toast.success('Dataset Rasio diunduh!'); }
-      catch { toast.dismiss(t); toast.error('Gagal unduh Rasio'); }
-      finally { setLoadingDataset(p => ({ ...p, RASIO: false })); }
-    };
-
-    if (jenis === 'ALL') { await doRLS(); await doAPS(); await doRasio(); }
-    else if (jenis === 'RLS') doRLS();
-    else if (jenis === 'APS') doAPS();
-    else if (jenis === 'RASIO') doRasio();
+    if (jenis === 'ALL') { await doDS('RLS','download-rls-xlsx','Dataset_RLS_BPS'); await doDS('APS','download-aps-xlsx','Dataset_APS_BPS'); await doDS('RASIO','download-rasio-xlsx','Dataset_Rasio_BPS'); }
+    else if (jenis === 'RLS')   doDS('RLS',  'download-rls-xlsx',  'Dataset_RLS_BPS');
+    else if (jenis === 'APS')   doDS('APS',  'download-aps-xlsx',  'Dataset_APS_BPS');
+    else if (jenis === 'RASIO') doDS('RASIO','download-rasio-xlsx','Dataset_Rasio_BPS');
   };
 
   const eksporData = (format) => {
-    if (!hasilAnalisis) return toast.error("Data tidak tersedia");
-    setMenuUnduhTerbuka(false);
-    const r   = hasilAnalisis.analysis_summary;
+    if (!hasilAnalisis) return toast.error('Data tidak tersedia');
+    const r   = hasilAnalisis.analysis_summary || [];
     const thn = hasilAnalisis.tahun || tahunTerpilih;
     const tgl = new Date().toISOString().split('T')[0];
     if (format === 'EXCEL') {
       const ws = XLSX.utils.json_to_sheet(r.map(i => ({ Provinsi: i.provinsi, Kategori: i.kategori, 'Skor Total': i.skor_total, 'RLS (thn)': i.rls||'-', 'Skor APS': i.skor_aps||'-', 'Rasio Rata': i.rasio_rata||'-' })));
-      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Analisis");
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Analisis');
       XLSX.writeFile(wb, `Analisis_Pendidikan_BPS_${thn}_${tgl}.xlsx`); toast.success('Excel diunduh');
     } else if (format === 'JSON') {
       unduhBlob(new Blob([JSON.stringify(hasilAnalisis,null,2)],{type:'application/json'}), `Analisis_Pendidikan_BPS_${thn}_${tgl}.json`); toast.success('JSON diunduh');
@@ -377,515 +850,208 @@ export default function PendidikanPage() {
     }
   };
 
-  // ── Misc ──
-  const hitungScaleKm  = (zoom) => ({5:1000,6:500,7:200,8:100,9:50,10:25})[Math.floor(zoom)] || 1000;
-  const getWarnaGrad   = () => ({ SEMUA:'linear-gradient(135deg,#ef4444,#f59e0b 50%,#10b981)', RLS:'linear-gradient(135deg,#8b5cf6,#7c3aed)', APS:'linear-gradient(135deg,#3b82f6,#2563eb)', RASIO:'linear-gradient(135deg,#10b981,#059669)' })[indikatorTerpilih] || 'linear-gradient(135deg,#ef4444,#f59e0b 50%,#10b981)';
-  const getButtonText  = () => { if (sedangMenganalisis) return 'Loading...'; if (!pernahAnalisis) return 'Analisis'; return { SEMUA:'Semua Indikator', RLS:'Analisis RLS', APS:'Analisis APS', RASIO:'Analisis Rasio' }[indikatorTerpilih] || 'Analisis'; };
-
-  const MouseTracker = () => {
-    if (!useMapEvents) return null;
-    const C = () => { useMapEvents({ mousemove:(e)=>setKoordinatCursor({lat:e.latlng.lat.toFixed(4),lng:e.latlng.lng.toFixed(4)}), zoomend:(e)=>setCurrentZoom(e.target.getZoom()) }); return null; };
-    return <C />;
-  };
-
-  if (!adalahClient) return null;
-  const basemapConfig = BASEMAPS[basemapTerpilih];
+  if (!isClient) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {!modeBersih && <HeaderBar />}
-      {!modeBersih && <SideBar />}
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <HeaderBar/>
+      <SideBar/>
 
-      {/* ── Modals ── */}
-      <ModalAlertKomboTidakAda info={alertKomboTidakAda} onTutup={() => setAlertKomboTidakAda(null)} onAmbilDariBPS={handleAmbilDariBPS} />
-      <ModalCekData tahun={pendingAnalisisRef.current?.tahunFetch||tahunTerpilih} indikator={pendingAnalisisRef.current?.pilihan||pilihanIndikator} hasilCek={hasilCekData} sedangCek={sedangCekData} onTutup={() => setHasilCekData(null)} onLanjut={lanjutkanAnalisis} />
+      {/* Modals */}
+      <ModalAlertKomboTidakAda info={alertKomboTidakAda} onTutup={() => setAlertKomboTidakAda(null)} onAmbilDariBPS={handleAmbilDariBPS}/>
+      <ModalCekData
+        tahun={pendingRef.current?.tahunFetch || tahunTerpilih}
+        indikator={pendingRef.current?.pilihan || pilihanIndikator}
+        hasilCek={hasilCekData} sedangCek={sedangCekData}
+        onTutup={() => setHasilCekData(null)} onLanjut={lanjutkanAnalisis}
+      />
 
-      {/* Modal Pilih Analisis */}
+      {/* Modal Analisis */}
       {modalAnalisisTerbuka && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-8">
+          <Card className="w-full max-w-lg p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">Pilih Data Analisis</h3>
-              <button onClick={() => setModalAnalisisTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={18} className="text-slate-500" /></button>
+              <button onClick={() => setModalAnalisisTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={18} className="text-slate-500"/></button>
             </div>
             <div className="mb-6">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Calendar size={13}/> Tahun Data BPS</label>
-              <div className="flex gap-2 flex-wrap">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3"><Calendar size={13}/> Tahun Data BPS</label>
+              <div className="grid grid-cols-4 gap-2">
                 {TAHUN_TERSEDIA.map(th => (
-                  <button key={th} onClick={() => setTahunTerpilih(th)} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border-2 ${tahunTerpilih===th?'bg-blue-600 border-blue-600 text-white':'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'}`}>{th}</button>
+                  <button key={th} onClick={() => setTahunTerpilih(th)}
+                    className={cn('px-3 py-2.5 rounded-xl text-sm font-bold border-2 transition-all',
+                      tahunTerpilih === th ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-600')}>
+                    {th}
+                  </button>
                 ))}
               </div>
             </div>
             <div className="space-y-2 mb-6">
-              {[{key:'ALL',label:'Semua Indikator',desc:'RLS + APS + Rasio',icon:<BarChart2 size={15}/>},{key:'RLS',label:'Rata-rata Lama Sekolah',desc:'Fokus pencapaian lama sekolah',icon:<BookOpen size={15}/>},{key:'APS',label:'Angka Partisipasi Sekolah',desc:'4 kelompok umur: 7–12, 13–15, 16–18, 19–23',icon:<GraduationCap size={15}/>},{key:'RASIO',label:'Rasio Murid-Guru',desc:'SD, SMP, SMA, SMK',icon:<Users size={15}/>}].map(opt => (
+              {[
+                { key:'ALL',   label:'Semua Indikator',        desc:'RLS + APS + Rasio',                          icon:<BarChart2 size={15}/> },
+                { key:'RLS',   label:'Rata-rata Lama Sekolah', desc:'Fokus pencapaian lama sekolah',               icon:<BookOpen size={15}/> },
+                { key:'APS',   label:'Angka Partisipasi',      desc:'4 kelompok umur: 7–12, 13–15, 16–18, 19–23', icon:<GraduationCap size={15}/> },
+                { key:'RASIO', label:'Rasio Murid-Guru',       desc:'SD, SMP, SMA, SMK',                           icon:<Users size={15}/> },
+              ].map(opt => (
                 <button key={opt.key} onClick={() => setPilihanIndikator(opt.key)}
-                  className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-start gap-3 ${pilihanIndikator===opt.key?'border-blue-500 bg-blue-50 dark:bg-blue-900/20':'border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}>
-                  <span className={`mt-0.5 flex-shrink-0 ${pilihanIndikator===opt.key?'text-blue-500':'text-slate-400'}`}>{opt.icon}</span>
-                  <div className="flex-1"><div className="text-sm font-semibold text-slate-900 dark:text-white">{opt.label}</div><div className="text-xs text-slate-500 mt-0.5">{opt.desc}</div></div>
-                  {pilihanIndikator===opt.key && <Check size={15} className="text-blue-500 flex-shrink-0 mt-0.5"/>}
+                  className={cn('w-full p-4 rounded-xl border-2 transition-all text-left flex items-start gap-3',
+                    pilihanIndikator === opt.key ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600')}>
+                  <span className={cn('mt-0.5 shrink-0', pilihanIndikator === opt.key ? 'text-blue-500' : 'text-slate-400')}>{opt.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{opt.label}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</div>
+                  </div>
+                  {pilihanIndikator === opt.key && <Check size={15} className="text-blue-500 mt-0.5"/>}
                 </button>
               ))}
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setModalAnalisisTerbuka(false)} className="flex-1 px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors">Batal</button>
-              <button onClick={() => cekDataLaluAnalisis()} disabled={sedangMenganalisis}
-                className="flex-1 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50">
+              <Btn variant="ghost" className="flex-1 justify-center" onClick={() => setModalAnalisisTerbuka(false)}>Batal</Btn>
+              <Btn variant="primary" className="flex-1 justify-center" onClick={() => cekDanAnalisis()} disabled={sedangMenganalisis}>
                 <Search size={13}/> Cek & Analisis {tahunTerpilih}
-              </button>
+              </Btn>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Modal Save */}
       {modalSaveTerbuka && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-8">
+          <Card className="w-full max-w-md p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">Simpan Analisis</h3>
               <button onClick={() => setModalSaveTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={18} className="text-slate-500"/></button>
             </div>
             <label className="block text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">Nama Analisis</label>
-            <input type="text" value={namaSimpan} onChange={e => setNamaSimpan(e.target.value)} onKeyPress={e => e.key==='Enter'&&simpanAnalisis()}
-              placeholder={`contoh: Analisis Pendidikan ${hasilAnalisis?.tahun||tahunTerpilih}`}
-              className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 outline-none text-sm mb-6" />
+            <input type="text" value={namaSimpan} onChange={e => setNamaSimpan(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && simpan()}
+              placeholder={`Analisis Pendidikan ${hasilAnalisis?.tahun || tahunTerpilih}`}
+              className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:border-blue-500 outline-none text-sm mb-6"/>
             <div className="flex gap-3">
-              <button onClick={() => setModalSaveTerbuka(false)} className="flex-1 px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors">Batal</button>
-              <button onClick={simpanAnalisis} disabled={sedangMenyimpan || !namaSimpan.trim()} className="flex-1 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm disabled:opacity-50">
+              <Btn variant="ghost" className="flex-1 justify-center" onClick={() => setModalSaveTerbuka(false)}>Batal</Btn>
+              <Btn variant="primary" className="flex-1 justify-center" onClick={simpan} disabled={sedangMenyimpan || !namaSimpan.trim()}>
                 {sedangMenyimpan ? 'Menyimpan...' : 'Simpan'}
-              </button>
+              </Btn>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* ── PETA ── */}
-      <div className={`fixed inset-0 bg-white dark:bg-slate-900 ${modeBersih ? 'top-0' : 'top-16'}`}>
-
-        {sedangMuatAwal && (
-          <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 size={28} className="text-blue-500 animate-spin" />
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Memuat data dari database...</p>
-            </div>
+      {/* MAIN */}
+      <main className="pt-[60px] pb-16 min-h-screen">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-2">
+          <div className="flex items-start justify-between pt-7 pb-5">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <GraduationCap size={22} className="text-blue-500"/>
+              Indeks Pendidikan Kewilayahan
+            </h1>
+            <nav className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+              <Home size={12}/> <span>›</span> <span>SDM Nasional</span> <span>›</span>
+              <span className="text-slate-600 dark:text-slate-300 font-semibold">Pendidikan</span>
+            </nav>
           </div>
-        )}
 
-        {!petaSedangMemuat && KontainerPeta && (
-          <KontainerPeta center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
-            <LapisanPeta key={basemapTerpilih} url={basemapConfig.url} attribution={basemapConfig.attribution} />
-            <MouseTracker />
-            {hasilAnalisis?.matched_features?.features && (
-              <GeoJSON
-                key={JSON.stringify(hasilAnalisis.matched_features.features)+kategoriTerpilih+indikatorTerpilih+provinsiDipilih}
-                data={{ type:"FeatureCollection", features: hasilAnalisis.matched_features.features }}
-                style={(fitur) => {
-                  const a   = fitur.properties?.education_analysis || {};
-                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
-                  const vis = kategoriTerpilih === 'SEMUA' || kat === kategoriTerpilih;
-                  const hl  = provinsiDipilih === a.nama_provinsi;
-                  return { fillColor:w, weight:hl?4:2, opacity:(vis&&w!=='#cbd5e1')?1:0, color:hl?'#3b82f6':'white', fillOpacity:(vis&&w!=='#cbd5e1')?0.75:0 };
-                }}
-                onEachFeature={(fitur, lapisan) => {
-                  const a   = fitur.properties?.education_analysis || {};
-                  const dp  = a.data_pendidikan || {};
-                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
-                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                  const wawasan = a.insights?.map(i => `<div style="margin-bottom:3px;padding-left:6px;border-left:2px solid ${w};font-size:9px;">${i}</div>`).join('') || '';
-                  lapisan.bindTooltip(`<div style="font-family:inherit;padding:4px;"><div style="font-weight:900;color:#0f172a;text-transform:uppercase;font-size:11px;">${a.nama_provinsi}</div><div style="font-size:9px;font-weight:800;color:${w};margin-top:2px;">${kat||'-'}</div><div style="font-size:8px;color:#64748b;margin-top:2px;">Skor: ${a.skor_total}</div></div>`,{sticky:true,opacity:0.95});
-                  let indHTML = '';
-                  if (indikatorTerpilih==='SEMUA') indHTML=`<div style="display:grid;gap:3px;"><div style="background:#f5f3ff;padding:5px;border-radius:5px;border-left:2px solid #8b5cf6;"><div style="font-size:7px;font-weight:700;color:#4c1d95;">LAMA SEKOLAH</div><div style="font-size:11px;font-weight:900;color:#7c3aed;">${dp.RLS?dp.RLS+' th':'-'}</div></div><div style="background:#eff6ff;padding:5px;border-radius:5px;border-left:2px solid #3b82f6;"><div style="font-size:7px;font-weight:700;color:#1e3a8a;">SKOR APS</div><div style="font-size:11px;font-weight:900;color:#2563eb;">${dp.SKOR_APS||'-'}</div></div><div style="background:#f0fdf4;padding:5px;border-radius:5px;border-left:2px solid #10b981;"><div style="font-size:7px;font-weight:700;color:#14532d;">RASIO M/G</div><div style="font-size:11px;font-weight:900;color:#059669;">${dp.RASIO_RATA||'-'}</div></div></div>`;
-                  else if (indikatorTerpilih==='RLS') indHTML=`<div style="background:#f5f3ff;padding:8px;border-radius:8px;border-left:3px solid #8b5cf6;"><div style="font-size:8px;font-weight:700;color:#4c1d95;">RATA-RATA LAMA SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#7c3aed;">${dp.RLS?dp.RLS+' tahun':'-'}</div></div>`;
-                  else if (indikatorTerpilih==='APS') indHTML=`<div style="background:#eff6ff;padding:8px;border-radius:8px;border-left:3px solid #3b82f6;"><div style="font-size:8px;font-weight:700;color:#1e3a8a;">ANGKA PARTISIPASI SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#2563eb;">${dp.SKOR_APS||'-'}</div></div>`;
-                  else if (indikatorTerpilih==='RASIO') indHTML=`<div style="background:#f0fdf4;padding:8px;border-radius:8px;border-left:3px solid #10b981;"><div style="font-size:8px;font-weight:700;color:#14532d;">RASIO MURID-GURU</div><div style="font-size:16px;font-weight:900;color:#059669;">${dp.RASIO_RATA||'-'}</div></div>`;
-                  lapisan.bindPopup(`<div style="font-family:inherit;min-width:260px;max-width:260px;color:#1e293b;padding:4px;"><div style="background:${w};color:white;padding:8px;border-radius:8px;margin-bottom:6px;"><div style="font-weight:900;font-size:12px;text-transform:uppercase;">${a.nama_provinsi}</div><div style="background:rgba(255,255,255,.2);border-radius:5px;padding:5px;margin-top:5px;font-size:10px;font-weight:900;text-align:center;">Skor: ${a.skor_total} — ${kat||'-'}</div></div><div style="padding:0 2px;"><div style="margin-bottom:6px;">${indHTML}</div><div style="font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:4px;border-bottom:1px solid #f1f5f9;padding-bottom:2px;">ANALISIS</div><div style="font-size:9px;color:#334155;line-height:1.4;background:#f8fafc;padding:6px;border-radius:5px;border-left:2px solid ${w};">${wawasan}</div></div></div>`,{maxWidth:280,maxHeight:400});
-                }}
-              />
-            )}
-          </KontainerPeta>
-        )}
-
-        {/* Title */}
-        {!modeBersih && (
-          <div className="absolute top-6 left-6 z-[1000]">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2">
-              <GraduationCap size={15} className="text-white flex-shrink-0" />
-              <span className="text-sm font-black text-white uppercase tracking-wide">SDM Nasional Pendidikan</span>
-            </div>
-          </div>
-        )}
-
-        {/* Selector */}
-        {!modeBersih && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000]">
-            <SelectorAnalisis hasilAnalisis={hasilAnalisis} kombinasiTersedia={kombinasiTersedia} tahunTerpilih={tahunTerpilih} onPilih={handlePilihKomboSelector} sedangMuatAwal={sedangMuatAwal} />
-          </div>
-        )}
-
-        {/* Zoom */}
-        {!modeBersih && (
-          <div className="absolute top-20 left-6 z-[1000] flex flex-col gap-2">
-            <button onClick={() => petaRef.current?.zoomIn()}  className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700"><Plus size={16}/></button>
-            <button onClick={() => petaRef.current?.zoomOut()} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700"><Minus size={16}/></button>
-          </div>
-        )}
-
-        {/* Mode bersih */}
-        {hasilAnalisis && (
-          <div className="absolute top-[170px] left-6 z-[1000]">
-            <button onClick={() => setModeBersih(!modeBersih)}
-              className="p-2.5 rounded-lg shadow-lg hover:shadow-xl transition-all active:scale-90 border-2 border-white dark:border-slate-700 relative overflow-hidden group"
-              style={{ background: getWarnaGrad() }}>
-              {modeBersih ? <EyeOff size={16} className="text-white relative z-10"/> : <Eye size={16} className="text-white relative z-10"/>}
-              <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all"/>
-            </button>
-          </div>
-        )}
-
-        {/* Basemap */}
-        {!modeBersih && (
-          <div className={`absolute left-6 z-[1001] ${hasilAnalisis ? 'top-[215px]' : 'top-[170px]'}`}>
-            <div className="relative">
-              <button onClick={() => setMenuBasemapTerbuka(!menuBasemapTerbuka)} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700"><Map size={16}/></button>
-              {menuBasemapTerbuka && (
-                <div className="absolute left-full ml-2 top-0 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] border border-slate-200 dark:border-slate-700 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Pilih Basemap</div>
-                  <div className="p-1.5 space-y-0.5 max-h-72 overflow-y-auto">
-                    {Object.entries(BASEMAPS).map(([key, bm]) => (
-                      <button key={key} onClick={() => { setBasemapTerpilih(key); setMenuBasemapTerbuka(false); }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${basemapTerpilih===key?'bg-blue-500 text-white':'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-                        <div className={`w-7 h-7 rounded flex-shrink-0 border ${basemapTerpilih===key?'border-white/40':'border-slate-200 dark:border-slate-600'} ${bm.preview}`}/>
-                        <span className={`text-xs font-medium truncate ${basemapTerpilih===key?'text-white':'text-slate-900 dark:text-white'}`}>{bm.label}</span>
-                        {basemapTerpilih===key && <Check size={13} className="text-white ml-auto flex-shrink-0"/>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Search */}
-        {hasilAnalisis && !modeBersih && (
-          <div className="absolute top-[263px] left-6 z-[1000]">
-            {searchTerbuka ? (
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                <div className="p-2 flex gap-2">
-                  <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyPress={e => e.key==='Enter'&&handleSearch()}
-                    placeholder="Cari provinsi..." autoFocus
-                    className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:border-blue-500 outline-none w-48"/>
-                  <button onClick={() => handleSearch()} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Search size={15}/></button>
-                  <button onClick={() => { setSearchTerbuka(false); setSearchQuery(''); setSearchSuggestions([]); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-300"><X size={15}/></button>
-                </div>
-                {searchSuggestions.length > 0 && (
-                  <div className="border-t border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
-                    {searchSuggestions.map((s, i) => (
-                      <button key={i} onClick={() => handleSearch(s.nama)} className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-900 dark:text-white">{s.nama}</span>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: s.warna+'20', color: s.warna }}>{s.kategori}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+          {sedangMuatAwal ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={28} className="text-blue-500 animate-spin"/>
+                <p className="text-sm text-slate-500">Memuat data...</p>
               </div>
-            ) : (
-              <button onClick={() => setSearchTerbuka(true)} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-lg shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-90 border border-slate-200 dark:border-slate-700"><Search size={16}/></button>
-            )}
-          </div>
-        )}
-
-        {/* Kanan atas */}
-        {!modeBersih && (
-          <div className="absolute top-6 right-6 z-[1000] space-y-2">
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-medium text-slate-600 dark:text-slate-400"><span className="text-blue-600 dark:text-blue-400">Lat:</span> {koordinatCursor.lat} | <span className="text-blue-600 dark:text-blue-400">Lng:</span> {koordinatCursor.lng}</div>
             </div>
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-              <div className="h-2 bg-slate-300 dark:bg-slate-600 mb-1" style={{ width:'80px', borderLeft:'2px solid #64748b', borderRight:'2px solid #64748b', borderBottom:'2px solid #64748b' }}/>
-              <div className="text-[11px] font-medium text-center text-slate-700 dark:text-slate-300">{hitungScaleKm(currentZoom)} km</div>
-            </div>
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
-              {Object.entries(KATEGORI).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-3 mb-1.5 last:mb-0">
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: v.warna }}/><span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">{v.label}</span></div>
-                  {hasilAnalisis && <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-900 dark:text-white">{jumlahKategori[k]}</span>}
-                </div>
-              ))}
-            </div>
-            {hasilAnalisis && (
-              <div className="relative">
-                <button onClick={() => { setMenuFilterTerbuka(!menuFilterTerbuka); setMenuUnduhTerbuka(false); }}
-                  className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium hover:bg-slate-50 transition-all flex items-center justify-between gap-2 shadow">
-                  <div className="flex items-center gap-1.5"><Filter size={13} className="text-slate-400"/> {kategoriTerpilih}</div>
-                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${menuFilterTerbuka?'rotate-180':''}`}/>
-                </button>
-                {menuFilterTerbuka && (
-                  <div className="absolute top-full mt-1 right-0 w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] border border-slate-200 dark:border-slate-700 py-1">
-                    {["SEMUA","KRITIS","SEDANG","BAIK"].map(kat => (
-                      <button key={kat} onClick={() => { setKategoriTerpilih(kat); setMenuFilterTerbuka(false); }}
-                        className={`w-full text-left px-4 py-2 text-xs font-medium transition-all ${kategoriTerpilih===kat?'bg-blue-500 text-white':'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                        {kat}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Action buttons */}
-        {!modeBersih && (
-          <div className="absolute left-1/2 -translate-x-1/2 z-[1002] transition-all duration-200" style={{ bottom:`${actionBtnBottom}px` }}>
-            <div className="flex gap-2.5 items-center">
-              <div className="relative">
-                <button onClick={() => !pernahAnalisis ? (setPilihanIndikator('ALL'), setModalAnalisisTerbuka(true)) : setMenuPilihanIndikatorTerbuka(!menuPilihanIndikatorTerbuka)}
-                  disabled={sedangMenganalisis||sedangCekData}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-semibold text-xs tracking-wide hover:shadow-xl hover:shadow-blue-500/30 disabled:opacity-50 transition-all uppercase active:scale-95 flex items-center gap-2 whitespace-nowrap">
-                  {sedangCekData ? <Loader2 size={13} className="animate-spin"/> : sedangMenganalisis ? <Loader2 size={13} className="animate-pulse"/> : <Play size={13}/>}
-                  {sedangCekData ? 'Memeriksa...' : getButtonText()}
-                </button>
-                {menuPilihanIndikatorTerbuka && (
-                  <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1003] border border-slate-200 dark:border-slate-700 min-w-[260px]">
-                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Calendar size={11}/> Tahun Data</div>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {TAHUN_TERSEDIA.map(th => (
-                          <button key={th} onClick={() => setTahunTerpilih(th)} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${tahunTerpilih===th?'bg-blue-500 border-blue-500 text-white':'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-blue-300'}`}>{th}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {[{key:'ALL',label:'Semua Indikator',icon:<BarChart2 size={13}/>},{key:'RLS',label:'Rata-rata Lama Sekolah',icon:<BookOpen size={13}/>},{key:'APS',label:'Angka Partisipasi Sekolah',icon:<GraduationCap size={13}/>},{key:'RASIO',label:'Rasio Murid-Guru',icon:<Users size={13}/>}].map((opt,i,arr) => (
-                      <button key={opt.key} onClick={() => cekDataLaluAnalisis(opt.key)}
-                        className={`w-full flex items-center gap-3 text-left px-4 py-2.5 text-xs font-medium transition-all text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 ${i<arr.length-1?'border-b border-slate-100 dark:border-slate-700':''}`}>
-                        <span className="text-slate-400">{opt.icon}</span> {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {hasilAnalisis && (
-                <>
-                  {dataBaruDariBPS && (
-                    <button onClick={() => { setNamaSimpan(''); setModalSaveTerbuka(true); }}
-                      className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-semibold text-xs tracking-wide hover:shadow-xl hover:shadow-green-500/30 transition-all uppercase active:scale-95 flex items-center gap-2">
-                      <Save size={13}/> Simpan
-                    </button>
-                  )}
-                  <button onClick={resetAnalisis} className="px-5 py-2.5 bg-gradient-to-r from-slate-600 to-slate-500 text-white rounded-xl font-semibold text-xs tracking-wide hover:shadow-xl transition-all uppercase active:scale-95 flex items-center gap-2">
-                    <RotateCcw size={13}/> Reset
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── BOTTOM PANELS ── */}
-        {hasilAnalisis && !modeBersih && (
-          <div ref={panelRef} className="absolute bottom-0 left-0 right-0 z-[1001] flex flex-col"
-            style={{ height: adaPanelTerbuka ? `${panelHeight}px` : 'auto' }}>
-
-            {/* INFO */}
-            {panelInfoTerbuka && (
-              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Activity className="text-blue-500" size={22}/>
-                      <div>
-                        <h2 className="text-base font-bold text-slate-900 dark:text-white">Ringkasan Analisis</h2>
-                        <div className="flex items-center gap-2 mt-1">
-                          {hasilAnalisis.tahun && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800"><Calendar size={9}/> Tahun {hasilAnalisis.tahun}</span>}
-                          {hasilAnalisis.indikator && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800"><BarChart2 size={9}/> {INDIKATOR_LABELS[hasilAnalisis.indikator]||hasilAnalisis.indikator}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={() => setPanelInfoTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={17} className="text-slate-500"/></button>
-                  </div>
-                  {hasilAnalisis.timestamp && <div className="mb-4 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><Calendar size={11}/> {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}</div>}
-                  {hasilAnalisis.dataset_aktif?.length > 0 && (
-                    <div className="mb-4 flex flex-wrap gap-1.5">
-                      <span className="text-[10px] font-medium text-slate-500 uppercase tracking-widest self-center">Dataset aktif:</span>
-                      {hasilAnalisis.dataset_aktif.map(k => <span key={k} className="text-[10px] px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">{DATASET_LABELS[k]||k}</span>)}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                    {[{l:'Total Provinsi',v:hasilAnalisis.total_success,c:'blue'},{l:'Kritis',v:jumlahKategori.KRITIS,c:'red'},{l:'Sedang',v:jumlahKategori.SEDANG,c:'yellow'},{l:'Baik',v:jumlahKategori.BAIK,c:'green'}].map(x => (
-                      <div key={x.l} className={`bg-${x.c}-50 dark:bg-${x.c}-900/20 rounded-xl p-3 border border-${x.c}-200 dark:border-${x.c}-800`}>
-                        <div className={`text-[10px] font-medium text-${x.c}-600 dark:text-${x.c}-400 uppercase mb-1`}>{x.l}</div>
-                        <div className={`text-xl font-bold text-${x.c}-700 dark:text-${x.c}-300`}>{x.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TABEL */}
-            {panelTabelTerbuka && (
-              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">Matriks Pendidikan</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-slate-500 font-medium">{dataTerfilter.length} Wilayah</span>
-                        {hasilAnalisis?.tahun && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800"><Calendar size={9}/> {hasilAnalisis.tahun}</span>}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="relative">
-                        <button onClick={() => { setMenuUnduhTerbuka(!menuUnduhTerbuka); setMenuFilterTerbuka(false); }} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm"><Download size={12}/> Unduh</button>
-                        {menuUnduhTerbuka && (
-                          <div className="absolute top-full mt-1 right-0 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[1002] border border-slate-200 dark:border-slate-700 py-1">
-                            {['GEOJSON','JSON','EXCEL','CSV'].map(fmt => (
-                              <button key={fmt} onClick={() => eksporData(fmt)} className="w-full text-left px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><Download size={11} className="text-blue-500"/> {fmt}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button onClick={() => setPanelTabelTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={17} className="text-slate-500"/></button>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[700px]">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-semibold text-slate-500 uppercase">
-                          <th className="px-3 py-2 text-center">No</th><th className="px-3 py-2">Provinsi</th><th className="px-3 py-2 text-center">Skor</th>
-                          {(indikatorTerpilih==='SEMUA'||indikatorTerpilih==='RLS') && <th className="px-3 py-2 text-center">RLS (thn)</th>}
-                          {indikatorTerpilih==='SEMUA' && <th className="px-3 py-2 text-center">Skor APS</th>}
-                          {indikatorTerpilih==='APS' && (<><th className="px-3 py-2 text-center">7–12</th><th className="px-3 py-2 text-center">13–15</th><th className="px-3 py-2 text-center">16–18</th><th className="px-3 py-2 text-center">19–23</th></>)}
-                          {(indikatorTerpilih==='SEMUA'||indikatorTerpilih==='RASIO') && <th className="px-3 py-2 text-center">Rasio M/G</th>}
-                          {indikatorTerpilih==='RASIO' && <th className="px-3 py-2">Per Jenjang</th>}
-                          <th className="px-3 py-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {dataTerfilter.map((fitur, idx) => {
-                          const d  = fitur.properties.education_analysis;
-                          const dp = d.data_pendidikan || {};
-                          const w  = getWarnaByIndikator(fitur, indikatorTerpilih);
-                          const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                              <td className="px-3 py-2 text-center text-[10px] text-slate-400">{idx+1}</td>
-                              <td className="px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white">{d.nama_provinsi}</td>
-                              <td className="px-3 py-2 text-center"><span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">{d.skor_total}</span></td>
-                              {(indikatorTerpilih==='SEMUA'||indikatorTerpilih==='RLS') && <td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.RLS??'-'}</td>}
-                              {indikatorTerpilih==='SEMUA' && <td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.SKOR_APS??'-'}</td>}
-                              {indikatorTerpilih==='APS' && (<><td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.APS_7_12!=null?`${dp.APS_7_12}%`:'-'}</td><td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.APS_13_15!=null?`${dp.APS_13_15}%`:'-'}</td><td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.APS_16_18!=null?`${dp.APS_16_18}%`:'-'}</td><td className="px-3 py-2 text-center text-xs text-slate-600 dark:text-slate-400">{dp.APS_19_23!=null?`${dp.APS_19_23}%`:'-'}</td></>)}
-                              {(indikatorTerpilih==='SEMUA'||indikatorTerpilih==='RASIO') && <td className="px-3 py-2 text-center text-xs font-semibold text-slate-900 dark:text-white">{dp.RASIO_RATA??'-'}</td>}
-                              {indikatorTerpilih==='RASIO' && <td className="px-3 py-2"><div className="flex flex-wrap gap-1">{[['SD',dp.RASIO_SD,'blue'],['SMP',dp.RASIO_SMP,'green'],['SMA',dp.RASIO_SMA,'yellow'],['SMK',dp.RASIO_SMK,'purple']].map(([j,v,c])=><span key={j} className={`px-1.5 py-0.5 bg-${c}-100 dark:bg-${c}-900/30 text-${c}-700 dark:text-${c}-300 text-[9px] font-medium rounded`}>{j}:{v??'-'}</span>)}</div></td>}
-                              <td className="px-3 py-2"><span className="px-2 py-0.5 rounded text-[10px] font-medium border" style={{ borderColor:w+'50', color:w }}>{kat}</span></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* KEBIJAKAN */}
-            {panelKebijakanTerbuka && (
-              <div className="flex-1 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3"><ClipboardList className="text-blue-500" size={22}/><h3 className="text-base font-bold text-slate-900 dark:text-white">Rekomendasi Kebijakan</h3></div>
-                    <button onClick={() => setPanelKebijakanTerbuka(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={17} className="text-slate-500"/></button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-semibold text-slate-500 uppercase">
-                          <th className="px-3 py-2 text-center">No</th><th className="px-3 py-2">Provinsi</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Prioritas</th><th className="px-3 py-2">Rekomendasi Kebijakan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {dataTerfilter.map((fitur, idx) => {
-                          const d  = fitur.properties.education_analysis;
-                          const rek = d.rekomendasi?.[0];
-                          const w  = getWarnaByIndikator(fitur, indikatorTerpilih);
-                          const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all">
-                              <td className="px-3 py-2 text-center text-[10px] text-slate-400">{idx+1}</td>
-                              <td className="px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white">{d.nama_provinsi}</td>
-                              <td className="px-3 py-2"><span className="px-2 py-0.5 rounded text-[10px] font-medium border" style={{ borderColor:w+'50', color:w }}>{kat}</span></td>
-                              <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-medium ${kat==='KRITIS'?'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300':kat==='SEDANG'?'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300':'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>{rek?.title||'NORMAL'}</span></td>
-                              <td className="px-3 py-2 max-w-md"><ul className="space-y-0.5 text-[10px]">{rek?.actions?.map((a,i) => <li key={i} className="text-slate-600 dark:text-slate-300">• {a}</li>) || <li className="text-slate-400">Pertahankan kondisi saat ini</li>}</ul></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* METADATA (renamed from Metodologi) */}
-            {panelMetadataTerbuka && (
-              <MetadataPanel
+          ) : (
+            <div className="space-y-4">
+              <PetaSection
                 hasilAnalisis={hasilAnalisis}
-                indikatorTerpilih={indikatorTerpilih}
                 tahunTerpilih={tahunTerpilih}
-                loadingDataset={loadingDataset}
-                onTutup={() => setPanelMetadataTerbuka(false)}
-                onUnduhDataset={unduhDataset}
-                menuDatasetTerbuka={menuDatasetTerbuka}
-                setMenuDatasetTerbuka={setMenuDatasetTerbuka}
+                indikatorTerpilih={indikatorTerpilih}
+                kategoriTerpilih={kategoriTerpilih}
+                setKategoriTerpilih={setKategoriTerpilih}
+                sedangMenganalisis={sedangMenganalisis}
+                sedangCekData={sedangCekData}
+                dataBaruDariBPS={dataBaruDariBPS}
+                pernahAnalisis={pernahAnalisis}
+                onAnalisis={() => pernahAnalisis ? cekDanAnalisis() : (setPilihanIndikator('ALL'), setModalAnalisisTerbuka(true))}
+                onSimpan={() => { setNamaSimpan(''); setModalSaveTerbuka(true); }}
+                onReset={() => {
+                  setHasilAnalisis(null); setKategoriTerpilih('SEMUA'); setIndikatorTerpilih('SEMUA');
+                  setProvinsiDipilih(null); setPernahAnalisis(false); setDataBaruDariBPS(false);
+                  toast.success('Analisis direset');
+                }}
+                leafletReady={leafletReady} MapCont={MapCont} TileLay={TileLay} GeoComp={GeoComp}
+                petaRef={petaRef} basemap={basemap} setBasemap={setBasemap}
+                koordinatCursor={koordinatCursor} setKoordinatCursor={setKoordinatCursor}
+                currentZoom={currentZoom} setCurrentZoom={setCurrentZoom}
+                provinsiDipilih={provinsiDipilih} setProvinsiDipilih={setProvinsiDipilih}
+                searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                suggestions={suggestions} handleSearch={handleSearch}
+                kombinasiTersedia={kombinasiTersedia} onPilihKombo={handlePilihKombo}
+                sedangMuatAwal={false}
+                jumlahKategori={jumlahKategori}
               />
-            )}
 
-            {/* TREND */}
-            {panelTrendTerbuka && (
-              <TrendPanel daftarTersimpan={daftarTersimpan} onTutup={() => setPanelTrendTerbuka(false)} />
-            )}
-
-            {/* TAB BAR */}
-            <div className="bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 shadow-2xl flex-shrink-0">
-              {adaPanelTerbuka && (
-                <div className={`flex items-center justify-center py-1.5 cursor-row-resize select-none group ${isDragging?'bg-blue-50 dark:bg-blue-900/10':'hover:bg-slate-50 dark:hover:bg-slate-800/50'} transition-colors`}
-                  onMouseDown={handleDragStart} onTouchStart={handleDragStart}>
-                  <div className={`flex flex-col gap-0.5 transition-opacity ${isDragging?'opacity-100':'opacity-40 group-hover:opacity-80'}`}>
-                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"/>
-                    <div className="w-8 h-0.5 rounded-full bg-slate-400 dark:bg-slate-500"/>
-                    <div className="w-5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600 mx-auto"/>
-                  </div>
+              {/* TABS */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div className="flex border-b border-slate-100 dark:border-slate-700">
+                  {TABS.map(({ id, label, Icon }) => {
+                    const active = activeTab === id;
+                    return (
+                      <button key={id} onClick={() => setActiveTab(id)}
+                        className={cn(
+                          'flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all relative flex-1',
+                          active
+                            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                        )}>
+                        <Icon size={15}/>
+                        <span className="hidden sm:inline">{label}</span>
+                        {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full"/>}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-              <div className="p-3 pt-1">
-                <div className="flex justify-center gap-2 flex-wrap">
-                  {[
-                    { label:'Info',     icon:<Info size={13}/>,         setter:setPanelInfoTerbuka,     state:panelInfoTerbuka     },
-                    { label:'Tabel',    icon:<Table size={13}/>,        setter:setPanelTabelTerbuka,    state:panelTabelTerbuka    },
-                    { label:'Kebijakan',icon:<ClipboardList size={13}/>,setter:setPanelKebijakanTerbuka,state:panelKebijakanTerbuka},
-                    { label:'Metadata', icon:<FileText size={13}/>,     setter:setPanelMetadataTerbuka, state:panelMetadataTerbuka },
-                    { label:'Tren',     icon:<TrendingUp size={13}/>,   setter:setPanelTrendTerbuka,    state:panelTrendTerbuka,   activeColor:'bg-indigo-500' },
-                  ].map(tab => (
-                    <button key={tab.label}
-                      onClick={() => adaPanelTerbuka && tab.state ? tab.setter(false) : bukaPanel(tab.setter)}
-                      className={`px-5 py-2 rounded-xl text-[10px] font-medium transition-all flex items-center gap-1.5 ${tab.state ? (tab.activeColor || 'bg-blue-500') + ' text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
-                      {tab.icon} {tab.label}
-                      {tab.state ? <ChevronDown size={12}/> : <ChevronUp size={12}/>}
-                    </button>
-                  ))}
-                  {adaPanelTerbuka && (
-                    <button onClick={toggleAllPanels} className="px-5 py-2 rounded-xl text-[10px] font-medium transition-all flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                      <ChevronDown size={12}/> Tutup
-                    </button>
+                <div className="p-5">
+                  {activeTab === 'info'      && (
+                    <TabInfo
+                      hasilAnalisis={hasilAnalisis}
+                      jumlahKategori={jumlahKategori}
+                      indikatorTerpilih={indikatorTerpilih}
+                      kategoriTerpilih={kategoriTerpilih}
+                      setKategoriTerpilih={setKategoriTerpilih}
+                      eksporData={eksporData}
+                    />
+                  )}
+                  {activeTab === 'kebijakan' && (
+                    <TabKebijakan
+                      hasilAnalisis={hasilAnalisis}
+                      indikatorTerpilih={indikatorTerpilih}
+                      kategoriTerpilih={kategoriTerpilih}
+                      setKategoriTerpilih={setKategoriTerpilih}
+                    />
+                  )}
+                  {activeTab === 'metadata'  && (
+                    <MetadataPanel
+                      hasilAnalisis={hasilAnalisis}
+                      indikatorTerpilih={indikatorTerpilih}
+                      tahunTerpilih={tahunTerpilih}
+                      loadingDataset={loadingDataset}
+                      onTutup={null}
+                      onUnduhDataset={unduhDataset}
+                      embedded={true}
+                    />
+                  )}
+                  {activeTab === 'tren'      && (
+                    <TrendPanel daftarTersimpan={daftarTersimpan} onTutup={null} embedded={true}/>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
+
+      <Footerauth/>
     </div>
   );
 }

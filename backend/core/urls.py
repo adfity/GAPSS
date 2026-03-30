@@ -51,32 +51,33 @@ urlpatterns = [
     path('download-imunisasi-xlsx/', health_views.download_imunisasi_xlsx, name='download-imunisasi-xlsx'),
     path('download-sanitasi-xlsx/', health_views.download_sanitasi_xlsx,  name='download-sanitasi-xlsx'),
 
-    # EKONOMI ANALYSIS (BPS API) -
-    path('analyze-ekonomi-bps/', economy_views.analyze_ekonomi_bps, name='analyze-ekonomi-bps'),
-    path('save-ekonomi-analysis/', economy_views.save_ekonomi_analysis, name='save-ekonomi-analysis'),
-    path('ekonomi-analysis/list/', economy_views.get_ekonomi_analysis_list, name='get-ekonomi-analysis-list'),
-    path('ekonomi-analysis/<str:analysis_id>/', economy_views.get_ekonomi_analysis_detail, name='get-ekonomi-analysis-detail'),
-    path('ekonomi-analysis/<str:analysis_id>/delete/', economy_views.delete_ekonomi_analysis, name='delete-ekonomi-analysis'),
-    path('historis-ekonomi/', economy_views.get_historis_ekonomi, name='historis-ekonomi'),
-
+    # EKONOMI ANALYSIS (BPS API)
+    path('check-ekonomi-data/',          economy_views.check_ekonomi_year_data,    name='check-ekonomi-data'),
+    path('analyze-ekonomi-bps/',         economy_views.analyze_ekonomi_bps,        name='analyze-ekonomi-bps'),
+    path('save-ekonomi-analysis/',       economy_views.save_ekonomi_analysis,      name='save-ekonomi-analysis'),
+    path('ekonomi-analysis/list/',       economy_views.get_ekonomi_analysis_list,  name='get-ekonomi-analysis-list'),
+    path('ekonomi-analysis/<str:analysis_id>/',        economy_views.get_ekonomi_analysis_detail, name='get-ekonomi-analysis-detail'),
+    path('ekonomi-analysis/<str:analysis_id>/delete/', economy_views.delete_ekonomi_analysis,     name='delete-ekonomi-analysis'),
+    path('historis-ekonomi/',            economy_views.get_historis_ekonomi,       name='historis-ekonomi'),
+    path('bank-kebijakan/',              economy_views.get_bank_kebijakan,         name='get-bank-kebijakan'),
+ 
+    # Download XLSX per indikator ekonomi
+    path('download-pdrb-xlsx/',          economy_views.download_pdrb_xlsx,         name='download-pdrb-xlsx'),
+    path('download-kemiskinan-xlsx/',    economy_views.download_kemiskinan_xlsx,   name='download-kemiskinan-xlsx'),
+    path('download-investasi-xlsx/',     economy_views.download_investasi_xlsx,    name='download-investasi-xlsx'),
     # PANGAN: Cek data & analisis -
     path('check-year-data-pangan/',  pangan_views.check_year_data_pangan, name='check_year_data_pangan'),
-
     # Endpoint utama — auto-route ke BPS atau AI berdasarkan tahun
     path('analyze-pangan-bps/',      pangan_views.analyze_pangan_bps, name='analyze_pangan_bps'),
-
     # Endpoint AI langsung (bisa dipanggil eksplisit jika perlu)
     path('analyze-pangan-ai/',       pangan_views.analyze_pangan_ai, name='analyze_pangan_ai'),
-
     # Info model AI yang aktif
     path('pangan-ai-model-info/',    pangan_views.get_ai_model_info, name='pangan_ai_model_info'),
-
     # PANGAN: CRUD simpan / list / detail / hapus
     path('save-pangan-analysis/',    pangan_views.save_pangan_analysis, name='save_pangan_analysis'),
     path('pangan-analysis/list/',    pangan_views.get_pangan_analysis_list,name='get_pangan_analysis_list'),
     path('pangan-analysis/<str:analysis_id>/',        pangan_views.get_pangan_analysis_detail, name='get_pangan_analysis_detail'),
     path('pangan-analysis/<str:analysis_id>/delete/', pangan_views.delete_pangan_analysis, name='delete_pangan_analysis'),
-
     # PANGAN: Download dataset xlsx
     path('download-padi-xlsx/',      pangan_views.download_padi_xlsx, name='download_padi_xlsx'),
     path('download-konsumsi-xlsx/',  pangan_views.download_konsumsi_xlsx, name='download_konsumsi_xlsx'),

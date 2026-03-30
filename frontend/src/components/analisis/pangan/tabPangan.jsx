@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download, BookOpen, Loader2, CheckCircle2, XCircle, AlertTriangle,
-  AlertCircle, Check, BarChart2, ChevronDown, FileText, Info, Bot,
-  Cpu, Activity, TrendingUp, ShieldCheck, Sprout, Users, History,
+  AlertCircle, Check, BarChart2, ChevronDown, Info, Bot,
+  Cpu, Activity, TrendingUp, ShieldCheck, Sprout, Users,
   Filter, Calendar,
 } from 'lucide-react';
 import {
@@ -13,27 +13,54 @@ import {
 import toast from 'react-hot-toast';
 import { cn, Card, Btn, SectionBar, AIBadge } from './petaSection';
 
+// ─── Constants
 const STATUS_PANGAN = {
   TINGGI: { warna: '#10b981', label: 'TINGGI' },
   SEDANG: { warna: '#f59e0b', label: 'SEDANG' },
   RENDAH: { warna: '#ef4444', label: 'RENDAH' },
 };
+
 const DATASET_LABELS = {
   PADI:       'Produksi, Luas Panen & Produktivitas Padi',
   KONSUMSI:   'Konsumsi Kalori & Protein per Kapita',
   KEMISKINAN: 'Persentase Penduduk Miskin',
   PENDUDUK:   'Jumlah Penduduk',
 };
-// ─── Tab: Info
-export function TabInfo({ hasilAnalisis, jumlahStatus }) {
+
+const PRIORITY_STYLE = {
+  Tinggi: { bar: 'bg-red-500',   badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
+  Sedang: { bar: 'bg-amber-500', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
+  Rendah: { bar: 'bg-green-500', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700' },
+};
+
+const insightStyle = (txt) => {
+  const t = txt.toLowerCase();
+  if (t.includes('baik') || t.includes('cukup') || t.includes('terpenuhi') || t.includes('tinggi'))
+    return { cls: 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800', Icon: CheckCircle2, iconCls: 'text-green-500' };
+  if (t.includes('rendah') || t.includes('bawah') || t.includes('lemah') || t.includes('rawan'))
+    return { cls: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800', Icon: XCircle, iconCls: 'text-red-400' };
+  if (t.includes('sedang') || t.includes('mendekati') || t.includes('perlu'))
+    return { cls: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800', Icon: AlertTriangle, iconCls: 'text-amber-500' };
+  return { cls: 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700', Icon: Info, iconCls: 'text-slate-400' };
+};
+
+// ─── Tab: Info (dengan tabel provinsi)
+export function TabInfo({ hasilAnalisis, jumlahStatus, eksporData }) {
+  const [filterStatus, setFilterStatus] = useState('SEMUA');
+  const [menuUnduh, setMenuUnduh]       = useState(false);
+
   if (!hasilAnalisis) return (
     <div className="py-10 text-center">
       <BarChart2 size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada data. Klik <strong>Analisis Pangan</strong> di peta untuk memulai.</p>
+      <p className="text-sm text-slate-400 dark:text-slate-500">
+        Belum ada data. Klik <strong>Analisis Pangan</strong> di peta untuk memulai.
+      </p>
     </div>
   );
 
-  const isAI = hasilAnalisis.is_ai_prediction;
+  const isAI    = hasilAnalisis.is_ai_prediction;
+  const summary = hasilAnalisis?.analysis_summary || [];
+  const filtered = filterStatus === 'SEMUA' ? summary : summary.filter(p => p.status === filterStatus);
 
   const statsConfig = [
     { label: 'TOTAL PROVINSI', val: hasilAnalisis.total_provinsi || hasilAnalisis.total_success || 0, cls: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300' },
@@ -49,7 +76,8 @@ export function TabInfo({ hasilAnalisis, jumlahStatus }) {
       {hasilAnalisis.timestamp && (
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
           <Calendar size={11} />
-          {isAI ? 'Waktu prediksi:' : 'Waktu pengambilan data:'} {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
+          {isAI ? 'Waktu prediksi:' : 'Waktu pengambilan data:'}{' '}
+          {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
         </div>
       )}
 
@@ -64,6 +92,7 @@ export function TabInfo({ hasilAnalisis, jumlahStatus }) {
         </div>
       )}
 
+      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statsConfig.map(s => (
           <div key={s.label} className={cn('border rounded-xl p-3', s.cls)}>
@@ -86,7 +115,9 @@ export function TabInfo({ hasilAnalisis, jumlahStatus }) {
         <div className="border border-purple-200 dark:border-purple-700 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 flex items-center gap-2">
             <Cpu size={13} className="text-purple-500" />
-            <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">Skor Model AI (Cross-Validation 5-Fold)</span>
+            <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
+              Skor Model AI (Cross-Validation 5-Fold)
+            </span>
           </div>
           <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-700">
             {Object.entries(hasilAnalisis.model_scores).map(([k, s]) => (
@@ -102,6 +133,7 @@ export function TabInfo({ hasilAnalisis, jumlahStatus }) {
         </div>
       )}
 
+      {/* Formula */}
       <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Dasar Penilaian IKP</div>
         <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
@@ -111,136 +143,80 @@ export function TabInfo({ hasilAnalisis, jumlahStatus }) {
           <span className="font-bold text-red-600 dark:text-red-400">RENDAH</span> {'< 0.50'}
         </p>
       </div>
-    </div>
-  );
-}
 
-const PRIORITY_STYLE = {
-  Tinggi: { bar: 'bg-red-500',   badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
-  Sedang: { bar: 'bg-amber-500', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
-  Rendah: { bar: 'bg-green-500', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700' },
-};
-
-const insightStyle = (txt) => {
-  const t = txt.toLowerCase();
-  if (t.includes('baik') || t.includes('cukup') || t.includes('terpenuhi') || t.includes('tinggi'))
-    return { cls: 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800', Icon: CheckCircle2, iconCls: 'text-green-500' };
-  if (t.includes('rendah') || t.includes('bawah') || t.includes('lemah') || t.includes('rawan'))
-    return { cls: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800', Icon: XCircle, iconCls: 'text-red-400' };
-  if (t.includes('sedang') || t.includes('mendekati') || t.includes('perlu'))
-    return { cls: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800', Icon: AlertTriangle, iconCls: 'text-amber-500' };
-  return { cls: 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700', Icon: Info, iconCls: 'text-slate-400' };
-};
-
-// ─── Tab: Tabel
-export function TabTabel({ hasilAnalisis, statusTerpilih, setStatusTerpilih, eksporData }) {
-  const [menuUnduh,    setMenuUnduh]    = useState(false);
-  const [expandedProv, setExpandedProv] = useState(null);
-
-  const isAI    = hasilAnalisis?.is_ai_prediction;
-  const summary = hasilAnalisis?.analysis_summary || [];
-  const filtered = statusTerpilih === 'SEMUA' ? summary : summary.filter(p => p.status === statusTerpilih);
-
-  const getFeatureData = (provName) =>
-    hasilAnalisis?.matched_features?.features
-      ?.find(f => f.properties?.pangan_analysis?.nama_provinsi === provName)
-      ?.properties?.pangan_analysis || null;
-
-  if (!hasilAnalisis) return (
-    <div className="py-10 text-center">
-      <FileText size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada data. Jalankan analisis terlebih dahulu.</p>
-    </div>
-  );
-
-  return (
-    <div className="space-y-3">
-      {isAI && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-xs text-purple-700 dark:text-purple-300">
-          <Bot size={12} className="shrink-0" />
-          <span>Nilai RPP, PL, IK, IA, dan IKP merupakan <strong>hasil prediksi model AI</strong>, bukan data real BPS.</span>
-        </div>
-      )}
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          {filtered.length} provinsi · Tahun {hasilAnalisis.tahun}
-          {isAI && <span className="ml-2 text-purple-400 font-semibold">· 🤖 Prediksi AI</span>}
-          {!isAI && hasilAnalisis.ada_data_kosong && <span className="ml-2 text-amber-500">· {hasilAnalisis.total_data_kosong} data kosong</span>}
-          <span className="ml-2 text-indigo-400">· Klik baris untuk rekomendasi</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <select value={statusTerpilih} onChange={e => setStatusTerpilih(e.target.value)}
-            className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
-            {['SEMUA', 'TINGGI', 'SEDANG', 'RENDAH'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <div className="relative">
-            <Btn variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setMenuUnduh(!menuUnduh)}>
-              <Download size={12} /> Unduh
-            </Btn>
-            {menuUnduh && (
-              <div className="absolute top-full mt-1 right-0 w-32 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
-                {['EXCEL', 'CSV', 'JSON', 'GEOJSON'].map(fmt => (
-                  <button key={fmt} onClick={() => { eksporData(fmt); setMenuUnduh(false); }}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
-                    <Download size={10} className="text-green-500" /> {fmt}
-                  </button>
-                ))}
+      {/* ─── Tabel Provinsi ─── */}
+      <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            {filtered.length} provinsi · Tahun {hasilAnalisis.tahun}
+            {isAI && <span className="ml-2 text-purple-400 font-semibold">· 🤖 Prediksi AI</span>}
+            {!isAI && hasilAnalisis.ada_data_kosong && (
+              <span className="ml-2 text-amber-500">· {hasilAnalisis.total_data_kosong} data kosong</span>
+            )}
+          </p>
+          <div className="flex items-center gap-2">
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
+              {['SEMUA', 'TINGGI', 'SEDANG', 'RENDAH'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {eksporData && (
+              <div className="relative">
+                <Btn variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setMenuUnduh(!menuUnduh)}>
+                  <Download size={12} /> Unduh
+                </Btn>
+                {menuUnduh && (
+                  <div className="absolute top-full mt-1 right-0 w-32 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
+                    {['EXCEL', 'CSV', 'JSON', 'GEOJSON'].map(fmt => (
+                      <button key={fmt} onClick={() => { eksporData(fmt); setMenuUnduh(false); }}
+                        className="w-full text-left px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+                        <Download size={10} className="text-green-500" /> {fmt}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {!isAI && hasilAnalisis.ada_data_kosong && (
-        <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
-          <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-700 dark:text-amber-300">
-            {hasilAnalisis.total_data_kosong} provinsi ditampilkan dengan '-' (data tidak tersedia di BPS)
-          </p>
-        </div>
-      )}
+        {isAI && (
+          <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-xs text-purple-700 dark:text-purple-300">
+            <Bot size={12} className="shrink-0" />
+            <span>Nilai RPP, PL, IK, IA, dan IKP merupakan <strong>hasil prediksi model AI</strong>, bukan data real BPS.</span>
+          </div>
+        )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-900/60">
-            <tr className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-              <th className="px-3 py-3 w-8" />
-              <th className="px-3 py-3 text-center w-8">No</th>
-              <th className="px-4 py-3 text-left">Provinsi</th>
-              <th className="px-4 py-3 text-center">IKP</th>
-              <th className="px-4 py-3 text-center">RPP</th>
-              <th className="px-4 py-3 text-center">PL</th>
-              <th className="px-4 py-3 text-center">IK</th>
-              <th className="px-4 py-3 text-center">IA</th>
-              <th className="px-4 py-3 text-center">% Miskin</th>
-              <th className="px-4 py-3 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p, i) => {
-              const noData     = !p.has_complete_data && p.status === '-';
-              const partData   = !p.has_complete_data && p.status !== '-';
-              const warna      = p.warna || '#94a3b8';
-              const isExpanded = expandedProv === p.provinsi;
-              const featData   = isExpanded ? getFeatureData(p.provinsi) : null;
-
-              return (
-                <React.Fragment key={p.provinsi}>
-                  <tr
-                    onClick={() => setExpandedProv(isExpanded ? null : p.provinsi)}
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/60">
+              <tr className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                <th className="px-3 py-3 text-center w-8">No</th>
+                <th className="px-4 py-3 text-left">Provinsi</th>
+                <th className="px-4 py-3 text-center">IKP</th>
+                <th className="px-4 py-3 text-center">RPP</th>
+                <th className="px-4 py-3 text-center">PL</th>
+                <th className="px-4 py-3 text-center">IK</th>
+                <th className="px-4 py-3 text-center">IA</th>
+                <th className="px-4 py-3 text-center">% Miskin</th>
+                <th className="px-4 py-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p, i) => {
+                const noData   = !p.has_complete_data && p.status === '-';
+                const partData = !p.has_complete_data && p.status !== '-';
+                const warna    = p.warna || '#94a3b8';
+                return (
+                  <tr key={p.provinsi}
                     className={cn(
-                      'border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors',
-                      isExpanded ? 'bg-indigo-50 dark:bg-indigo-900/20 border-b-0' : 'hover:bg-slate-50 dark:hover:bg-slate-700/30',
+                      'border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors',
                       noData ? 'opacity-40' : partData ? 'opacity-70' : ''
                     )}>
-                    <td className="pl-4 py-2.5 text-center">
-                      <ChevronDown size={13} className={cn('text-slate-400 transition-transform duration-200', isExpanded ? 'rotate-180 text-indigo-500' : '')} />
-                    </td>
                     <td className="px-2 py-2.5 text-center text-xs text-slate-400">{i + 1}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: warna }} />
-                        <span className={cn('text-xs font-semibold', isExpanded ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200')}>{p.provinsi}</span>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{p.provinsi}</span>
                         {p.is_prediction && <Bot size={9} className="text-purple-400 shrink-0" title="Prediksi AI" />}
                         {partData && <span className="text-[8px] px-1 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded font-medium">Parsial</span>}
                       </div>
@@ -254,7 +230,9 @@ export function TabTabel({ hasilAnalisis, statusTerpilih, setStatusTerpilih, eks
                     <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.pl  != null ? p.pl.toFixed(2)  : '-'}</td>
                     <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.ik  != null ? p.ik.toFixed(4)  : '-'}</td>
                     <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.ia  != null ? p.ia.toFixed(4)  : '-'}</td>
-                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.ia != null ? `${((1 - p.ia) * 100).toFixed(2)}%` : '-'}</td>
+                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">
+                      {p.ia != null ? `${((1 - p.ia) * 100).toFixed(2)}%` : '-'}
+                    </td>
                     <td className="px-4 py-2.5 text-center">
                       {p.status !== '-'
                         ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border" style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>{p.status}</span>
@@ -262,105 +240,192 @@ export function TabTabel({ hasilAnalisis, statusTerpilih, setStatusTerpilih, eks
                       }
                     </td>
                   </tr>
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={10} className="px-6 pb-5 pt-1 bg-indigo-50/40 dark:bg-indigo-900/10">
-                        <div className="border border-indigo-200 dark:border-indigo-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
-                          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-700" style={{ borderLeftWidth: 3, borderLeftColor: warna }}>
-                            <ShieldCheck size={14} style={{ color: warna }} />
-                            <span className="text-xs font-bold text-slate-800 dark:text-white">Kebijakan - {p.provinsi}</span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>
-                              {p.status !== '-' ? p.status : 'N/A'} · IKP {p.ikp != null ? p.ikp.toFixed(3) : '-'}
-                            </span>
-                            {p.is_prediction && (
-                              <span className="text-[9px] font-semibold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full">🤖 Prediksi AI</span>
-                            )}
-                            <span className="ml-auto text-[10px] text-slate-400">Tahun {hasilAnalisis.tahun}</span>
-                          </div>
-                          {featData ? (
-                            <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-700">
-                              <div className="p-5">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="w-1 h-4 rounded-full bg-blue-400" />
-                                  <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Analisis Kondisi</h4>
-                                </div>
-                                <div className="space-y-2">
-                                  {(featData.insights || []).map((insight, idx) => {
-                                    const { cls, Icon: IIcon, iconCls } = insightStyle(insight);
-                                    const cleanText = insight.replace(/^[\u{1F300}-\u{1FFFF}\u2600-\u26FF\u2700-\u27BF\s]+/u, '').trim();
-                                    return (
-                                      <div key={idx} className={cn('flex items-start gap-2.5 px-3 py-2 rounded-lg border text-xs text-slate-700 dark:text-slate-300 leading-relaxed', cls)}>
-                                        <IIcon size={12} className={cn('shrink-0 mt-0.5', iconCls)} />
-                                        <span>{cleanText}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              <div className="p-5">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="w-1 h-4 rounded-full bg-green-500" />
-                                  <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rekomendasi Kebijakan</h4>
-                                </div>
-                                <div className="space-y-3">
-                                  {(featData.rekomendasi || []).map((rek, ri) => {
-                                    const pStyle = PRIORITY_STYLE[rek.priority] || PRIORITY_STYLE['Sedang'];
-                                    return (
-                                      <div key={ri} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50">
-                                          <div className="flex items-center gap-2">
-                                            <div className={cn('w-1 h-3.5 rounded-full', pStyle.bar)} />
-                                            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{rek.title}</span>
-                                          </div>
-                                          <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded border uppercase', pStyle.badge)}>{rek.priority}</span>
-                                        </div>
-                                        <ul className="px-3 py-2.5 space-y-1.5 bg-white dark:bg-slate-800">
-                                          {(rek.actions || []).map((action, ai) => (
-                                            <li key={ai} className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                                              <Check size={10} className="text-green-500 shrink-0 mt-0.5" />
-                                              {action}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3 px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
-                              <AlertCircle size={14} className="text-slate-400 shrink-0" />
-                              Rekomendasi tidak tersedia - data dimensi provinsi ini kosong.
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
+// ─── Tab: Kebijakan (accordion provinsi)
+export function TabKebijakan({ hasilAnalisis, statusTerpilih, setStatusTerpilih }) {
+  const [expandedProv, setExpandedProv] = useState(null);
+
+  if (!hasilAnalisis) return (
+    <div className="py-10 text-center">
+      <ShieldCheck size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+      <p className="text-sm text-slate-400 dark:text-slate-500">
+        Belum ada data. Jalankan analisis terlebih dahulu.
+      </p>
+    </div>
+  );
+
+  const isAI    = hasilAnalisis.is_ai_prediction;
+  const summary = hasilAnalisis?.analysis_summary || [];
+  const filtered = statusTerpilih === 'SEMUA' ? summary : summary.filter(p => p.status === statusTerpilih);
+
+  const getFeatureData = (provName) =>
+    hasilAnalisis?.matched_features?.features
+      ?.find(f => f.properties?.pangan_analysis?.nama_provinsi === provName)
+      ?.properties?.pangan_analysis || null;
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          {filtered.length} provinsi · Tahun {hasilAnalisis.tahun}
+          {isAI && <span className="ml-2 text-purple-400 font-semibold">· 🤖 Prediksi AI</span>}
+          <span className="ml-2 text-indigo-400">· Klik provinsi untuk detail kebijakan</span>
+        </p>
+        <select value={statusTerpilih} onChange={e => setStatusTerpilih(e.target.value)}
+          className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
+          {['SEMUA', 'TINGGI', 'SEDANG', 'RENDAH'].map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Accordion list */}
+      <div className="space-y-2">
+        {filtered.map(p => {
+          const warna      = p.warna || '#94a3b8';
+          const isExpanded = expandedProv === p.provinsi;
+          const featData   = isExpanded ? getFeatureData(p.provinsi) : null;
+          const hasPolicy  = featData?.insights?.length || featData?.rekomendasi?.length;
+
+          return (
+            <div key={p.provinsi}
+              className={cn('rounded-2xl border-2 overflow-hidden transition-all duration-200',
+                isExpanded
+                  ? 'border-indigo-300 dark:border-indigo-700 shadow-md'
+                  : 'border-slate-200 dark:border-slate-700'
+              )}>
+              {/* Header baris */}
+              <button
+                onClick={() => setExpandedProv(isExpanded ? null : p.provinsi)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-5 py-3.5 transition-colors text-left',
+                  isExpanded
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                    : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                )}>
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: warna }} />
+                <span className={cn('text-sm font-bold flex-1',
+                  isExpanded ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'
+                )}>
+                  {p.provinsi}
+                </span>
+                {p.is_prediction && <Bot size={11} className="text-purple-400 shrink-0" title="Prediksi AI" />}
+                {/* IKP value */}
+                <span className="text-xs font-mono font-black shrink-0" style={{ color: warna }}>
+                  IKP {p.ikp != null ? p.ikp.toFixed(3) : '-'}
+                </span>
+                {/* Status badge */}
+                {p.status !== '-' && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
+                    style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>
+                    {p.status}
+                  </span>
+                )}
+                <ChevronDown size={14} className={cn(
+                  'text-slate-400 transition-transform duration-200 shrink-0',
+                  isExpanded && 'rotate-180 text-indigo-500'
+                )} />
+              </button>
+
+              {/* Konten expanded */}
+              {isExpanded && (
+                <div className="border-t border-slate-100 dark:border-slate-700">
+                  {hasPolicy ? (
+                    <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-700">
+                      {/* Analisis Kondisi */}
+                      <div className="p-5 bg-white dark:bg-slate-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-1 h-4 rounded-full bg-blue-400" />
+                          <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                            Analisis Kondisi
+                          </h4>
+                        </div>
+                        <div className="space-y-2">
+                          {(featData.insights || []).map((insight, idx) => {
+                            const { cls, Icon: IIcon, iconCls } = insightStyle(insight);
+                            const cleanText = insight.replace(/^[\u{1F300}-\u{1FFFF}\u2600-\u26FF\u2700-\u27BF\s]+/u, '').trim();
+                            return (
+                              <div key={idx} className={cn('flex items-start gap-2.5 px-3 py-2 rounded-lg border text-xs text-slate-700 dark:text-slate-300 leading-relaxed', cls)}>
+                                <IIcon size={12} className={cn('shrink-0 mt-0.5', iconCls)} />
+                                <span>{cleanText}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {/* Rekomendasi Kebijakan */}
+                      <div className="p-5 bg-white dark:bg-slate-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-1 h-4 rounded-full bg-green-500" />
+                          <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                            Rekomendasi Kebijakan
+                          </h4>
+                        </div>
+                        <div className="space-y-3">
+                          {(featData.rekomendasi || []).map((rek, ri) => {
+                            const pStyle = PRIORITY_STYLE[rek.priority] || PRIORITY_STYLE['Sedang'];
+                            return (
+                              <div key={ri} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50">
+                                  <div className="flex items-center gap-2">
+                                    <div className={cn('w-1 h-3.5 rounded-full', pStyle.bar)} />
+                                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{rek.title}</span>
+                                  </div>
+                                  <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded border uppercase', pStyle.badge)}>
+                                    {rek.priority}
+                                  </span>
+                                </div>
+                                <ul className="px-3 py-2.5 space-y-1.5 bg-white dark:bg-slate-800">
+                                  {(rek.actions || []).map((action, ai) => (
+                                    <li key={ai} className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                                      <Check size={10} className="text-green-500 shrink-0 mt-0.5" />
+                                      {action}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 px-5 py-4 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800">
+                      <AlertCircle size={14} className="text-slate-400 shrink-0" />
+                      Rekomendasi tidak tersedia — data dimensi provinsi ini kosong.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab: Metadata
 const METRIC_EXPLAIN = {
   cv_r2:  { label: 'CV R²',    desc: 'Koefisien determinasi (Cross-Validation). Semakin mendekati 1.0, semakin baik. Nilai ≥ 0.90 dianggap sangat baik.' },
   cv_mae: { label: 'CV MAE',   desc: 'Mean Absolute Error (Cross-Validation). Rata-rata kesalahan prediksi dalam satuan IKP (0–1). Nilai 0.024 artinya rata-rata selisih hanya 2.4 poin.' },
   r2:     { label: 'Train R²', desc: 'R² pada data training. Nilai tinggi wajar; yang penting adalah CV R² untuk generalisasi ke data baru.' },
 };
 
-// ─── Tab: Metadata
 export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
-  const [menuDataset,    setMenuDataset]    = useState(false);
-  const [expandFormula,  setExpandFormula]  = useState(false);
-  const [expandAI,       setExpandAI]       = useState(false);
-  const isAI     = hasilAnalisis?.is_ai_prediction;
-  const scores   = hasilAnalisis?.model_scores;
+  const [menuDataset,   setMenuDataset]   = useState(false);
+  const [expandFormula, setExpandFormula] = useState(false);
+  const [expandAI,      setExpandAI]      = useState(false);
+  const isAI   = hasilAnalisis?.is_ai_prediction;
+  const scores = hasilAnalisis?.model_scores;
 
   return (
     <div className="space-y-5">
@@ -396,13 +461,13 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
         )}
       </div>
 
-      {/* ─ Info AI ─ */}
+      {/* Info AI */}
       {isAI && (
         <Card className="p-5 border border-purple-200 dark:border-purple-700">
           <button className="w-full flex items-center justify-between" onClick={() => setExpandAI(!expandAI)}>
             <SectionBar color="bg-purple-500" title="Model AI - Prediksi Penuh Random Forest"
               sub={`Versi: ${hasilAnalisis.model_version || 'rf_v1.0'} · Dilatih data BPS 2018–2024`} />
-            <ChevronDown size={14} className={cn("text-slate-400 transition-transform", expandAI && "rotate-180")} />
+            <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandAI && 'rotate-180')} />
           </button>
           {scores && (
             <div className="mt-3 grid grid-cols-5 gap-2">
@@ -419,7 +484,7 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
           )}
           {expandAI && (
             <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-700 pt-3">
-              <p><strong>Algoritma:</strong> Random Forest Regressor (scikit-learn) - ensemble banyak pohon keputusan, rata-ratakan prediksi untuk kurangi overfitting.</p>
+              <p><strong>Algoritma:</strong> Random Forest Regressor (scikit-learn) — ensemble banyak pohon keputusan, rata-ratakan prediksi untuk kurangi overfitting.</p>
               <p><strong>Data Training:</strong> 7 tahun × 34 provinsi = 238 baris. Fitur: lag-1, lag-2, delta YoY, rolling mean 2-tahun, rolling std, encoding provinsi & pulau, dummy 6 pulau utama.</p>
               <p><strong>Prediksi Rolling:</strong> Untuk 2025+, hasil prediksi tahun sebelumnya dipakai sebagai input tahun berikutnya (cascading prediction).</p>
               <div className="mt-3 space-y-2">
@@ -435,11 +500,11 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
         </Card>
       )}
 
-      {/* ─ Formula IKP ─ */}
+      {/* Formula IKP */}
       <Card className="p-5">
         <button className="w-full flex items-center justify-between" onClick={() => setExpandFormula(!expandFormula)}>
           <SectionBar color="bg-green-500" title="Formula & Bobot IKP" sub="Dasar perhitungan Indeks Ketahanan Pangan" />
-          <ChevronDown size={14} className={cn("text-slate-400 transition-transform", expandFormula && "rotate-180")} />
+          <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandFormula && 'rotate-180')} />
         </button>
         <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800 my-3">
           <code className="block text-sm font-mono font-black text-slate-900 dark:text-white">
@@ -506,10 +571,10 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
           <SectionBar color="bg-teal-500" title="Sumber Data BPS" />
           <div className="space-y-2 mt-3">
             {[
-              { ds: 'Produksi & Luas Panen Padi', src: 'BPS SIMDASI (id_tabel PADI)', update: 'Tahunan' },
-              { ds: 'Konsumsi Kalori & Protein',   src: 'BPS Susenas - Tabel Statis 951', update: 'Tahunan (tersedia hingga 2025)' },
-              { ds: '% Penduduk Miskin',            src: 'BPS - /api/list var=192',       update: 'Tahunan' },
-              { ds: 'Jumlah Penduduk',              src: 'BPS SIMDASI (proyeksi)',         update: 'Tahunan' },
+              { ds: 'Produksi & Luas Panen Padi', src: 'BPS SIMDASI (id_tabel PADI)',       update: 'Tahunan' },
+              { ds: 'Konsumsi Kalori & Protein',   src: 'BPS Susenas - Tabel Statis 951',    update: 'Tahunan (tersedia hingga 2025)' },
+              { ds: '% Penduduk Miskin',            src: 'BPS - /api/list var=192',           update: 'Tahunan' },
+              { ds: 'Jumlah Penduduk',              src: 'BPS SIMDASI (proyeksi)',             update: 'Tahunan' },
             ].map(d => (
               <div key={d.ds} className="p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="text-xs font-bold text-slate-700 dark:text-slate-300">{d.ds}</div>
@@ -524,61 +589,12 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
   );
 }
 
-// ─── Tab: Riwayat
-export function TabRiwayat({ daftarTersimpan, onMuat, hasilAnalisis }) {
-  if (!daftarTersimpan.length) return (
-    <div className="py-10 text-center">
-      <History size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada analisis yang disimpan.</p>
-    </div>
-  );
-  return (
-    <div className="space-y-4">
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{daftarTersimpan.length} analisis tersimpan</div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {daftarTersimpan.map(item => {
-          const isActive = hasilAnalisis?.analysis_id === item.analysis_id;
-          const isAIItem = item.is_ai_prediction;
-          return (
-            <button key={item.analysis_id} onClick={() => onMuat(item.analysis_id, item.tahun)}
-              className={cn('text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md',
-                isActive
-                  ? isAIItem ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-400 shadow-md' : 'bg-green-50 dark:bg-green-900/20 border-green-400 shadow-md'
-                  : isAIItem ? 'bg-white dark:bg-slate-800 border-purple-200 dark:border-purple-800 hover:border-purple-400'
-                             : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-green-300'
-              )}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className={cn('text-xs font-bold px-2 py-0.5 rounded-md',
-                    isActive ? (isAIItem ? 'bg-purple-500 text-white' : 'bg-green-500 text-white')
-                             : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  )}>Tahun {item.tahun}</span>
-                  {isAIItem && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 rounded">AI</span>}
-                </div>
-                {isActive && <CheckCircle2 size={14} className={isAIItem ? 'text-purple-500' : 'text-green-500'} />}
-              </div>
-              <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight mb-1">{item.name || 'Analisis Pangan'}</div>
-              <div className="text-[10px] text-slate-400 mb-2">
-                {item.timestamp ? new Date(item.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-              </div>
-              <div className="text-[10px] text-slate-400 mb-2 italic">{item.source || (isAIItem ? 'AI Prediction' : 'BPS Web API')}</div>
-              {item.status_distribusi && (
-                <div className="flex gap-1.5 flex-wrap">
-                  {Object.entries(item.status_distribusi).map(([s, n]) => (
-                    <span key={s} className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: (STATUS_PANGAN[s]?.warna || '#6b7280') + '20', color: STATUS_PANGAN[s]?.warna || '#6b7280' }}>
-                      {s}: {n}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// ─── Tab: Tren
+const PALETTE = [
+  '#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6',
+  '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',
+  '#a855f7','#0ea5e9','#fb923c','#e879f9','#4ade80',
+];
 
 const VIEW_BTNS = [
   { id: 'distribusi', label: 'Distribusi Status', Icon: BarChart2   },
@@ -620,39 +636,30 @@ const DistribTooltip = ({ active, payload, label }) => {
           <span className="text-[11px] font-black" style={{ color: p.fill }}>{p.value}</span>
         </div>
       ))}
-      <div className="border-t border-slate-100 dark:border-slate-700 mt-1.5 pt-1.5 text-[10px] text-slate-400">Total: {total} provinsi</div>
+      <div className="border-t border-slate-100 dark:border-slate-700 mt-1.5 pt-1.5 text-[10px] text-slate-400">
+        Total: {total} provinsi
+      </div>
     </div>
   );
 };
 
-// ─── Tab: Tren
-const PALETTE = [
-  '#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6',
-  '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',
-  '#a855f7','#0ea5e9','#fb923c','#e879f9','#4ade80',
-];
-
 export function TabTrend({ trendData, trendLoading, trendError }) {
-  const loading = trendLoading;
-  const error   = trendError;
-  const [viewMode,       setViewMode]       = useState('distribusi'); // distribusi | ikp | ranking | heatmap
+  const [viewMode,       setViewMode]       = useState('distribusi');
   const [selectedProvs,  setSelectedProvs]  = useState([]);
   const [provSearch,     setProvSearch]     = useState('');
   const [showProvPicker, setShowProvPicker] = useState(false);
-  const [metrik,         setMetrik]         = useState('ikp'); // ikp | rpp | pl | ik | ia
+  const [metrik,         setMetrik]         = useState('ikp');
 
-  // Load semua detail analisis tersimpan
-  // Default provinsi terpilih saat data pertama kali tersedia
   useEffect(() => {
     if (!trendData?.length || selectedProvs.length > 0) return;
-    const allProvs = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))];
+    const allProvs  = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))];
     const provCount = {};
     trendData.forEach(d => d.summary.forEach(p => { provCount[p.provinsi] = (provCount[p.provinsi] || 0) + 1; }));
     const top5 = allProvs.sort((a, b) => (provCount[b] || 0) - (provCount[a] || 0)).slice(0, 5);
     setSelectedProvs(top5);
   }, [trendData]);
 
-  if (!trendData && !loading) return (
+  if (!trendData && !trendLoading) return (
     <div className="py-14 text-center">
       <Activity size={36} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
       <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 mb-1">Belum ada analisis tersimpan</p>
@@ -660,37 +667,36 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
     </div>
   );
 
-  if (loading) return (
+  if (trendLoading) return (
     <div className="py-14 text-center">
       <Loader2 size={28} className="text-green-500 animate-spin mx-auto mb-3" />
       <p className="text-sm text-slate-500">Memuat data analisis tersimpan...</p>
     </div>
   );
 
-  if (error) return (
+  if (trendError) return (
     <div className="py-10 text-center">
       <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
-      <p className="text-sm text-red-500">{error}</p>
+      <p className="text-sm text-red-500">{trendError}</p>
     </div>
   );
 
   if (!trendData?.length) return null;
 
-  const tahunList  = [...new Set(trendData.map(d => d.tahun))].sort();
-  const allProvs   = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))].sort();
-  const filteredProvs = allProvs.filter(p => p.toLowerCase().includes(provSearch.toLowerCase()));
+  const tahunList      = [...new Set(trendData.map(d => d.tahun))].sort();
+  const allProvs       = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))].sort();
+  const filteredProvs  = allProvs.filter(p => p.toLowerCase().includes(provSearch.toLowerCase()));
 
-  // ── Data: Distribusi Status per Tahun ──
   const distribusiData = trendData.map(d => ({
-    tahun: String(d.tahun),
+    tahun:  String(d.tahun),
     TINGGI: d.status_dist.TINGGI || 0,
     SEDANG: d.status_dist.SEDANG || 0,
     RENDAH: d.status_dist.RENDAH || 0,
-    isAI: d.is_ai,
+    isAI:   d.is_ai,
   }));
 
-  // ── Data: Trend IKP per Provinsi ──
   const METRIK_LABEL = { ikp: 'IKP', rpp: 'RPP (norm)', pl: 'PL (norm)', ik: 'IK (norm)', ia: 'IA (norm)' };
+
   const ikpTrendData = tahunList.map(th => {
     const snap = trendData.find(d => d.tahun === th);
     const row  = { tahun: String(th) };
@@ -703,7 +709,6 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
     return row;
   });
 
-  // ── Data: Ranking Rata-rata IKP ──
   const rankingData = allProvs.map(pn => {
     const vals = trendData.flatMap(d => {
       const p = d.summary.find(s => s.provinsi === pn);
@@ -714,15 +719,13 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
     return { provinsi: pn, avg: avg ? +avg.toFixed(4) : null, count: vals.length, warna: last?.warna || '#94a3b8', status: last?.status || '-' };
   }).filter(d => d.avg != null).sort((a, b) => b.avg - a.avg);
 
-  const top5    = rankingData.slice(0, 5);
-  const bottom5 = rankingData.slice(-5).reverse();
-
-  // ── Data: Heatmap (Provinsi × Tahun) ──
+  const top5        = rankingData.slice(0, 5);
+  const bottom5     = rankingData.slice(-5).reverse();
   const heatmapProvs = rankingData.slice(0, 20);
 
   return (
     <div className="space-y-4">
-      {/* Header info */}
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
@@ -753,7 +756,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
         </div>
       </div>
 
-      {/* ── View 1: Distribusi Status per Tahun ── */}
+      {/* ── Distribusi Status ── */}
       {viewMode === 'distribusi' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -775,10 +778,8 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {/* Summary cards */}
           <div className="grid grid-cols-3 gap-3">
-            {['TINGGI','SEDANG','RENDAH'].map(s => {
-              const vals   = distribusiData.map(d => d[s] || 0);
+            {['TINGGI', 'SEDANG', 'RENDAH'].map(s => {
               const latest = distribusiData[distribusiData.length - 1]?.[s] || 0;
               const prev   = distribusiData[distribusiData.length - 2]?.[s];
               const delta  = prev != null ? latest - prev : null;
@@ -800,7 +801,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
         </div>
       )}
 
-      {/* ── View 2: Tren IKP per Provinsi ── */}
+      {/* ── Tren IKP per Provinsi ── */}
       {viewMode === 'ikp' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -809,17 +810,15 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Tren Metrik per Provinsi</h3>
             </div>
             <div className="flex items-center gap-2">
-              {/* Metrik selector */}
               <select value={metrik} onChange={e => setMetrik(e.target.value)}
                 className="text-xs font-semibold px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
                 {Object.entries(METRIK_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-              {/* Provinsi picker */}
               <div className="relative">
                 <button onClick={() => setShowProvPicker(!showProvPicker)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-green-300 transition-colors">
                   <Filter size={11} /> Provinsi ({selectedProvs.length})
-                  <ChevronDown size={11} className={cn("transition-transform", showProvPicker && "rotate-180")} />
+                  <ChevronDown size={11} className={cn('transition-transform', showProvPicker && 'rotate-180')} />
                 </button>
                 {showProvPicker && (
                   <div className="absolute top-full mt-1 right-0 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-20 max-h-72 flex flex-col">
@@ -841,8 +840,12 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
                             else if (selectedProvs.length < 10) setSelectedProvs(p => [...p, pn]);
                             else toast('Maks 10 provinsi sekaligus', { icon: '⚠️' });
                           }}
-                            className={cn('w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors', sel ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700')}>
-                            <div className={cn('w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0', sel ? 'bg-green-500 border-green-500' : 'border-slate-300 dark:border-slate-600')}>
+                            className={cn('w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors',
+                              sel ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 font-semibold'
+                                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                            )}>
+                            <div className={cn('w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0',
+                              sel ? 'bg-green-500 border-green-500' : 'border-slate-300 dark:border-slate-600')}>
                               {sel && <Check size={9} className="text-white" />}
                             </div>
                             {pn}
@@ -879,7 +882,6 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
             </div>
           )}
 
-          {/* Tabel ringkasan per provinsi terpilih */}
           {selectedProvs.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
               <table className="w-full text-xs">
@@ -898,11 +900,9 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
                       const p    = snap?.summary.find(s => s.provinsi === pn);
                       return p?.[metrik] ?? p?.ikp ?? null;
                     });
-                    const nonNull = vals.filter(v => v != null);
-                    const avg     = nonNull.length ? nonNull.reduce((a, b) => a + b, 0) / nonNull.length : null;
-                    const first   = nonNull[0];
-                    const last    = nonNull[nonNull.length - 1];
-                    const trendDir = first != null && last != null ? last - first : null;
+                    const nonNull  = vals.filter(v => v != null);
+                    const avg      = nonNull.length ? nonNull.reduce((a, b) => a + b, 0) / nonNull.length : null;
+                    const trendDir = nonNull.length > 1 ? nonNull[nonNull.length - 1] - nonNull[0] : null;
                     return (
                       <tr key={pn} className="border-b border-slate-100 dark:border-slate-700/50">
                         <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">{pn}</td>
@@ -935,7 +935,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
         </div>
       )}
 
-      {/* ── View 3: Top & Bottom Ranking ── */}
+      {/* ── Top & Bottom Ranking ── */}
       {viewMode === 'ranking' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -943,7 +943,6 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Peringkat Rata-rata IKP (Semua Periode Tersimpan)</h3>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {/* Top 5 */}
             <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-4">
                 <CheckCircle2 size={14} className="text-green-500" />
@@ -960,7 +959,6 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            {/* Bottom 5 */}
             <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle size={14} className="text-red-400" />
@@ -978,7 +976,6 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
               </ResponsiveContainer>
             </div>
           </div>
-          {/* Full ranking table */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 dark:bg-slate-900/60">
@@ -1005,7 +1002,8 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
                     <td className="px-4 py-2 text-center font-black" style={{ color: d.warna }}>{d.avg.toFixed(4)}</td>
                     <td className="px-4 py-2 text-center text-slate-400">{d.count}×</td>
                     <td className="px-4 py-2 text-center">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border" style={{ borderColor: d.warna + '60', color: d.warna, backgroundColor: d.warna + '15' }}>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: d.warna + '60', color: d.warna, backgroundColor: d.warna + '15' }}>
                         {d.status}
                       </span>
                     </td>
@@ -1022,7 +1020,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
         </div>
       )}
 
-      {/* ── View 4: Heatmap Provinsi × Tahun ── */}
+      {/* ── Heatmap ── */}
       {viewMode === 'heatmap' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -1085,13 +1083,12 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
               </tbody>
             </table>
           </div>
-          {/* Legend */}
           <div className="flex items-center gap-4 px-2">
             <span className="text-[10px] text-slate-400 font-semibold">Legenda:</span>
             {Object.entries(STATUS_PANGAN).map(([s, v]) => (
               <div key={s} className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: v.warna + '30', border: `1px solid ${v.warna}60` }} />
-                <span className="text-[10px] font-semibold text-slate-500" style={{ color: v.warna }}>{s}</span>
+                <span className="text-[10px] font-semibold" style={{ color: v.warna }}>{s}</span>
               </div>
             ))}
             <div className="flex items-center gap-1.5">
