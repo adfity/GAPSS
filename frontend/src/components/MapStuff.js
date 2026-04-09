@@ -17,13 +17,12 @@ const glass = [
   "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
 ].join(" ");
 
-const NAVBAR_H   = 56;
-const LEFT_PX    = 12;
-const TOP_ZOOM   = NAVBAR_H + 12;
-const TOP_CLEAN  = TOP_ZOOM + 90 + 8;
+const NAVBAR_H  = 56;
+const LEFT_PX   = 12;
+const TOP_ZOOM  = NAVBAR_H + 12;
+const TOP_CLEAN = TOP_ZOOM + 90 + 8;
 
-
-// Detection Preview Box
+// ─── Detection Preview Box ────────────────────────────────────────────────────
 
 export function DetectionPreviewBox({ show, size }) {
   const map = useMap();
@@ -67,7 +66,7 @@ export function DetectionPreviewBox({ show, size }) {
   );
 }
 
-// Zoom Watcher
+// ─── Zoom Watcher ─────────────────────────────────────────────────────────────
 
 export function ZoomWatcher({ onZoomChange }) {
   useMapEvents({
@@ -76,7 +75,7 @@ export function ZoomWatcher({ onZoomChange }) {
   return null;
 }
 
-// Zoom Buttons
+// ─── Zoom Buttons ─────────────────────────────────────────────────────────────
 
 export function ZoomButtons({ modeBersih }) {
   const map = useMap();
@@ -103,7 +102,8 @@ export function ZoomButtons({ modeBersih }) {
   );
 }
 
-// ✅ FIX: Mouse Coordinate — ganti φ/λ dengan teks "Lat" / "Lng"
+// ─── Mouse Coordinate ─────────────────────────────────────────────────────────
+// Tanpa background — menyatu dengan style map lain
 
 export function MouseCoordinate({ modeBersih }) {
   const [coords, setCoords] = useState({ lat: 0, lng: 0 });
@@ -113,21 +113,21 @@ export function MouseCoordinate({ modeBersih }) {
   if (modeBersih) return null;
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-      <div className={`${glass} rounded-full px-4 py-1.5 flex items-center gap-2.5`}>
+      <div className="flex items-center gap-2.5 px-3 py-1">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-        <span className="font-mono text-[11px] tracking-wide text-black dark:text-white select-none whitespace-nowrap flex items-center gap-1.5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lat</span>
-          <span className="text-sky-500 font-bold">{coords.lat}</span>
-          <span className="mx-1 text-slate-300 dark:text-slate-600">|</span>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lng</span>
-          <span className="text-sky-500 font-bold">{coords.lng}</span>
+        <span className="font-mono text-[11px] tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] select-none whitespace-nowrap flex items-center gap-1.5">
+          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">Lat</span>
+          <span className="text-sky-300 font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">{coords.lat}</span>
+          <span className="mx-1 text-slate-400">|</span>
+          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">Lng</span>
+          <span className="text-sky-300 font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">{coords.lng}</span>
         </span>
       </div>
     </div>
   );
 }
 
-// Clean Mode Button
+// ─── Clean Mode Button ────────────────────────────────────────────────────────
 
 export function CleanModeButton({ modeBersih, setModeBersih }) {
   return (
@@ -147,7 +147,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
   );
 }
 
-// Map Reset
+// ─── Map Reset ────────────────────────────────────────────────────────────────
 
 export function MapReset({ trigger, onDone }) {
   const map = useMap();
@@ -159,7 +159,7 @@ export function MapReset({ trigger, onDone }) {
   return null;
 }
 
-// Sidebar Buttons
+// ─── Sidebar Buttons ──────────────────────────────────────────────────────────
 
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
   const [isMobile, setIsMobile] = useState(false);
@@ -185,11 +185,6 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
       icon: <img src={isDark ? '/icons/Wradius.png' : '/icons/bradius.png'} className="w-[18px] h-[18px] object-contain" alt="Radius" />,
       label: 'Radius',
     },
-    // {
-    //   id: 'geoai',
-    //   icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
-    //   label: 'GeoAI',
-    // },
     {
       id: 'areascan',
       icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
@@ -212,7 +207,6 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
 
   const activeIcon = (btn) => {
     if (btn.id === 'radius') return <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />;
-    // if (btn.id === 'geoai')  return <img src="/icons/wgeo.png"    className="w-[18px] h-[18px] object-contain" alt="GeoAI" />;
     return btn.icon;
   };
 
@@ -275,7 +269,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
   );
 }
 
-// Preview Layer
+// ─── Preview Layer ────────────────────────────────────────────────────────────
 
 export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) {
   const map = useMap();
@@ -308,11 +302,11 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
             key={`preview-${idx}`}
             positions={polygonCoords}
             pathOptions={{
-              color: getCategoryColor(obj.kategori),
-              fillColor: getCategoryColor(obj.kategori),
+              color:       getCategoryColor(obj.kategori),
+              fillColor:   getCategoryColor(obj.kategori),
               fillOpacity: 0.35,
-              weight: 2,
-              dashArray: '6, 8',
+              weight:      2,
+              dashArray:   '6, 8',
             }}
           >
             <Popup>
@@ -341,7 +335,7 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
   );
 }
 
-// Saved Data Layer
+// ─── Saved Data Layer ─────────────────────────────────────────────────────────
 
 export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   const handleDelete = (feature_id) => {
@@ -377,10 +371,10 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
           key={item.feature_id || idx}
           data={item.location}
           style={() => ({
-            color: getCategoryColor(item.kategori),
-            fillColor: getCategoryColor(item.kategori),
+            color:       getCategoryColor(item.kategori),
+            fillColor:   getCategoryColor(item.kategori),
             fillOpacity: 0.35,
-            weight: 2,
+            weight:      2,
           })}
         >
           <Popup>
@@ -437,7 +431,7 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
   );
 }
 
-// Analysis Layer
+// ─── Analysis Layer ───────────────────────────────────────────────────────────
 
 export function AnalysisLayer({ activeAnalysisData }) {
   if (!activeAnalysisData?.matched_features?.features) return null;
@@ -492,7 +486,7 @@ export function AnalysisLayer({ activeAnalysisData }) {
   );
 }
 
-// Default Export
+// ─── Default Export ───────────────────────────────────────────────────────────
 
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
@@ -536,7 +530,7 @@ export default function MapStuff(props) {
       />
 
       <DetectionPreviewBox show={props.showPreviewBox} size={props.detectionSize || 640} />
-      <ZoomWatcher onZoomChange={props.onZoomChange || (() => {})} />
+      <ZoomWatcher     onZoomChange={props.onZoomChange || (() => {})} />
       <ZoomButtons     modeBersih={modeBersih} />
       <CleanModeButton modeBersih={modeBersih} setModeBersih={setModeBersih} />
       <MouseCoordinate modeBersih={modeBersih} />

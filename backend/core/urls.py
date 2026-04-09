@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import views
 from . import education_views
 from . import health_views
@@ -12,6 +13,49 @@ from core.scripts.waypoint_pendidikan import (
     WaypointKindergartenView,
     WaypointCollegeView,
     WaypointUniversityView,
+)
+
+from core.scripts.waypoint_kesehatan import (
+    WaypointKesehatanView,
+    WaypointHospitalView,
+    WaypointClinicView,
+    WaypointHealthPostView,
+    WaypointPharmacyView,
+)
+
+from core.scripts.waypoint_kantor_pemerintahan import (
+    WaypointPemerintahanView,
+    WaypointTownhallView,
+    WaypointVillageOfficeView,
+    WaypointGovernmentOfficeView,
+    WaypointMinistryView,
+    WaypointPoliceView,
+    WaypointFireStationView,
+    WaypointCourthouseView,
+    WaypointCustomsView,
+    WaypointImmigrationView,
+    WaypointTaxOfficeView,
+    WaypointLegislativeView,
+)
+
+from core.scripts.waypoint_mbg import (
+    WaypointMbgView,
+    WaypointMbgCommunityCentreView,
+    WaypointMbgKitchenView,
+    WaypointMbgFoodCentreView,
+    WaypointMbgNutritionCentreView,
+    WaypointMbgCanteenView,
+)
+
+from core.scripts.waypoint_pertahanan import (
+    WaypointPertahananView,
+    WaypointMilitaryBaseView,
+    WaypointMilitaryBarracksView,
+    WaypointMilitaryCheckpointView,
+    WaypointMilitaryOfficeView,
+    WaypointMilitaryTrainingView,
+    WaypointAirfieldView,
+    WaypointNavalBaseView,
 )
 
 urlpatterns = [
@@ -70,12 +114,49 @@ urlpatterns = [
     path('area-scan/summary/',  views_area_scan.area_scan_summary,      name='area-scan-summary'),
     path('area-scan/sessions/', views_area_scan.area_scan_sessions_list, name='area-scan-sessions'),
 
-     # ── WAYPOINT PENDIDIKAN ──────────────────────────────────────────────────
-    # Semua kategori sekaligus
-    path('waypoint/pendidikan/',             WaypointPendidikanView.as_view()),
-    # Per sub-kategori
-    path('waypoint/pendidikan/school/',      WaypointSchoolView.as_view()),
-    path('waypoint/pendidikan/kindergarten/',WaypointKindergartenView.as_view()),
-    path('waypoint/pendidikan/college/',     WaypointCollegeView.as_view()),
-    path('waypoint/pendidikan/university/',  WaypointUniversityView.as_view()),
+    # ── WAYPOINT PENDIDIKAN ──────────────────────────────────────────────────
+    path('waypoint/pendidikan/',              WaypointPendidikanView.as_view()),
+    path('waypoint/pendidikan/school/',       WaypointSchoolView.as_view()),
+    path('waypoint/pendidikan/kindergarten/', WaypointKindergartenView.as_view()),
+    path('waypoint/pendidikan/college/',      WaypointCollegeView.as_view()),
+    path('waypoint/pendidikan/university/',   WaypointUniversityView.as_view()),
+
+    # ── WAYPOINT KESEHATAN ───────────────────────────────────────────────────
+    path('waypoint/kesehatan/',              WaypointKesehatanView.as_view()),
+    path('waypoint/kesehatan/hospital/',     WaypointHospitalView.as_view()),
+    path('waypoint/kesehatan/clinic/',       WaypointClinicView.as_view()),
+    path('waypoint/kesehatan/health-post/',  WaypointHealthPostView.as_view()),
+    path('waypoint/kesehatan/pharmacy/',     WaypointPharmacyView.as_view()),
+
+    # ── WAYPOINT KANTOR PEMERINTAHAN ─────────────────────────────────────────
+    path('waypoint/pemerintahan/',                   WaypointPemerintahanView.as_view()),
+    path('waypoint/pemerintahan/townhall/',          WaypointTownhallView.as_view()),
+    path('waypoint/pemerintahan/village-office/',    WaypointVillageOfficeView.as_view()),
+    path('waypoint/pemerintahan/government-office/', WaypointGovernmentOfficeView.as_view()),
+    path('waypoint/pemerintahan/ministry/',          WaypointMinistryView.as_view()),
+    path('waypoint/pemerintahan/police/',            WaypointPoliceView.as_view()),
+    path('waypoint/pemerintahan/fire-station/',      WaypointFireStationView.as_view()),
+    path('waypoint/pemerintahan/courthouse/',        WaypointCourthouseView.as_view()),
+    path('waypoint/pemerintahan/customs/',           WaypointCustomsView.as_view()),
+    path('waypoint/pemerintahan/immigration/',       WaypointImmigrationView.as_view()),
+    path('waypoint/pemerintahan/tax-office/',        WaypointTaxOfficeView.as_view()),
+    path('waypoint/pemerintahan/legislative/',       WaypointLegislativeView.as_view()),
+
+    # ── WAYPOINT MBG (MAKAN BERGIZI GRATIS) ─────────────────────────────────
+    path('waypoint/mbg/',                    WaypointMbgView.as_view()),
+    path('waypoint/mbg/community-centre/',   WaypointMbgCommunityCentreView.as_view()),
+    path('waypoint/mbg/kitchen/',            WaypointMbgKitchenView.as_view()),
+    path('waypoint/mbg/food-centre/',        WaypointMbgFoodCentreView.as_view()),
+    path('waypoint/mbg/nutrition-centre/',   WaypointMbgNutritionCentreView.as_view()),
+    path('waypoint/mbg/canteen/',            WaypointMbgCanteenView.as_view()),
+
+    # ── WAYPOINT PERTAHANAN ──────────────────────────────────────────────────
+    path('waypoint/pertahanan/',                  WaypointPertahananView.as_view()),
+    path('waypoint/pertahanan/base/',             WaypointMilitaryBaseView.as_view()),
+    path('waypoint/pertahanan/barracks/',         WaypointMilitaryBarracksView.as_view()),
+    path('waypoint/pertahanan/checkpoint/',       WaypointMilitaryCheckpointView.as_view()),
+    path('waypoint/pertahanan/office/',           WaypointMilitaryOfficeView.as_view()),
+    path('waypoint/pertahanan/training-area/',    WaypointMilitaryTrainingView.as_view()),
+    path('waypoint/pertahanan/airfield/',         WaypointAirfieldView.as_view()),
+    path('waypoint/pertahanan/naval-base/',       WaypointNavalBaseView.as_view()),
 ]

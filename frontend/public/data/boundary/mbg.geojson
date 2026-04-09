@@ -1,0 +1,60 @@
+{
+  "type": "FeatureCollection",
+  "generator": "overpass-turbo",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.",
+  "timestamp": "2026-04-01T02:19:02Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6130196495",
+        "amenity": "community_centre",
+        "name": "tempat pelatihan kebun gizi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.8554136,
+          -7.5437044
+        ]
+      },
+      "id": "node/6130196495"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11736956970",
+        "addr:postcode": "75553",
+        "addr:street": "Soekarno-Hatta",
+        "amenity": "community_centre",
+        "name:hi": "Lapangan Volly"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.6881792,
+          0.083147
+        ]
+      },
+      "id": "node/11736956970"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11736964169",
+        "addr:postcode": "75553",
+        "addr:street": "Soekarno-Hatta",
+        "amenity": "community_centre",
+        "name:hi": "Lapangan Volleyball,"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.6882032,
+          0.0831783
+        ]
+      },
+      "id": "node/11736964169"
+    }
+  ]
+}
