@@ -1,0 +1,3102 @@
+{
+  "type": "FeatureCollection",
+  "generator": "overpass-turbo",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.",
+  "timestamp": "2026-04-01T02:36:36Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/358494619",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.0899058,
+          2.2927881
+        ]
+      },
+      "id": "node/358494619"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1133750827",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "Rocky Hill Camp",
+        "name:ms": "Kem Rocky Hill"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          104.049796,
+          1.4002812
+        ]
+      },
+      "id": "node/1133750827"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1447971780",
+        "military": "barracks",
+        "name": "Batalyon \"Walet Sakti\""
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.9332652,
+          0.9290484
+        ]
+      },
+      "id": "node/1447971780"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1514284767",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.9147302,
+          -1.2606295
+        ]
+      },
+      "id": "node/1514284767"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341808",
+        "addr:street": "Jalan Emy Saelan",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Bataliyon Yonit 711"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.8759089,
+          -0.9170465
+        ]
+      },
+      "id": "node/1570341808"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341815",
+        "addr:street": "Jalan Nuri",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Kodim 1306 Palu"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.8896022,
+          -0.9014293
+        ]
+      },
+      "id": "node/1570341815"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341825",
+        "addr:street": "Jalan W.R. Supratman",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Koramil Palu Barat"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.8509678,
+          -0.89439
+        ]
+      },
+      "id": "node/1570341825"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341827",
+        "addr:street": "Jalan Abdul Rahman Saleh",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Koramil Palu Selatan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.9020364,
+          -0.9187489
+        ]
+      },
+      "id": "node/1570341827"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341846",
+        "addr:street": "Jalan Jenderal Sudirman",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Korem 132 Tadulako"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.8700338,
+          -0.8944099
+        ]
+      },
+      "id": "node/1570341846"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1570341856",
+        "addr:street": "Jalan Sultan Hasanuddin",
+        "building": "yes",
+        "military": "barracks",
+        "name": "Polisi Militer"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.8687545,
+          -0.8974314
+        ]
+      },
+      "id": "node/1570341856"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1676656739",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.3565006,
+          -0.8964594
+        ]
+      },
+      "id": "node/1676656739"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1747338920",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.3640533,
+          3.0198648
+        ]
+      },
+      "id": "node/1747338920"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/1920978758",
+        "military": "office",
+        "name": "Kodim 0808 Blitar"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.1696401,
+          -8.0995751
+        ]
+      },
+      "id": "node/1920978758"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2285198303",
+        "military": "office",
+        "name": "Koramil"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          118.7236451,
+          -8.4653468
+        ]
+      },
+      "id": "node/2285198303"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2389058086",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.1203656,
+          2.2882046
+        ]
+      },
+      "id": "node/2389058086"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2678338896",
+        "military": "barracks",
+        "name": "Komando Distrik Militer 1606",
+        "source": "survey",
+        "source:date": "2013-12-20"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1000295,
+          -8.5404116
+        ]
+      },
+      "id": "node/2678338896"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690662152",
+        "military": "barracks",
+        "name": "Ajudan Jendral Kodam IX Udayana",
+        "short_name": "Ajudan Jendral Kodam IX Udayana",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.0780429,
+          -8.5770854
+        ]
+      },
+      "id": "node/2690662152"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690662153",
+        "military": "barracks",
+        "name": "Ajudan Jendral Korem 162 Wira Bhakti",
+        "short_name": "Ajudan Jendral Korem 162 Wira Bhakti",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.0780726,
+          -8.5771508
+        ]
+      },
+      "id": "node/2690662153"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690662606",
+        "military": "barracks",
+        "name": "Comando Daerah Meliter IX/Udayana",
+        "short_name": "Comando Daerah Meliter IX/Udayana",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.10676,
+          -8.6183275
+        ]
+      },
+      "id": "node/2690662606"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690663323",
+        "military": "barracks",
+        "name": "Komando Militer 1606",
+        "short_name": "Koramil 1606",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1007874,
+          -8.5951434
+        ]
+      },
+      "id": "node/2690663323"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690663326",
+        "military": "barracks",
+        "name": "Kompi Senapan C",
+        "short_name": "Kompi Senapan C",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1213628,
+          -8.5979828
+        ]
+      },
+      "id": "node/2690663326"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690663660",
+        "military": "barracks",
+        "name": "Makodim Lobar",
+        "short_name": "Makodim Lobar",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1105754,
+          -8.5836004
+        ]
+      },
+      "id": "node/2690663660"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690663670",
+        "military": "barracks",
+        "name": "Markas Kompi Batalion Infanteri 742",
+        "short_name": "Markas Kompi Batalion Infanteri 742",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1191807,
+          -8.5965416
+        ]
+      },
+      "id": "node/2690663670"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690663922",
+        "military": "barracks",
+        "name": "Mess TNI AL Wanamarta",
+        "short_name": "Mess TNI AL Wanamarta",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.0862824,
+          -8.5682702
+        ]
+      },
+      "id": "node/2690663922"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690664197",
+        "addr:street": "Malomba",
+        "military": "barracks",
+        "name": "Pangkalan TNA AL Mataram",
+        "phone": "+621254",
+        "short_name": "Pangkalan TNA AL Mataram",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.079583,
+          -8.576964
+        ]
+      },
+      "id": "node/2690664197"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690664198",
+        "military": "barracks",
+        "name": "Pangkalan TNI AU Rembige",
+        "short_name": "Pangkalan TNI AU Rembige",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1066043,
+          -8.5630558
+        ]
+      },
+      "id": "node/2690664198"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2690664267",
+        "military": "barracks",
+        "name": "Pehubungan Daerah Militer X Udayana Korem 162",
+        "short_name": "Pehubungan Daerah Militer X Udayana Korem 162",
+        "source": "survey",
+        "survey:date": "2013-12-10"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          116.1100773,
+          -8.5846369
+        ]
+      },
+      "id": "node/2690664267"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2993812020",
+        "landuse": "military",
+        "military": "office",
+        "name": "Kodim 1204 Sekadau"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.8874506,
+          0.0168335
+        ]
+      },
+      "id": "node/2993812020"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/2997126976",
+        "military": "barracks",
+        "name": "KORAMIL Getasan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.4410708,
+          -7.3765943
+        ]
+      },
+      "id": "node/2997126976"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3040330743",
+        "admin_level": "5",
+        "amenity": "police",
+        "military": "base",
+        "name": "Komando Distrik Militer 1413/Buton"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          122.6115967,
+          -5.4583515
+        ]
+      },
+      "id": "node/3040330743"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3091997353",
+        "addr:street": "Jalan Kyai Haji Wahid Hasyim",
+        "landuse": "military",
+        "military": "base",
+        "name": "Komando Distrik Militer Jombang"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.2370786,
+          -7.5406302
+        ]
+      },
+      "id": "node/3091997353"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3170315591",
+        "addr:city": "Bengkalis",
+        "addr:postcode": "28712",
+        "addr:street": "Jl. Perwira",
+        "landuse": "military",
+        "military": "office",
+        "name": "KORAMIL 01 Bengkalis"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.1111451,
+          1.4680814
+        ]
+      },
+      "id": "node/3170315591"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3261753917",
+        "landuse": "military",
+        "military": "checkpoint",
+        "name": "KOPAL"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.4176736,
+          1.5312178
+        ]
+      },
+      "id": "node/3261753917"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3630751694",
+        "description": "Markas Komando Distrik Militer 0729 Bantul",
+        "military": "office",
+        "name": "Kodim Bantul"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.334532,
+          -7.8805037
+        ]
+      },
+      "id": "node/3630751694"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3925251670",
+        "military": "barracks",
+        "name": "LAPETAL (Lembaga Penyedia Tenaga Angkatan Laut)"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.6261372,
+          -7.9910969
+        ]
+      },
+      "id": "node/3925251670"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/3986545424",
+        "access": "private",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.8499057,
+          1.2894808
+        ]
+      },
+      "id": "node/3986545424"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4134915012",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Obstacle Course",
+        "name:en": "Obstacle Course"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.3766503,
+          4.0282782
+        ]
+      },
+      "id": "node/4134915012"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4150463290",
+        "landuse": "military",
+        "military": "base",
+        "name": "Kompi Senapan A Yonif 631/ATG"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.9417661,
+          -2.5357578
+        ]
+      },
+      "id": "node/4150463290"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4153380884",
+        "addr:street": "gang sesama",
+        "military": "barracks",
+        "name": "barak"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.9569803,
+          -2.5598195
+        ]
+      },
+      "id": "node/4153380884"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4677080454",
+        "landuse": "military",
+        "military": "office",
+        "name": "Kodim Magetan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.3298409,
+          -7.6540821
+        ]
+      },
+      "id": "node/4677080454"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4682605328",
+        "military": "office",
+        "name": "Koramil Mantingan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.1437817,
+          -7.3637041
+        ]
+      },
+      "id": "node/4682605328"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4706040589",
+        "addr:neighbourhood": "Chinese Pier",
+        "addr:street": "Fisheries Road",
+        "military": "barracks",
+        "name": "10th Marine Company - 10th Marine Batalion"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.7757729,
+          5.0311648
+        ]
+      },
+      "id": "node/4706040589"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4743419121",
+        "addr:city": "Ende",
+        "addr:district": "Ende Tengah",
+        "addr:province": "East Nusa Tenggara",
+        "addr:street": "Jalan Wirajaya",
+        "addr:subdistrict": "Paupire",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "Kompi C Yonif 743"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          121.6571424,
+          -8.8369524
+        ]
+      },
+      "id": "node/4743419121"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4787782663",
+        "barrier": "gate",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.8409915,
+          1.2979653
+        ]
+      },
+      "id": "node/4787782663"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4791635834",
+        "addr:city": "Bukit Katil, Melaka",
+        "addr:postcode": "75450",
+        "addr:street": "Jalan OZ 2, Ozana Impian",
+        "landuse": "military",
+        "military": "checkpoint",
+        "name": "Ozana Impian Guardhouse",
+        "name:en": "Ozana Impian Guardhouse"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.3058062,
+          2.2570943
+        ]
+      },
+      "id": "node/4791635834"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4853060759",
+        "addr:city": "Port Dickson",
+        "landuse": "military",
+        "military": "office",
+        "name": "Wisma Perwira Kor JLJ DiRaja"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.847722,
+          2.4842454
+        ]
+      },
+      "id": "node/4853060759"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4853060813",
+        "addr:city": "Port Dickson",
+        "addr:place": "Bandar Tentera",
+        "landuse": "military",
+        "military": "office",
+        "name": "1 Kompeni Angkut Kor Perkhidmatan DiRaja"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.8414093,
+          2.4948663
+        ]
+      },
+      "id": "node/4853060813"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4977925303",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.363798,
+          3.0194686
+        ]
+      },
+      "id": "node/4977925303"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4977925421",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.3666748,
+          3.0161571
+        ]
+      },
+      "id": "node/4977925421"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/4977925445",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.3665502,
+          3.0159541
+        ]
+      },
+      "id": "node/4977925445"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5031891523",
+        "barrier": "jersey_barrier",
+        "bicycle": "yes",
+        "foot": "yes",
+        "material": "plastic",
+        "military": "checkpoint",
+        "motorcar": "yes",
+        "motorcycle": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          108.5403529,
+          -7.3546986
+        ]
+      },
+      "id": "node/5031891523"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5116381861",
+        "military": "office",
+        "name": "Koperasi Tentera"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.6103507,
+          2.5821839
+        ]
+      },
+      "id": "node/5116381861"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5179393204",
+        "landuse": "military",
+        "military": "office",
+        "name": "Denpal"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.4402245,
+          0.4914807
+        ]
+      },
+      "id": "node/5179393204"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5260386631",
+        "landuse": "military",
+        "military": "office",
+        "name": "Kem Pakit"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.4790236,
+          1.1452046
+        ]
+      },
+      "id": "node/5260386631"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5315753330",
+        "military": "barracks",
+        "name": "Pos Hansip",
+        "name:en": "Pos Hansip",
+        "office": "government"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8202597,
+          -6.3938625
+        ]
+      },
+      "id": "node/5315753330"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5367313280",
+        "landuse": "military",
+        "military": "checkpoint",
+        "name": "Pos Pondok Duta 2"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8493677,
+          -6.3723747
+        ]
+      },
+      "id": "node/5367313280"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5470232545",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.5910723,
+          -7.4218048
+        ]
+      },
+      "id": "node/5470232545"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5470232593",
+        "landuse": "military",
+        "military": "checkpoint",
+        "name": "Mandiri Residence Main Gate"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.5849606,
+          -7.4195656
+        ]
+      },
+      "id": "node/5470232593"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5500319418",
+        "access": "private",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.2984306,
+          5.3247908
+        ]
+      },
+      "id": "node/5500319418"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5500319419",
+        "access": "private",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.2984473,
+          5.3265086
+        ]
+      },
+      "id": "node/5500319419"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5500319420",
+        "access": "private",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.3003129,
+          5.3277402
+        ]
+      },
+      "id": "node/5500319420"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5603509580",
+        "landuse": "military",
+        "military": "barracks",
+        "name": "Batalyon Artileri Medan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.4147752,
+          -5.1751052
+        ]
+      },
+      "id": "node/5603509580"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5603509581",
+        "landuse": "military",
+        "military": "barracks",
+        "name": "Asrama Remaja YON Armed"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.4137525,
+          -5.1749534
+        ]
+      },
+      "id": "node/5603509581"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5664283662",
+        "landuse": "military",
+        "military": "office",
+        "name": "Kodim 0611"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.9047921,
+          -7.2143947
+        ]
+      },
+      "id": "node/5664283662"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5664283671",
+        "landuse": "military",
+        "military": "office"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.9037406,
+          -7.2168588
+        ]
+      },
+      "id": "node/5664283671"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5678511152",
+        "landuse": "military",
+        "military": "office",
+        "name": "KOrem 062 / TN"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.9117852,
+          -7.2214799
+        ]
+      },
+      "id": "node/5678511152"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5714615600",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.5905291,
+          -7.4220944
+        ]
+      },
+      "id": "node/5714615600"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5765678045",
+        "landuse": "military",
+        "military": "office",
+        "name": "KODIM"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          133.7644271,
+          -3.6665615
+        ]
+      },
+      "id": "node/5765678045"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5791258453",
+        "addr:street": "Jalan DI. Panjaitan",
+        "military": "office",
+        "name": "Asrama Yonzikon 12 Karana Jaya, Kompi Branjangan",
+        "name:en": "Asrama Yonzikon 12 Karana Jaya, Kompi Bravo",
+        "opening_hours": "24/7"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          104.7983728,
+          -2.9925607
+        ]
+      },
+      "id": "node/5791258453"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/5988359035",
+        "landuse": "military",
+        "military": "office",
+        "name": "KODIM 07/09 Kebumen"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          109.6616141,
+          -7.6806642
+        ]
+      },
+      "id": "node/5988359035"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6012584648",
+        "landuse": "military",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.1395754,
+          2.2871745
+        ]
+      },
+      "id": "node/6012584648"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6317512714",
+        "addr:city": "Bengkalis",
+        "addr:postcode": "28714",
+        "addr:street": "Jl. Bantan",
+        "landuse": "military",
+        "military": "office",
+        "name": "KODIM 0303 Bengkalis"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.1368983,
+          1.4865644
+        ]
+      },
+      "id": "node/6317512714"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6450973798",
+        "access": "permit",
+        "barrier": "gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8923691,
+          -6.2881918
+        ]
+      },
+      "id": "node/6450973798"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6593020152",
+        "military": "office",
+        "name": "Oditurat Militer II-08 Bandung"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.6161004,
+          -6.9062194
+        ]
+      },
+      "id": "node/6593020152"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6642753293",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.126887,
+          4.6066733
+        ]
+      },
+      "id": "node/6642753293"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6657074119",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3881242,
+          1.3999995
+        ]
+      },
+      "id": "node/6657074119"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6661127577",
+        "access": "private",
+        "barrier": "gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.9818529,
+          5.7163748
+        ]
+      },
+      "id": "node/6661127577"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6664997925",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.914131,
+          -6.346817
+        ]
+      },
+      "id": "node/6664997925"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/6683938107",
+        "military": "office",
+        "name": "Komando Resor militar"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          140.6538698,
+          -2.6062761
+        ]
+      },
+      "id": "node/6683938107"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7200173835",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Gemilang Education and Training Sdn Bhd"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.7522402,
+          3.1555557
+        ]
+      },
+      "id": "node/7200173835"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7273701416",
+        "barrier": "yes",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.7710057,
+          5.944985
+        ]
+      },
+      "id": "node/7273701416"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7301617987",
+        "access": "no",
+        "barrier": "lift_gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.351105,
+          -0.8998489
+        ]
+      },
+      "id": "node/7301617987"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7301617988",
+        "access": "no",
+        "barrier": "lift_gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.3514604,
+          -0.898806
+        ]
+      },
+      "id": "node/7301617988"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7301617989",
+        "barrier": "lift_gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.3516235,
+          -0.8983293
+        ]
+      },
+      "id": "node/7301617989"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7400991027",
+        "military": "checkpoint",
+        "name": "Pos Penjagaan Lanud Abd Saleh"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.6978521,
+          -7.9362406
+        ]
+      },
+      "id": "node/7400991027"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7424546237",
+        "military": "office",
+        "name": "West Jakarta KODIM 0503"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.7891756,
+          -6.1709633
+        ]
+      },
+      "id": "node/7424546237"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7465796244",
+        "access": "permit",
+        "barrier": "lift_gate",
+        "bicycle": "yes",
+        "foot": "yes",
+        "military": "checkpoint",
+        "motorcar": "yes",
+        "motorcycle": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          108.5422343,
+          -7.3561584
+        ]
+      },
+      "id": "node/7465796244"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7659634480",
+        "military": "office",
+        "name": "Koramil Pendopo"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.9552893,
+          -3.792928
+        ]
+      },
+      "id": "node/7659634480"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7724106289",
+        "military": "office",
+        "name": "Koramil Plumpang"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.0991435,
+          -7.0244296
+        ]
+      },
+      "id": "node/7724106289"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7725972215",
+        "military": "office",
+        "name": "Koramil Plumpang"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.099145,
+          -7.0244057
+        ]
+      },
+      "id": "node/7725972215"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7830905367",
+        "military": "office",
+        "name": "KODIM 1426 Takalar"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.4406334,
+          -5.4226506
+        ]
+      },
+      "id": "node/7830905367"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7864044439",
+        "alt_name": "Denpal Lempuyangan",
+        "military": "office",
+        "name": "Dentasemen Perlengkapan IV/02"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3775453,
+          -7.7904539
+        ]
+      },
+      "id": "node/7864044439"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7880683785",
+        "military": "office"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          122.5519406,
+          -1.2806019
+        ]
+      },
+      "id": "node/7880683785"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/7935212874",
+        "description": "Jl. Jenderal Sudirman No 9 Kab Bone, Manurunge, Tanete Riattang, Sulawesi Selatan, 92712\n\nTelp = +6248121091",
+        "military": "office",
+        "name": "Korem 141 Toddopuli"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          120.3285296,
+          -4.5411344
+        ]
+      },
+      "id": "node/7935212874"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8024580996",
+        "military": "office",
+        "name": "Batalion Kedua Rejimen 508 Askar Wataniah Kem Tampin"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.2297687,
+          2.468708
+        ]
+      },
+      "id": "node/8024580996"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8224252707",
+        "addr:country": "SG",
+        "addr:housenumber": "PSA Sembawang Wharves",
+        "addr:postcode": "759657",
+        "addr:street": "Deptford Road",
+        "description": "U.S. Coast Guard - Marine Inspection Detachment (MIDET) Singapore inspects U.S. flagged ships stationed overseas, high threat U.S. bound foreign ships, and enforces the International Port Security Program.",
+        "facebook": "https://www.facebook.com/pg/USCGFEACT/photos/?ref=page_internal",
+        "landuse": "military",
+        "military": "office",
+        "military_service": "coast_guard",
+        "name": "U.S. Coast Guard - Marine Inspection Detachment Singapore",
+        "operator": "United States Coast Guard",
+        "operator:wikidata": "Q11224",
+        "website": "https://www.pacificarea.uscg.mil/Our-Organization/District-14/D14-Units/Activities-Far-East-FEACT/Marine-Inspection-Detachment-MIDET/"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.831398,
+          1.4624665
+        ]
+      },
+      "id": "node/8224252707"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8321079186",
+        "landuse": "military",
+        "military": "barracks",
+        "name": "Markas Komando Resimen Mahasiswa \"Wira Makara\" Universitas Indonesia"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8313491,
+          -6.3532518
+        ]
+      },
+      "id": "node/8321079186"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8405833738",
+        "barrier": "lift_gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.5589437,
+          1.5510403
+        ]
+      },
+      "id": "node/8405833738"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8405833739",
+        "barrier": "lift_gate",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.5590362,
+          1.5511039
+        ]
+      },
+      "id": "node/8405833739"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8539607799",
+        "military": "office",
+        "name": "Koramil Ajung"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.6533641,
+          -8.2450644
+        ]
+      },
+      "id": "node/8539607799"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8584743587",
+        "description": "Koramil 01 Pulau Banyak",
+        "military": "office",
+        "name": "Koramil 01 Pulau Banyak"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          97.4090412,
+          2.2989432
+        ]
+      },
+      "id": "node/8584743587"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8812101453",
+        "military": "office",
+        "name": "Koramil 1403-12 Bone-Bone"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          120.4978157,
+          -2.5969133
+        ]
+      },
+      "id": "node/8812101453"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8851162831",
+        "military": "office",
+        "name": "Kantor Koramil Puger"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.4726856,
+          -8.3692382
+        ]
+      },
+      "id": "node/8851162831"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8860767934",
+        "military": "office",
+        "name": "Koramil Gumukmas"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.4038131,
+          -8.3092625
+        ]
+      },
+      "id": "node/8860767934"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8886821049",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Kem Sangro"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.7389532,
+          4.8832107
+        ]
+      },
+      "id": "node/8886821049"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8886821050",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Kem Kamunting Rejimen Ke-3 Artileri Diraja"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.7347596,
+          4.8862724
+        ]
+      },
+      "id": "node/8886821050"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8925221908",
+        "military": "checkpoint",
+        "note": "Kuala Nerus - Setiu PDRM MCO checkpoint, see https://openstreetcam.org/details/3723601/822"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.9248845,
+          5.3233465
+        ]
+      },
+      "id": "node/8925221908"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8929183508",
+        "military": "office",
+        "name": "Koramil Bermani ilir"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.7098279,
+          -3.6993484
+        ]
+      },
+      "id": "node/8929183508"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8948954348",
+        "landuse": "military",
+        "military": "barracks",
+        "name": "BarakG10 PT. KMP"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          109.5329094,
+          1.5225966
+        ]
+      },
+      "id": "node/8948954348"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/8949033706",
+        "landuse": "military",
+        "military": "barracks",
+        "name": "Emplasmen PT. Tsjafiuddin"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          109.4889159,
+          1.6035365
+        ]
+      },
+      "id": "node/8949033706"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9001911003",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Pusat Latihan UNIMAS",
+        "source": "https://openstreetcam.org/details/2212670/9479"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.1404378,
+          1.4320853
+        ]
+      },
+      "id": "node/9001911003"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9179824982",
+        "military": "barracks",
+        "name": "Kodim 0730/GK"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.6064597,
+          -7.9635009
+        ]
+      },
+      "id": "node/9179824982"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9191255912",
+        "military": "office",
+        "name": "Koramil 04 Danurejan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3740475,
+          -7.7892429
+        ]
+      },
+      "id": "node/9191255912"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9454467292",
+        "military": "checkpoint",
+        "name": "Danramil Mukok"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.7676615,
+          0.1099961
+        ]
+      },
+      "id": "node/9454467292"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9471766133",
+        "military": "office",
+        "name": "Koramil 15 Boja"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.277261,
+          -7.1049124
+        ]
+      },
+      "id": "node/9471766133"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9733985993",
+        "military": "office",
+        "name": "Koramil 05 Lowokwaru"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.6311349,
+          -7.9382643
+        ]
+      },
+      "id": "node/9733985993"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9798409719",
+        "military": "office",
+        "name": "Koramil 0804/14",
+        "note": "Hopefully the name is correct"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.4241014,
+          -7.5699453
+        ]
+      },
+      "id": "node/9798409719"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9807895363",
+        "military": "office",
+        "name": "Koramil 0922 Cimahi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.5330526,
+          -6.8875029
+        ]
+      },
+      "id": "node/9807895363"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9808057001",
+        "military": "office",
+        "name": "Koramil 18-07 SKS/SKJ"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.592973,
+          -6.8644285
+        ]
+      },
+      "id": "node/9808057001"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9822374943",
+        "military": "office",
+        "name": "Komando Daerah Militer II/Sriwijaya Zeni"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          104.7432273,
+          -2.9906827
+        ]
+      },
+      "id": "node/9822374943"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9828015969",
+        "military": "office",
+        "name": "Komando Resor Militer 044 Garuda Dempo"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          104.7357626,
+          -2.9574613
+        ]
+      },
+      "id": "node/9828015969"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9837661000",
+        "military": "office",
+        "name": "Koramil 14 Pringgokusuman"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3593347,
+          -7.7893553
+        ]
+      },
+      "id": "node/9837661000"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9849182743",
+        "military": "office",
+        "name": "Yon Zipur I/DD"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          98.6451473,
+          3.6110787
+        ]
+      },
+      "id": "node/9849182743"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9852952843",
+        "military": "office",
+        "name": "Dodiklatpur"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.5128015,
+          -8.005102
+        ]
+      },
+      "id": "node/9852952843"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9872155635",
+        "military": "base",
+        "name": "Koramil 1417 15 Landono"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          122.2945592,
+          -4.0898694
+        ]
+      },
+      "id": "node/9872155635"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/9965147998",
+        "check_date": "2022-08-20",
+        "military": "office",
+        "name": "Koramil 01-Koja"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8979208,
+          -6.1313452
+        ]
+      },
+      "id": "node/9965147998"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10029188026",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.334459,
+          -7.8802879
+        ]
+      },
+      "id": "node/10029188026"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10129407798",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Puslatpur Marinir 6 Antralina"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.7987502,
+          -7.0255119
+        ]
+      },
+      "id": "node/10129407798"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10153308118",
+        "addr:street": "JL. SUPRATMAN",
+        "military": "office",
+        "name": "PUSAT PERSENJATAAN MILITER INFANTERI"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.6318914,
+          -6.9090804
+        ]
+      },
+      "id": "node/10153308118"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10196548976",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "Rindam XIII Merdeka"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          124.8351847,
+          1.3435663
+        ]
+      },
+      "id": "node/10196548976"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10284575893",
+        "military": "office",
+        "name": "Koramil Gambiran"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.1906822,
+          -8.4401301
+        ]
+      },
+      "id": "node/10284575893"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10287387494",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "Taman Blambangan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.3769283,
+          -8.2123637
+        ]
+      },
+      "id": "node/10287387494"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10287387499",
+        "military": "office",
+        "name": "Kodim Banyuwangi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.3780709,
+          -8.2113998
+        ]
+      },
+      "id": "node/10287387499"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10539938857",
+        "military": "office",
+        "name": "KODIM 0807 / 01"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.8972144,
+          -8.0721226
+        ]
+      },
+      "id": "node/10539938857"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10539941818",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "KODIM 0807 Tulungagung"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.9023104,
+          -8.0637628
+        ]
+      },
+      "id": "node/10539941818"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10586251016",
+        "access": "private",
+        "military": "office",
+        "name": "Detasemen Pernika Satkomlek TNI"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.7667213,
+          -6.2580726
+        ]
+      },
+      "id": "node/10586251016"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10740233390",
+        "barrier": "yes",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.7711481,
+          5.9448771
+        ]
+      },
+      "id": "node/10740233390"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10740674232",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "marines",
+        "name": "Pos TNI Angkatan Laut"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          126.5783709,
+          5.5500599
+        ]
+      },
+      "id": "node/10740674232"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10744449679",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "Pos TNI Angkatan Darat"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          126.5820421,
+          5.5542083
+        ]
+      },
+      "id": "node/10744449679"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10798188873",
+        "military": "checkpoint",
+        "name": "Secaba Rindam III Siliwangi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.6862748,
+          -6.8889236
+        ]
+      },
+      "id": "node/10798188873"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10798188874",
+        "military": "checkpoint",
+        "name": "Secaba Rindam III Siliwangi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.6860805,
+          -6.8897339
+        ]
+      },
+      "id": "node/10798188874"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10798213705",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "army",
+        "name": "KODIM 0710/PEKALONGAN"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          109.6597411,
+          -6.8970158
+        ]
+      },
+      "id": "node/10798213705"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/10939660649",
+        "military": "office",
+        "name": "Unit Sejarah ATM"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.7304795,
+          3.1749603
+        ]
+      },
+      "id": "node/10939660649"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11104858469",
+        "military": "office",
+        "name": "Koramil Punggur"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          105.2757608,
+          -5.0383463
+        ]
+      },
+      "id": "node/11104858469"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11197205533",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "air_force",
+        "name": "KOSEK HANUDNAS IV Biak"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.0919859,
+          -1.1638889
+        ]
+      },
+      "id": "node/11197205533"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11197205974",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "air_force",
+        "name": "KOOPS AU WILAYAH III"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.0776858,
+          -1.1676021
+        ]
+      },
+      "id": "node/11197205974"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11232815284",
+        "landuse": "military",
+        "military": "base",
+        "name": "KORAMIL Baron"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.0482809,
+          -7.6060766
+        ]
+      },
+      "id": "node/11232815284"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11262527460",
+        "landuse": "military",
+        "military": "base",
+        "name": "Koramil Golewa"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          121.0613548,
+          -8.8230898
+        ]
+      },
+      "id": "node/11262527460"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11329077929",
+        "landuse": "military",
+        "military": "base",
+        "name": "KORAMIL Jelbuk"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.7754221,
+          -8.053038
+        ]
+      },
+      "id": "node/11329077929"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11329077946",
+        "landuse": "military",
+        "military": "base",
+        "name": "KORAMIL Maesan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.7796097,
+          -8.0152467
+        ]
+      },
+      "id": "node/11329077946"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11524448863",
+        "landuse": "military",
+        "military": "base",
+        "name": "Kem Sri Limbang"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.0191277,
+          4.7486965
+        ]
+      },
+      "id": "node/11524448863"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11598672130",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.5424204,
+          -5.2700293
+        ]
+      },
+      "id": "node/11598672130"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11707784588",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.4368903,
+          -5.1130933
+        ]
+      },
+      "id": "node/11707784588"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11707784589",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          119.4371012,
+          -5.1128211
+        ]
+      },
+      "id": "node/11707784589"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/11800001457",
+        "military": "checkpoint"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.9911168,
+          4.3453684
+        ]
+      },
+      "id": "node/11800001457"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12128961577",
+        "military": "office",
+        "name": "Koramil namrole"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          126.7245884,
+          -3.8455894
+        ]
+      },
+      "id": "node/12128961577"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12131226230",
+        "military": "office",
+        "name": "Kantor Koramil515 Binaya"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          126.7245197,
+          -3.8453241
+        ]
+      },
+      "id": "node/12131226230"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12143492908",
+        "military": "office",
+        "name": "Koramil"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          126.5116882,
+          -3.7780505
+        ]
+      },
+      "id": "node/12143492908"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12148177977",
+        "military": "office",
+        "name": "Yonif 733 Waiheru"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          128.2185413,
+          -3.6299419
+        ]
+      },
+      "id": "node/12148177977"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12153045924",
+        "military": "office",
+        "name": "Bekang XV PATTIMURA"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          128.1871599,
+          -3.694443
+        ]
+      },
+      "id": "node/12153045924"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12153052621",
+        "military": "office",
+        "name": "Korem 151 Binaiya"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          128.1844353,
+          -3.7028119
+        ]
+      },
+      "id": "node/12153052621"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12185014267",
+        "military": "barracks",
+        "name": "Asrama Jatayu I"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8939381,
+          -6.2730133
+        ]
+      },
+      "id": "node/12185014267"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12185014268",
+        "military": "barracks",
+        "name": "Asrama Jatayu II"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.8939416,
+          -6.2736943
+        ]
+      },
+      "id": "node/12185014268"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12231574747",
+        "landuse": "military",
+        "military": "base",
+        "name": "Kem Penrissen"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3248913,
+          1.4561315
+        ]
+      },
+      "id": "node/12231574747"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12234429881",
+        "landuse": "military",
+        "military": "base",
+        "name": "Kem Pernrissen Lama"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.3251752,
+          1.4568053
+        ]
+      },
+      "id": "node/12234429881"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12323397001",
+        "landuse": "military",
+        "military": "base",
+        "name": "Yonif 900/Raider"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.0862484,
+          -8.1229253
+        ]
+      },
+      "id": "node/12323397001"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12497611799",
+        "military": "office",
+        "name": "Kodim"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          120.9772363,
+          -8.7893492
+        ]
+      },
+      "id": "node/12497611799"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12595947184",
+        "military": "barracks",
+        "name": "KORAMIL Manipi"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          120.0028306,
+          -5.2089417
+        ]
+      },
+      "id": "node/12595947184"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12695683066",
+        "military": "checkpoint",
+        "name": "Posko Balu Hangit"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.417761,
+          -1.8945563
+        ]
+      },
+      "id": "node/12695683066"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12813888076",
+        "landuse": "military",
+        "military": "base",
+        "name": "Mess BINTARA Cut Nyak Dien"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          104.4396698,
+          0.9246161
+        ]
+      },
+      "id": "node/12813888076"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12835448224",
+        "landuse": "military",
+        "military": "base",
+        "military_service": "navy",
+        "name": "Mess Martadinata"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.6138046,
+          -7.9792594
+        ]
+      },
+      "id": "node/12835448224"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/12916344051",
+        "military": "office",
+        "name": "Koramil Parungkuda"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.7606749,
+          -6.8455278
+        ]
+      },
+      "id": "node/12916344051"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13055446672",
+        "military": "office",
+        "name": "Pos Gabungan Malindo Lubok Antu"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.8338852,
+          1.050228
+        ]
+      },
+      "id": "node/13055446672"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13233766869",
+        "addr:street": "Jalan Jangkang",
+        "military": "office",
+        "name": "Koramil Ngemplak"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          110.4462421,
+          -7.6999949
+        ]
+      },
+      "id": "node/13233766869"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13333192245",
+        "military": "barracks",
+        "name": "GOF Battalion 10 Temudok Camp Company C"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.468412,
+          1.1659351
+        ]
+      },
+      "id": "node/13333192245"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13386591537",
+        "military": "office",
+        "name": "Koramil Ciampea"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.6952657,
+          -6.5561746
+        ]
+      },
+      "id": "node/13386591537"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13515697652",
+        "military": "office",
+        "name": "Detasemen Polisi Militer I/4"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.614527,
+          -0.2421094
+        ]
+      },
+      "id": "node/13515697652"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13586167989",
+        "military": "office",
+        "name": "Kodim 1607 Sumbawa Besar"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          117.4243804,
+          -8.495809
+        ]
+      },
+      "id": "node/13586167989"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13607507080",
+        "landuse": "military",
+        "military": "training_area",
+        "name": "PALAPES UTeM"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          102.326694,
+          2.3119265
+        ]
+      },
+      "id": "node/13607507080"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13639581973",
+        "military": "office",
+        "name": "Koramil 0805/01 Ngawi Kota"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          111.4508083,
+          -7.4061802
+        ]
+      },
+      "id": "node/13639581973"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13660582197",
+        "military": "office",
+        "name": "Koramil 0809/02 Pesantren"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          112.0427395,
+          -7.8315829
+        ]
+      },
+      "id": "node/13660582197"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13661935413",
+        "military": "office",
+        "name": "Koramil Cot Girek"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          97.3659405,
+          4.9410345
+        ]
+      },
+      "id": "node/13661935413"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "node/13663049396",
+        "military": "checkpoint",
+        "name": "Padang Kawad UTHM"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          103.0821119,
+          1.8537404
+        ]
+      },
+      "id": "node/13663049396"
+    }
+  ]
+}
