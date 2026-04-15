@@ -318,11 +318,9 @@ export function TabKebijakan({ hasilAnalisis, statusTerpilih, setStatusTerpilih 
                   {p.provinsi}
                 </span>
                 {p.is_prediction && <Bot size={11} className="text-purple-400 shrink-0" title="Prediksi AI" />}
-                {/* IKP value */}
                 <span className="text-xs font-mono font-black shrink-0" style={{ color: warna }}>
                   IKP {p.ikp != null ? p.ikp.toFixed(3) : '-'}
                 </span>
-                {/* Status badge */}
                 {p.status !== '-' && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
                     style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>
@@ -415,26 +413,96 @@ export function TabKebijakan({ hasilAnalisis, statusTerpilih, setStatusTerpilih 
 
 // ─── Tab: Metadata
 const METRIC_EXPLAIN = {
-  cv_r2:  { label: 'CV R²',    desc: 'Koefisien determinasi (Cross-Validation). Semakin mendekati 1.0, semakin baik. Nilai ≥ 0.90 dianggap sangat baik.' },
+  cv_r2:  { label: 'CV R²',    desc: 'Koefisien determinasi (Cross-Validation). Semakin mendekati 1.0, semakin baik. Nilai ≥ 0.90 dianggat sangat baik.' },
   cv_mae: { label: 'CV MAE',   desc: 'Mean Absolute Error (Cross-Validation). Rata-rata kesalahan prediksi dalam satuan IKP (0–1). Nilai 0.024 artinya rata-rata selisih hanya 2.4 poin.' },
   r2:     { label: 'Train R²', desc: 'R² pada data training. Nilai tinggi wajar; yang penting adalah CV R² untuk generalisasi ke data baru.' },
 };
+
+// Referensi jurnal & regulasi yang mendukung metodologi IKP
+const JURNAL_REFS = [
+  {
+    id: 'fao',
+    warna: '#0ea5e9',
+    badge: 'FAO · 1996–2015',
+    judul: 'Food Security Definition: Availability, Access, Utilization, Stability',
+    penulis: 'FAO, IFAD, WFP',
+    tahun: '1996–2015',
+    relevansi: 'Mendefinisikan ketahanan pangan melalui 4 dimensi (Ketersediaan/Availability, Akses/Access, Pemanfaatan/Utilization, Stabilitas/Stability) yang menjadi kerangka utama konstruksi IKP dalam sistem ini. Keempat dimensi ini menjadi dasar pemilihan variabel RPP, PL, IK, dan IA.',
+    doi: null,
+    tags: ['4 Dimensi FAO', 'Definisi Ketahanan Pangan', 'Kerangka Global'],
+  },
+  {
+    id: 'rochmah2020',
+    warna: '#10b981',
+    badge: 'Jurnal Sains & Seni ITS · 2020',
+    judul: 'Pemodelan Ketahanan Pangan di Jawa Timur Menggunakan Metode Geographically Weighted Ordinal Logistic Regression (GWOLR)',
+    penulis: 'V.F. Rochmah & V. Ratnasari',
+    tahun: '2020',
+    doi: 'https://doi.org/10.12962/j23373520.v8i2.47021',
+    relevansi: 'Penelitian ini menggunakan variabel yang tersedia di BPS — produksi padi, konsumsi kalori, dan persentase penduduk miskin — untuk memodelkan ketahanan pangan dengan pendekatan spasial di Jawa Timur. Variabel-variabel tersebut identik dengan komponen RPP (produksi padi per kapita), IK (konsumsi kalori/protein), dan IA (proksi kemiskinan) dalam sistem ini, memvalidasi relevansi data BPS untuk analisis ketahanan pangan tingkat provinsi.',
+    tags: ['Komponen RPP', 'Komponen IA', 'Komponen IK', 'Pemodelan Spasial BPS'],
+  },
+  {
+    id: 'permenkes2019',
+    warna: '#f59e0b',
+    badge: 'Regulasi Nasional · 2019',
+    judul: 'Angka Kecukupan Gizi (AKG) untuk Masyarakat Indonesia',
+    penulis: 'Peraturan Menteri Kesehatan No. 28 Tahun 2019',
+    tahun: '2019',
+    doi: null,
+    relevansi: 'Menetapkan standar kecukupan protein sebesar 57 gram per kapita per hari dan standar kalori 2.100 kkal per kapita per hari sebagai denominator baku dalam perhitungan Indeks Konsumsi (IK). Nilai 57 g digunakan sebagai target normalisasi sehingga IK = 1.0 berarti konsumsi protein telah memenuhi standar nasional. Standar ini juga merupakan acuan resmi WNPG (Widyakarya Nasional Pangan dan Gizi) X.',
+    tags: ['Standar 57 g Protein/hari', 'Standar 2100 kkal/hari', 'Komponen IK', 'WNPG X'],
+  },
+  {
+    id: 'djirimu2025',
+    warna: '#8b5cf6',
+    badge: 'Jurnal Mantik · 2025',
+    judul: 'Analysis of the Determinants of Food Security in Central Sulawesi, Indonesia',
+    penulis: 'M. Djirimu',
+    tahun: '2025',
+    doi: null,
+    relevansi: 'Menggunakan data BPS dan membuktikan secara empiris bahwa produksi padi berpengaruh signifikan terhadap nilai IKP di Indonesia. Temuan ini mendukung validitas pemilihan komponen Ketersediaan (RPP = produksi padi per kapita, dan PL = produktivitas lahan padi ton/ha) sebagai determinan utama dimensi ketersediaan pangan dalam sistem ini.',
+    tags: ['Komponen RPP', 'Komponen PL', 'Validasi Empiris', 'Data BPS'],
+  },
+  {
+    id: 'ardakani2017',
+    warna: '#ef4444',
+    badge: 'Intl. J. Agriculture Mgmt. · 2017',
+    judul: 'Food Security and Its Multidimensionality: A TOPSIS-Based Approach',
+    penulis: 'Ardakani et al.',
+    tahun: '2017',
+    doi: null,
+    relevansi: 'Menggunakan teknik TOPSIS untuk normalisasi dan agregasi multidimensi indeks ketahanan pangan. Pendekatan ini secara konseptual setara dengan Min-Max Normalization yang diterapkan dalam sistem ini — kedua metode bertujuan menyetarakan skala variabel yang berbeda satuan (ton/jiwa, ton/ha, rasio) agar dapat diagregasi menjadi satu skor tunggal IKP.',
+    tags: ['Normalisasi Min-Max', 'Agregasi Multidimensi', 'TOPSIS', 'Indeks Komposit'],
+  },
+];
 
 export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
   const [menuDataset,   setMenuDataset]   = useState(false);
   const [expandFormula, setExpandFormula] = useState(false);
   const [expandAI,      setExpandAI]      = useState(false);
+  const [expandRef,     setExpandRef]     = useState(false);
+  const [expandNorm,    setExpandNorm]    = useState(false);
+  const [expandKlasif,  setExpandKlasif]  = useState(false);
+  const [activeRefId,   setActiveRefId]   = useState(null);
   const isAI   = hasilAnalisis?.is_ai_prediction;
   const scores = hasilAnalisis?.model_scores;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+
+      {/* ── Header + Download ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
             <BookOpen size={16} className="text-green-600 dark:text-green-400" />
           </div>
-          <h2 className="text-base font-bold text-slate-800 dark:text-white">Metadata & Metodologi IKP</h2>
+          <div>
+            <h2 className="text-base font-bold text-slate-800 dark:text-white">Metadata & Metodologi IKP</h2>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+              Indeks Ketahanan Pangan · 4 Dimensi FAO · Data BPS Indonesia
+            </p>
+          </div>
         </div>
         {hasilAnalisis && !isAI && (
           <div className="relative">
@@ -442,17 +510,17 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
               <Download size={14} /> Download Dataset
             </Btn>
             {menuDataset && (
-              <div className="absolute top-full mt-1 right-0 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
+              <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
                 {[
-                  { key: 'PADI',     label: 'Dataset Padi',     Icon: Sprout,      fn: unduhFns.padi,     cls: 'text-green-500'   },
-                  { key: 'KONSUMSI', label: 'Dataset Konsumsi', Icon: TrendingUp,  fn: unduhFns.konsumsi, cls: 'text-blue-500'    },
-                  { key: 'PENDUDUK', label: 'Dataset Penduduk', Icon: Users,       fn: unduhFns.penduduk, cls: 'text-amber-500'   },
-                  { key: 'IKP',      label: 'Hasil IKP',        Icon: ShieldCheck, fn: unduhFns.ikp,      cls: 'text-emerald-500' },
+                  { key: 'PADI',     label: 'Dataset Padi (Produksi & LP)',  Icon: Sprout,      fn: unduhFns.padi,     cls: 'text-green-500'   },
+                  { key: 'KONSUMSI', label: 'Dataset Konsumsi Kalori',        Icon: TrendingUp,  fn: unduhFns.konsumsi, cls: 'text-blue-500'    },
+                  { key: 'PENDUDUK', label: 'Dataset Jumlah Penduduk',        Icon: Users,       fn: unduhFns.penduduk, cls: 'text-amber-500'   },
+                  { key: 'IKP',      label: 'Hasil IKP Lengkap',              Icon: ShieldCheck, fn: unduhFns.ikp,      cls: 'text-emerald-500' },
                 ].map(d => (
                   <button key={d.key} onClick={() => { d.fn(); setMenuDataset(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors">
+                    className="w-full text-left px-4 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors">
                     <d.Icon size={12} className={d.cls} /> {d.label}
-                    {loadingDataset[d.key] && <Loader2 size={10} className="animate-spin ml-auto" />}
+                    {loadingDataset[d.key] && <Loader2 size={10} className="animate-spin ml-auto text-green-500" />}
                   </button>
                 ))}
               </div>
@@ -461,36 +529,47 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
         )}
       </div>
 
-      {/* Info AI */}
+      {/* ── Model AI ── */}
       {isAI && (
-        <Card className="p-5 border border-purple-200 dark:border-purple-700">
-          <button className="w-full flex items-center justify-between" onClick={() => setExpandAI(!expandAI)}>
-            <SectionBar color="bg-purple-500" title="Model AI - Prediksi Penuh Random Forest"
-              sub={`Versi: ${hasilAnalisis.model_version || 'rf_v1.0'} · Dilatih data BPS 2018–2024`} />
+        <Card className="overflow-hidden border border-purple-200 dark:border-purple-700">
+          <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-colors"
+            onClick={() => setExpandAI(!expandAI)}>
+            <SectionBar color="bg-purple-500" title="Model AI — Random Forest Regressor"
+              sub={`Versi: ${hasilAnalisis?.model_version || 'rf_v1.0'} · Dilatih data historis BPS 2018–2024`} />
             <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandAI && 'rotate-180')} />
           </button>
           {scores && (
-            <div className="mt-3 grid grid-cols-5 gap-2">
+            <div className="px-5 pb-4 grid grid-cols-5 gap-2">
               {Object.entries(scores).map(([k, s]) => (
                 <div key={k} className="text-center p-2 rounded-lg border bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800">
-                  <div className="text-[9px] font-bold uppercase text-purple-400">{k.toUpperCase()}</div>
+                  <div className="text-[9px] font-bold uppercase text-purple-400 mb-1">{k.toUpperCase()}</div>
                   <div className="text-sm font-black text-purple-700 dark:text-purple-300">{s.cv_r2?.toFixed(3)}</div>
                   <div className="text-[8px] text-slate-400">CV R²</div>
-                  <div className="text-[9px] font-semibold text-slate-500">{s.cv_mae?.toFixed(3)}</div>
+                  <div className="text-[10px] font-semibold text-slate-500 mt-0.5">{s.cv_mae?.toFixed(4)}</div>
                   <div className="text-[8px] text-slate-400">MAE</div>
                 </div>
               ))}
             </div>
           )}
           {expandAI && (
-            <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-700 pt-3">
-              <p><strong>Algoritma:</strong> Random Forest Regressor (scikit-learn) — ensemble banyak pohon keputusan, rata-ratakan prediksi untuk kurangi overfitting.</p>
-              <p><strong>Data Training:</strong> 7 tahun × 34 provinsi = 238 baris. Fitur: lag-1, lag-2, delta YoY, rolling mean 2-tahun, rolling std, encoding provinsi & pulau, dummy 6 pulau utama.</p>
-              <p><strong>Prediksi Rolling:</strong> Untuk 2025+, hasil prediksi tahun sebelumnya dipakai sebagai input tahun berikutnya (cascading prediction).</p>
-              <div className="mt-3 space-y-2">
+            <div className="px-5 pb-5 space-y-3 text-xs text-slate-600 dark:text-slate-300 border-t border-purple-100 dark:border-purple-800 pt-4">
+              <div className="grid md:grid-cols-3 gap-3">
+                {[
+                  { title: 'Algoritma', body: 'Random Forest Regressor (scikit-learn) — ensemble pohon keputusan yang merata-ratakan prediksi untuk mengurangi overfitting.' },
+                  { title: 'Data Training', body: '7 tahun × 34 provinsi = 238 baris. Fitur: lag-1, lag-2, delta YoY, rolling mean 2-tahun, rolling std, encoding provinsi & pulau.' },
+                  { title: 'Prediksi Rolling', body: 'Untuk 2025+, output prediksi tahun sebelumnya dipakai sebagai input tahun berikutnya (cascading/autoregressive prediction).' },
+                ].map(item => (
+                  <div key={item.title} className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800">
+                    <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 mb-1">{item.title}</div>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">{item.body}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Interpretasi Metrik Evaluasi</div>
                 {Object.entries(METRIC_EXPLAIN).map(([k, m]) => (
-                  <div key={k} className="flex gap-2 p-2 bg-slate-50 dark:bg-slate-900/40 rounded-lg">
-                    <code className="text-[10px] font-black text-purple-600 dark:text-purple-400 w-14 shrink-0 mt-0.5">{m.label}</code>
+                  <div key={k} className="flex gap-3 p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <code className="text-[10px] font-black text-purple-600 dark:text-purple-400 w-16 shrink-0">{m.label}</code>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">{m.desc}</span>
                   </div>
                 ))}
@@ -500,91 +579,364 @@ export function TabMetadata({ hasilAnalisis, unduhFns, loadingDataset }) {
         </Card>
       )}
 
-      {/* Formula IKP */}
-      <Card className="p-5">
-        <button className="w-full flex items-center justify-between" onClick={() => setExpandFormula(!expandFormula)}>
-          <SectionBar color="bg-green-500" title="Formula & Bobot IKP" sub="Dasar perhitungan Indeks Ketahanan Pangan" />
+      {/* ── Formula & Komponen ── */}
+      <Card className="overflow-hidden">
+        <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+          onClick={() => setExpandFormula(!expandFormula)}>
+          <SectionBar color="bg-green-500" title="Formula & Bobot IKP" sub="Indeks Ketahanan Pangan — 4 Dimensi FAO" />
           <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandFormula && 'rotate-180')} />
         </button>
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800 my-3">
-          <code className="block text-sm font-mono font-black text-slate-900 dark:text-white">
-            IKP = 0.4×(RPP_n + PL_n)/2 + 0.3×IK_n + 0.3×IA_n
-          </code>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Semua variabel dalam skala 0–1 setelah normalisasi Min-Max</p>
-        </div>
-        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
-          <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mb-1">Mengapa bobot 0.4 dan 0.3?</p>
-          <p className="text-[10px] text-blue-600 dark:text-blue-400 leading-relaxed">
-            Mengacu pada <strong>FAO Food Security Framework</strong> dan adaptasi FSVA Indonesia (BPS & WFP).
-            Dimensi Ketersediaan (RPP+PL) mendapat bobot lebih besar (40%) sebagai prasyarat utama.
-            Konsumsi (IK) dan Akses (IA) masing-masing 30%.
-          </p>
-        </div>
-        <div className="space-y-3">
-          {[
-            { k: 'RPP', bobot: '20%', rumus: 'Produksi Padi (ton) ÷ Jumlah Penduduk (jiwa)', why: 'Ketersediaan pangan per kapita dari produksi lokal. Sumber: BPS SIMDASI.' },
-            { k: 'PL',  bobot: '20%', rumus: 'Produksi Padi (ton) ÷ Luas Panen (ha)',         why: 'Produktivitas lahan (ton/ha). Efisiensi pertanian. Sumber: BPS SIMDASI.' },
-            { k: 'IK',  bobot: '30%', rumus: 'Konsumsi Protein (g/kap/hari) ÷ 57 g',          why: '57 g/hari = standar kecukupan protein (WNPG X & Permenkes No.28/2019). Sumber: BPS Susenas.' },
-            { k: 'IA',  bobot: '30%', rumus: '1 − (% Penduduk Miskin ÷ 100)',                  why: 'Indeks akses ekonomi. Kemiskinan sebagai proksi ketidakmampuan akses pangan. Sumber: BPS.' },
-          ].map(v => (
-            <div key={v.k} className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2 mb-1">
-                <code className="text-xs font-black text-green-600 dark:text-green-400">{v.k}</code>
-                <span className="text-[10px] font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded">bobot {v.bobot}</span>
+
+        <div className="px-5 pb-2">
+          {/* Formula utama */}
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800 mb-4">
+            <div className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase tracking-widest mb-2">Formula Utama (IKP)</div>
+            <code className="block text-sm font-mono font-black text-slate-900 dark:text-white">
+              IKP = 0.4×(RPP_n + PL_n)/2 + 0.3×IK_n + 0.3×IA_n
+            </code>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">
+              Semua variabel dinormalisasi ke skala 0–1 menggunakan{' '}
+              <strong>Min-Max Normalization</strong>:{' '}
+              <code className="bg-green-100 dark:bg-green-900/40 px-1.5 py-0.5 rounded text-[10px] text-green-700 dark:text-green-300">
+                X_norm = (X − X_min) / (X_max − X_min)
+              </code>
+            </p>
+          </div>
+
+          {/* Alasan bobot */}
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+            <div className="flex items-start gap-2">
+              <Info size={12} className="text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mb-1">Justifikasi Pembobotan (0.4 dan 0.3)</p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 leading-relaxed">
+                  Mengacu pada <strong>FAO Food Security Framework</strong> (FAO, IFAD, WFP, 1996–2015) dan adaptasi
+                  FSVA Indonesia (BPS & WFP). Dimensi Ketersediaan (RPP+PL) mendapat bobot lebih besar{' '}
+                  <strong>(40%)</strong> sebagai prasyarat utama — tanpa ketersediaan pangan yang cukup, dimensi lain
+                  tidak relevan. Komponen Pemanfaatan (IK) dan Akses (IA) masing-masing <strong>30%</strong>,
+                  selaras dengan penelitian Rochmah & Ratnasari (2020) yang menggunakan variabel yang sama.
+                </p>
               </div>
-              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1 font-mono">{v.rumus}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">{v.why}</p>
+            </div>
+          </div>
+
+          {/* Tabel komponen detail */}
+          <div className="space-y-3 mb-4">
+            {[
+              {
+                k: 'RPP', dim: 'Ketersediaan', dimEn: 'Availability', bobot: '20%', color: '#10b981',
+                rumus: 'Produksi Padi (ton) ÷ Jumlah Penduduk (jiwa)',
+                satuan: 'ton/jiwa',
+                why: 'Mengukur ketersediaan pangan per kapita dari produksi lokal. Semakin tinggi RPP, semakin besar pasokan padi per jiwa penduduk di suatu provinsi.',
+                sumber: 'BPS SIMDASI (id_tabel PADI)',
+                ref: 'Rochmah & Ratnasari (2020); Djirimu (2025)',
+              },
+              {
+                k: 'PL', dim: 'Ketersediaan', dimEn: 'Availability', bobot: '20%', color: '#10b981',
+                rumus: 'Produksi Padi (ton) ÷ Luas Panen (ha)',
+                satuan: 'ton/ha',
+                why: 'Mengukur produktivitas & efisiensi lahan pertanian. Nilai PL yang tinggi menunjukkan teknologi pertanian yang baik dan potensi peningkatan produksi.',
+                sumber: 'BPS SIMDASI (id_tabel PADI)',
+                ref: 'Djirimu (2025) — produksi padi berpengaruh signifikan terhadap IKP',
+              },
+              {
+                k: 'IK', dim: 'Pemanfaatan', dimEn: 'Utilization', bobot: '30%', color: '#3b82f6',
+                rumus: 'Konsumsi Protein (g/kap/hari) ÷ 57 g',
+                satuan: '0–1',
+                why: '57 g/hari = standar kecukupan protein per kapita per hari (Permenkes No. 28 Tahun 2019 / WNPG X). IK = 1.0 berarti konsumsi protein sudah memenuhi standar nasional sepenuhnya.',
+                sumber: 'BPS Susenas — Tabel Statis 951',
+                ref: 'Permenkes No. 28/2019; Rochmah & Ratnasari (2020)',
+              },
+              {
+                k: 'IA', dim: 'Akses', dimEn: 'Access', bobot: '30%', color: '#f59e0b',
+                rumus: '1 − (% Penduduk Miskin ÷ 100)',
+                satuan: '0–1',
+                why: 'Menggunakan tingkat kemiskinan sebagai proksi ketidakmampuan ekonomi dalam mengakses pangan. Nilai IA = 1.0 berarti tidak ada penduduk miskin; semakin rendah kemiskinan, semakin tinggi akses pangan.',
+                sumber: 'BPS — /api/list var=192 (% Penduduk Miskin)',
+                ref: 'Rochmah & Ratnasari (2020) — % kemiskinan sebagai variabel akses pangan',
+              },
+            ].map(v => (
+              <div key={v.k} className="rounded-xl border-2 overflow-hidden" style={{ borderColor: v.color + '30' }}>
+                <div className="flex items-center justify-between px-4 py-2.5" style={{ backgroundColor: v.color + '10' }}>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <code className="text-sm font-black" style={{ color: v.color }}>{v.k}</code>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: v.color + '20', color: v.color }}>
+                      {v.dim} / {v.dimEn}
+                    </span>
+                    <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded">
+                      Bobot {v.bobot}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-slate-400 shrink-0">satuan: {v.satuan}</span>
+                </div>
+                <div className="px-4 py-3 bg-white dark:bg-slate-800 space-y-2">
+                  <p className="text-[11px] font-mono font-bold text-slate-800 dark:text-white">{v.rumus}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">{v.why}</p>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    <span className="text-[9px] px-2 py-0.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded border border-teal-200 dark:border-teal-700 font-semibold">
+                      📊 {v.sumber}
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded border border-slate-200 dark:border-slate-600">
+                      📚 {v.ref}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {expandFormula && (
+            <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-700">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 size={12} className="text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mb-1">Validitas & Keterbatasan Metodologi</p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
+                    Formula diadaptasi dari metodologi <strong>FSVA Indonesia</strong> (BPS & WFP, sejak 2005) dan
+                    kerangka FAO 4 dimensi. Pendekatan agregasi dengan normalisasi Min-Max juga digunakan dalam
+                    penelitian Ardakani et al. (2017) menggunakan TOPSIS untuk indeks ketahanan pangan multidimensi.
+                  </p>
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed mt-1.5">
+                    ⚠ <strong>Keterbatasan:</strong> Normalisasi Min-Max sensitif terhadap outlier dan bersifat
+                    relatif antar tahun — nilai IKP dari tahun berbeda tidak langsung komparabel tanpa standarisasi eksternal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Normalisasi & Klasifikasi ── */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Normalisasi */}
+        <Card className="overflow-hidden">
+          <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+            onClick={() => setExpandNorm(!expandNorm)}>
+            <SectionBar color="bg-blue-500" title="Normalisasi Data" sub="Min-Max Normalization (Ardakani et al., 2017)" />
+            <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandNorm && 'rotate-180')} />
+          </button>
+          <div className="px-5 pb-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-700 mb-3">
+              <code className="text-xs font-mono font-black text-slate-900 dark:text-white">
+                X_norm = (X − X_min) / (X_max − X_min)
+              </code>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Semua komponen (RPP, PL, IK, IA) dinormalisasi ke rentang <strong>0–1</strong> agar dapat
+              diagregasi meskipun memiliki satuan berbeda. Metode ini setara dengan pendekatan yang digunakan
+              Ardakani et al. (2017) dalam indeks multidimensi ketahanan pangan berbasis TOPSIS.
+            </p>
+            {expandNorm && (
+              <div className="mt-3 space-y-2">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Interpretasi Nilai Ternormalisasi</div>
+                {[
+                  { val: '0.00', arti: 'Nilai terendah di antara semua provinsi pada tahun tersebut (titik minimum distribusi)' },
+                  { val: '0.50', arti: 'Berada di tengah-tengah distribusi provinsi — kinerja rata-rata' },
+                  { val: '1.00', arti: 'Nilai tertinggi di antara semua provinsi pada tahun tersebut (titik maksimum distribusi)' },
+                ].map(i => (
+                  <div key={i.val} className="flex gap-3 text-[10px] p-2 bg-slate-50 dark:bg-slate-900/40 rounded-lg">
+                    <code className="font-black text-blue-600 dark:text-blue-400 w-8 shrink-0">{i.val}</code>
+                    <span className="text-slate-500 dark:text-slate-400 leading-relaxed">{i.arti}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Klasifikasi */}
+        <Card className="overflow-hidden">
+          <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+            onClick={() => setExpandKlasif(!expandKlasif)}>
+            <SectionBar color="bg-rose-500" title="Klasifikasi Status IKP" sub="3 Kelas — ambang batas FAO/FSVA/BPS" />
+            <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandKlasif && 'rotate-180')} />
+          </button>
+          <div className="px-5 pb-4 space-y-2">
+            {[
+              {
+                label: 'TINGGI', range: 'IKP ≥ 0.70', color: '#10b981',
+                desc: 'Semua 4 dimensi FAO terpenuhi dengan baik. Produksi padi mencukupi, akses ekonomi tinggi, dan konsumsi protein di atas standar Permenkes.',
+              },
+              {
+                label: 'SEDANG', range: '0.50 ≤ IKP < 0.70', color: '#f59e0b',
+                desc: 'Ketahanan pangan moderat — masih ada satu atau lebih dimensi yang lemah dan memerlukan perhatian kebijakan pangan.',
+              },
+              {
+                label: 'RENDAH', range: 'IKP < 0.50', color: '#ef4444',
+                desc: 'Rawan pangan — perlu intervensi prioritas pada produksi pertanian, pengentasan kemiskinan, atau perbaikan gizi masyarakat.',
+              },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl border p-3" style={{ borderColor: s.color + '40', backgroundColor: s.color + '08' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded"
+                    style={{ backgroundColor: s.color + '25', color: s.color }}>{s.label}</span>
+                  <code className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400">{s.range}</code>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+            {expandKlasif && (
+              <div className="mt-1 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Ambang 0.70 dan 0.50 diadaptasi dari klasifikasi IPM BPS (Tinggi ≥ 70, Sedang 60–70,
+                  Rendah &lt; 60 dalam skala 0–100) yang dikonversi ke skala 0–1, serta mengacu pada distribusi
+                  riil nilai IKP antar provinsi berdasarkan FSVA (Food Security and Vulnerability Atlas) BPS & WFP Indonesia.
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Sumber Data BPS ── */}
+      <Card className="p-5">
+        <SectionBar color="bg-teal-500" title="Sumber Data BPS" sub="Dataset resmi yang digunakan dalam perhitungan IKP" />
+        <div className="mt-4 grid md:grid-cols-2 gap-3">
+          {[
+            {
+              ds: 'Produksi & Luas Panen Padi',
+              src: 'BPS SIMDASI (id_tabel PADI)',
+              update: 'Tahunan',
+              desc: 'Digunakan untuk menghitung RPP (ton/jiwa) dan PL (ton/ha). Mencakup data per provinsi yang dapat diagregasi.',
+              color: '#10b981',
+            },
+            {
+              ds: 'Konsumsi Kalori & Protein per Kapita',
+              src: 'BPS Susenas — Tabel Statis 951',
+              update: 'Tahunan (tersedia hingga 2025)',
+              desc: 'Untuk menghitung IK. Pembagi baku: 57 g protein/hari per Permenkes No. 28/2019 (WNPG X).',
+              color: '#3b82f6',
+            },
+            {
+              ds: 'Persentase Penduduk Miskin',
+              src: 'BPS — /api/list var=192',
+              update: 'Tahunan (Maret & September)',
+              desc: 'Proksi akses ekonomi terhadap pangan. Digunakan sebagai komponen IA = 1 − (% miskin/100).',
+              color: '#f59e0b',
+            },
+            {
+              ds: 'Jumlah Penduduk',
+              src: 'BPS SIMDASI (proyeksi penduduk)',
+              update: 'Tahunan',
+              desc: 'Denominator untuk menghitung RPP per kapita (ton padi dibagi jumlah penduduk jiwa).',
+              color: '#8b5cf6',
+            },
+          ].map(d => (
+            <div key={d.ds} className="p-3 rounded-xl border-2 bg-white dark:bg-slate-800/80"
+              style={{ borderColor: d.color + '30' }}>
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: d.color }} />
+                <div>
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-0.5">{d.ds}</div>
+                  <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-1">{d.src}</div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">{d.desc}</p>
+                  <div className="text-[9px] font-semibold mt-1.5" style={{ color: d.color }}>
+                    🔄 Frekuensi update: {d.update}
+                  </div>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        {expandFormula && (
-          <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-700">
-            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mb-1">✓ Validitas Analisis</p>
-            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
-              Formula diadaptasi dari metodologi FSVA Indonesia (BPS & WFP sejak 2005).
-              <strong> Keterbatasan:</strong> normalisasi Min-Max sensitif outlier dan bersifat relatif antar tahun.
+      </Card>
+
+      {/* ── Referensi Jurnal & Regulasi ── */}
+      <Card className="overflow-hidden">
+        <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+          onClick={() => setExpandRef(!expandRef)}>
+          <SectionBar color="bg-indigo-500"
+            title="Referensi Ilmiah & Landasan Metodologi"
+            sub="FAO framework · jurnal nasional & internasional · regulasi Permenkes" />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full">
+              {JURNAL_REFS.length} referensi
+            </span>
+            <ChevronDown size={14} className={cn('text-slate-400 transition-transform', expandRef && 'rotate-180')} />
+          </div>
+        </button>
+
+        {expandRef && (
+          <div className="px-5 pb-5 space-y-3 border-t border-slate-100 dark:border-slate-700 pt-4">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              Klik referensi untuk melihat detail relevansinya terhadap metodologi IKP dalam sistem ini.
             </p>
+            {JURNAL_REFS.map(ref => (
+              <div key={ref.id}
+                className={cn(
+                  'rounded-2xl border-2 overflow-hidden cursor-pointer transition-all duration-200',
+                  activeRefId === ref.id ? 'shadow-md' : 'hover:shadow-sm'
+                )}
+                style={{ borderColor: activeRefId === ref.id ? ref.warna + '70' : ref.warna + '25' }}
+                onClick={() => setActiveRefId(activeRefId === ref.id ? null : ref.id)}>
+
+                {/* Header referensi */}
+                <div className="flex items-start gap-3 px-4 py-3.5 transition-colors"
+                  style={{ backgroundColor: activeRefId === ref.id ? ref.warna + '12' : ref.warna + '06' }}>
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-2" style={{ backgroundColor: ref.warna }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: ref.warna + '20', color: ref.warna }}>
+                        {ref.badge}
+                      </span>
+                      {ref.tags.map(t => (
+                        <span key={t} className="text-[8px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-snug">{ref.judul}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 italic">{ref.penulis} · {ref.tahun}</p>
+                  </div>
+                  <ChevronDown size={13} className={cn('transition-transform shrink-0 mt-1.5', activeRefId === ref.id && 'rotate-180')}
+                    style={{ color: ref.warna }} />
+                </div>
+
+                {/* Detail relevansi */}
+                {activeRefId === ref.id && (
+                  <div className="px-5 py-4 border-t bg-white dark:bg-slate-800"
+                    style={{ borderColor: ref.warna + '20' }}>
+                    <div className="text-[9px] font-bold uppercase tracking-widest mb-2" style={{ color: ref.warna }}>
+                      Relevansi untuk Metodologi IKP
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
+                      {ref.relevansi}
+                    </p>
+                    {ref.doi ? (
+                      <a href={ref.doi} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-75"
+                        style={{ backgroundColor: ref.warna + '15', color: ref.warna }}
+                        onClick={e => e.stopPropagation()}>
+                        🔗 DOI: {ref.doi.replace('https://doi.org/', '')}
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-400">
+                        📄 Regulasi / Dokumen Resmi Nasional
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Catatan penutup */}
+            <div className="mt-2 p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">📋 Ringkasan Metodologi</div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Rumus IKP dalam sistem ini merupakan adaptasi dari kerangka <strong>FAO 4 dimensi</strong> (1996–2015)
+                yang diimplementasikan menggunakan data BPS yang tersedia secara publik via API. Standar gizi mengacu
+                pada <strong>Permenkes No. 28/2019</strong>. Pendekatan spasial dan pemilihan variabel divalidasi oleh
+                penelitian <strong>Rochmah & Ratnasari (2020)</strong> dan <strong>Djirimu (2025)</strong>.
+                Teknik normalisasi selaras dengan <strong>Ardakani et al. (2017)</strong>.
+                Klasifikasi 3 kelas mengacu pada distribusi empiris FSVA (BPS & WFP Indonesia).
+              </p>
+            </div>
           </div>
         )}
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        <Card className="p-5">
-          <SectionBar color="bg-rose-500" title="Klasifikasi Status IKP" />
-          <div className="space-y-2 mt-3">
-            {[
-              { label: 'TINGGI', range: 'IKP ≥ 0.70',        color: '#10b981', desc: 'Ketahanan pangan baik.' },
-              { label: 'SEDANG', range: '0.50 ≤ IKP < 0.70', color: '#f59e0b', desc: 'Ketahanan moderat - perlu perhatian.' },
-              { label: 'RENDAH', range: 'IKP < 0.50',         color: '#ef4444', desc: 'Rawan pangan - perlu intervensi segera.' },
-            ].map(s => (
-              <div key={s.label} className="flex gap-3 p-2.5 rounded-lg border" style={{ borderColor: s.color + '40', backgroundColor: s.color + '08' }}>
-                <div className="shrink-0 text-center">
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded" style={{ backgroundColor: s.color + '20', color: s.color }}>{s.label}</span>
-                  <div className="text-[9px] text-slate-400 mt-0.5 whitespace-nowrap">{s.range}</div>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-5">
-          <SectionBar color="bg-teal-500" title="Sumber Data BPS" />
-          <div className="space-y-2 mt-3">
-            {[
-              { ds: 'Produksi & Luas Panen Padi', src: 'BPS SIMDASI (id_tabel PADI)',       update: 'Tahunan' },
-              { ds: 'Konsumsi Kalori & Protein',   src: 'BPS Susenas - Tabel Statis 951',    update: 'Tahunan (tersedia hingga 2025)' },
-              { ds: '% Penduduk Miskin',            src: 'BPS - /api/list var=192',           update: 'Tahunan' },
-              { ds: 'Jumlah Penduduk',              src: 'BPS SIMDASI (proyeksi)',             update: 'Tahunan' },
-            ].map(d => (
-              <div key={d.ds} className="p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">{d.ds}</div>
-                <div className="text-[10px] text-slate-400">{d.src}</div>
-                <div className="text-[10px] text-teal-500 font-semibold mt-0.5">Update: {d.update}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
     </div>
   );
 }
@@ -946,7 +1298,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
             <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-4">
                 <CheckCircle2 size={14} className="text-green-500" />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">Top 5 - IKP Tertinggi</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">Top 5 — IKP Tertinggi</span>
               </div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={top5} layout="vertical" margin={{ top: 0, right: 40, left: 8, bottom: 0 }} barSize={18}>
@@ -962,7 +1314,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
             <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle size={14} className="text-red-400" />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">Bottom 5 - IKP Terendah</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">Bottom 5 — IKP Terendah</span>
               </div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={bottom5} layout="vertical" margin={{ top: 0, right: 40, left: 8, bottom: 0 }} barSize={18}>
@@ -1025,7 +1377,7 @@ export function TabTrend({ trendData, trendLoading, trendError }) {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 rounded-full bg-amber-500" />
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Heatmap IKP - Top 20 Provinsi × Tahun</h3>
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Heatmap IKP — Top 20 Provinsi × Tahun</h3>
             <span className="text-[10px] text-slate-400">(warna = status IKP)</span>
           </div>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">

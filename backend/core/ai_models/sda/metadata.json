@@ -1,0 +1,220 @@
+{
+  "version": "sda_rf_v2.0",
+  "created_at": "2026-04-02T02:15:20.260324",
+  "features": [
+    "tahun_rel",
+    "prov_enc",
+    "pulau_enc",
+    "n_komponen_fe",
+    "flag_npi",
+    "flag_kps",
+    "rpp_ikan_lag1",
+    "rpp_kebun_lag1",
+    "npi_lag1",
+    "kps_lag1",
+    "ipsda_lag1",
+    "rpp_ikan_lag2",
+    "rpp_kebun_lag2",
+    "npi_lag2",
+    "kps_lag2",
+    "ipsda_lag2",
+    "rpp_ikan_delta",
+    "rpp_kebun_delta",
+    "npi_delta",
+    "kps_delta",
+    "ipsda_delta",
+    "rpp_ikan_roll2",
+    "rpp_kebun_roll2",
+    "npi_roll2",
+    "kps_roll2",
+    "ipsda_roll2",
+    "rpp_ikan_std2",
+    "rpp_kebun_std2",
+    "npi_std2",
+    "kps_std2",
+    "pulau_Bali-Nusa",
+    "pulau_Jawa",
+    "pulau_Kalimantan",
+    "pulau_Maluku-Papua",
+    "pulau_Sulawesi",
+    "pulau_Sumatera"
+  ],
+  "targets": [
+    "rpp_ikan",
+    "rpp_kebun",
+    "npi",
+    "kps",
+    "ipsda"
+  ],
+  "pulau_dummy_cols": [
+    "pulau_Bali-Nusa",
+    "pulau_Jawa",
+    "pulau_Kalimantan",
+    "pulau_Maluku-Papua",
+    "pulau_Sulawesi",
+    "pulau_Sumatera"
+  ],
+  "tahun_historis": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "tahun_prediksi": [
+    2025,
+    2026,
+    2027,
+    2028,
+    2029,
+    2030
+  ],
+  "tahun_rel_base": 2018,
+  "provinsi_list": [
+    "ACEH",
+    "BALI",
+    "BANTEN",
+    "BENGKULU",
+    "DAERAH ISTIMEWA YOGYAKARTA",
+    "GORONTALO",
+    "JAKARTA",
+    "JAMBI",
+    "JAWA BARAT",
+    "JAWA TENGAH",
+    "JAWA TIMUR",
+    "KALIMANTAN BARAT",
+    "KALIMANTAN SELATAN",
+    "KALIMANTAN TENGAH",
+    "KALIMANTAN TIMUR",
+    "KALIMANTAN UTARA",
+    "KEPULAUAN BANGKA BELITUNG",
+    "KEPULAUAN RIAU",
+    "LAMPUNG",
+    "MALUKU",
+    "MALUKU UTARA",
+    "NUSA TENGGARA BARAT",
+    "NUSA TENGGARA TIMUR",
+    "PAPUA",
+    "PAPUA BARAT",
+    "RIAU",
+    "SULAWESI BARAT",
+    "SULAWESI SELATAN",
+    "SULAWESI TENGAH",
+    "SULAWESI TENGGARA",
+    "SULAWESI UTARA",
+    "SUMATERA BARAT",
+    "SUMATERA SELATAN",
+    "SUMATERA UTARA"
+  ],
+  "pulau_list": [
+    "Bali-Nusa",
+    "Jawa",
+    "Kalimantan",
+    "Maluku-Papua",
+    "Sulawesi",
+    "Sumatera"
+  ],
+  "pulau_map": {
+    "ACEH": "Sumatera",
+    "SUMATERA UTARA": "Sumatera",
+    "SUMATERA BARAT": "Sumatera",
+    "RIAU": "Sumatera",
+    "JAMBI": "Sumatera",
+    "SUMATERA SELATAN": "Sumatera",
+    "BENGKULU": "Sumatera",
+    "LAMPUNG": "Sumatera",
+    "KEPULAUAN BANGKA BELITUNG": "Sumatera",
+    "KEPULAUAN RIAU": "Sumatera",
+    "JAKARTA": "Jawa",
+    "JAWA BARAT": "Jawa",
+    "JAWA TENGAH": "Jawa",
+    "DAERAH ISTIMEWA YOGYAKARTA": "Jawa",
+    "JAWA TIMUR": "Jawa",
+    "BANTEN": "Jawa",
+    "BALI": "Bali-Nusa",
+    "NUSA TENGGARA BARAT": "Bali-Nusa",
+    "NUSA TENGGARA TIMUR": "Bali-Nusa",
+    "KALIMANTAN BARAT": "Kalimantan",
+    "KALIMANTAN TENGAH": "Kalimantan",
+    "KALIMANTAN SELATAN": "Kalimantan",
+    "KALIMANTAN TIMUR": "Kalimantan",
+    "KALIMANTAN UTARA": "Kalimantan",
+    "SULAWESI UTARA": "Sulawesi",
+    "SULAWESI TENGAH": "Sulawesi",
+    "SULAWESI SELATAN": "Sulawesi",
+    "SULAWESI TENGGARA": "Sulawesi",
+    "GORONTALO": "Sulawesi",
+    "SULAWESI BARAT": "Sulawesi",
+    "MALUKU": "Maluku-Papua",
+    "MALUKU UTARA": "Maluku-Papua",
+    "PAPUA": "Maluku-Papua",
+    "PAPUA BARAT": "Maluku-Papua",
+    "PAPUA BARAT DAYA": "Maluku-Papua",
+    "PAPUA SELATAN": "Maluku-Papua",
+    "PAPUA TENGAH": "Maluku-Papua",
+    "PAPUA PEGUNUNGAN": "Maluku-Papua"
+  },
+  "scores": {
+    "rpp_ikan": {
+      "cv_r2": 0.9289,
+      "cv_mae": 0.009186,
+      "train_r2": 0.9786,
+      "train_mae": 0.004672
+    },
+    "rpp_kebun": {
+      "cv_r2": 0.8973,
+      "cv_mae": 0.009754,
+      "train_r2": 0.9753,
+      "train_mae": 0.004279
+    },
+    "npi": {
+      "cv_r2": 0.9192,
+      "cv_mae": 250139.628693,
+      "train_r2": 0.981,
+      "train_mae": 119173.989467
+    },
+    "kps": {
+      "cv_r2": 0.9434,
+      "cv_mae": 0.014386,
+      "train_r2": 0.985,
+      "train_mae": 0.006772
+    },
+    "ipsda": {
+      "cv_r2": 0.9441,
+      "cv_mae": 0.020934,
+      "train_r2": 0.9868,
+      "train_mae": 0.010235
+    }
+  },
+  "n_train_rows": 238,
+  "data_sources": {
+    "RPP_Ikan": "var=1054 (Ton, 2000-2024, semua tahun tersedia)",
+    "RPP_Kebun": "var=132 (2018-2023) + var=2566 (2024), Ribu Ton",
+    "NPI": "SIMDASI NTdH 2017-2022 (c9knnv4dte ton, s1dgw0lol3 ribu Rp) + ZUpF 2023-2024 (cnt2nlnwxu kg, un4872dm6h Rp)",
+    "KPS": "var=2268 th_val=tahun-1900+1",
+    "Penduduk": "var=958 domain=7100 (Ribu Jiwa)"
+  },
+  "simdasi": {
+    "lama_tabel": "NTdHM1BiQXJXUHAyUUNoMXNabkRwZz09",
+    "baru_tabel": "ZUpFNjk2T1BxZDFoN1pVbVBBYUtUdz09",
+    "kolom_lama": {
+      "prod_ton": "c9knnv4dte",
+      "nilai_ribu_rp": "s1dgw0lol3"
+    },
+    "kolom_baru": {
+      "prod_kg": "cnt2nlnwxu",
+      "nilai_rp": "un4872dm6h"
+    }
+  },
+  "formula": {
+    "ipsda": "(RPP_Ikan_n+RPP_Kebun_n+NPI_n+KPS_n)/4",
+    "klasifikasi": {
+      "OPTIMAL": ">=0.70",
+      "CUKUP": "0.50-0.70",
+      "KURANG": "0.30-0.50",
+      "RENDAH": "<0.30"
+    }
+  }
+}

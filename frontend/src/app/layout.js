@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: {
-    default: "TerraSeg",
-    template: "%s | TerraSeg"
+    default: "GAPSS",
+    template: "%s | GAPSS"
   },
   description: "app masih magang",
   icons: {
-    icon: "/icon.png", 
+    icon: "/putigapss.png", 
   },
 };
 
