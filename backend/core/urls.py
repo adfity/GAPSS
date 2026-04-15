@@ -1,64 +1,20 @@
 from django.urls import path
 
 from . import views
-
-# analisis (nanti delet)
-from .analysis_views import education_views
-from .analysis_views import health_views
-from .analysis_views import economy_views
 from . import views_area_scan
-
-
 from . import waypoint_views
-
 # analisis
 from .analysis_views import sdm_views
 from .analysis_views import pangan_views
 from .analysis_views import sda_views
 
 
-from core.scripts.waypoint_kesehatan import (
-    WaypointKesehatanView,
-    WaypointHospitalView,
-    WaypointClinicView,
-    WaypointHealthPostView,
-    WaypointPharmacyView,
-)
+# analisis (nanti delet)
+from .analysis_views import education_views
+from .analysis_views import health_views
+from .analysis_views import economy_views
+# ---------------------------------------
 
-from core.scripts.waypoint_kantor_pemerintahan import (
-    WaypointPemerintahanView,
-    WaypointTownhallView,
-    WaypointVillageOfficeView,
-    WaypointGovernmentOfficeView,
-    WaypointMinistryView,
-    WaypointPoliceView,
-    WaypointFireStationView,
-    WaypointCourthouseView,
-    WaypointCustomsView,
-    WaypointImmigrationView,
-    WaypointTaxOfficeView,
-    WaypointLegislativeView,
-)
-
-from core.scripts.waypoint_mbg import (
-    WaypointMbgView,
-    WaypointMbgCommunityCentreView,
-    WaypointMbgKitchenView,
-    WaypointMbgFoodCentreView,
-    WaypointMbgNutritionCentreView,
-    WaypointMbgCanteenView,
-)
-
-from core.scripts.waypoint_pertahanan import (
-    WaypointPertahananView,
-    WaypointMilitaryBaseView,
-    WaypointMilitaryBarracksView,
-    WaypointMilitaryCheckpointView,
-    WaypointMilitaryOfficeView,
-    WaypointMilitaryTrainingView,
-    WaypointAirfieldView,
-    WaypointNavalBaseView,
-)
 
 urlpatterns = [
     # AI DETECTION & FEATURES -
