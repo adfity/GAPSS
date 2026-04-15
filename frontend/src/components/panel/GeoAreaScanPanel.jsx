@@ -108,19 +108,40 @@ function clipPolygonToBounds(polygon, bounds) {
 function generateTilesFromBounds(bounds, tileMeter = 150, clipFeature = null) {
   const south = Math.min(bounds[0].lat, bounds[1].lat), north = Math.max(bounds[0].lat, bounds[1].lat);
   const west  = Math.min(bounds[0].lng, bounds[1].lng), east  = Math.max(bounds[0].lng, bounds[1].lng);
+  
+  // FIX: ensure bounds are valid
+  if (south >= north || west >= east) return [];
+  
   const cLat = (south + north) / 2, latStep = meterToLat(tileMeter), lngStep = meterToLng(tileMeter, cLat);
   const tiles = []; let row = 0;
+  
   for (let lat = south; lat < north; lat += latStep) {
     let col = 0;
     for (let lng = west; lng < east; lng += lngStep) {
       const tN = Math.min(lat + latStep, north), tE = Math.min(lng + lngStep, east);
       const cLt = (lat + tN) / 2, cLg = (lng + tE) / 2;
+      
+      // FIX: check jika center tile ada dalam bounds (strict rectangle check)
+      const inLatBound = cLt >= south && cLt <= north;
+      const inLngBound = cLg >= west && cLg <= east;
+      
+      // Skip jika tile center diluar bounds rectangle
+      if (!inLatBound || !inLngBound) { col++; continue; }
+      
+      // Jika ada clipFeature (kabupaten), check ke polygon feature
       if (clipFeature && !pointInFeature({ lat: cLt, lng: cLg }, clipFeature)) { col++; continue; }
-      tiles.push({ id: `tile_${row}_${col}`, row, col, south: lat, north: tN, west: lng, east: tE, centerLat: cLt, centerLng: cLg, status: 'pending', count: 0 });
+      
+      tiles.push({ 
+        id: `tile_${row}_${col}`, row, col, 
+        south: lat, north: tN, west: lng, east: tE, 
+        centerLat: cLt, centerLng: cLg, 
+        status: 'pending', count: 0 
+      });
       col++;
     }
     row++;
   }
+  
   tiles.sort((a, b) => a.row !== b.row ? a.row - b.row : a.col - b.col);
   return tiles;
 }
@@ -1231,14 +1252,24 @@ export default function GeoAreaScanPanel({
   };
 
   // ── TILE SCAN ──
-  const handleStartTileScan = async () => {
-    if (!activeBounds)        { toast.error('Tentukan area scan terlebih dahulu!'); return; }
-    if (!selectedCats.length) { toast.error('Pilih minimal satu kategori!'); return; }
-    if (estTiles === 0)       { toast.error('Area terlalu kecil!'); return; }
-
-    const clipFeature = scanMode === 'kabupaten' ? selectedKabupaten : null;
-    const grid = generateTilesFromBounds(activeBounds, TILE_METER, clipFeature);
-    if (!grid.length) { toast.error('Tidak ada tile!'); return; }
+ const handleStartTileScan = async () => {
+  if (!activeBounds)        { toast.error('Tentukan area scan terlebih dahulu!'); return; }
+  if (!selectedCats.length) { toast.error('Pilih minimal satu kategori!'); return; }
+  
+  // FIX: validate bounds strictly
+  const isValidBounds = activeBounds && 
+    activeBounds[0].lat < activeBounds[1].lat && 
+    activeBounds[0].lng < activeBounds[1].lng;
+  
+  if (!isValidBounds) { 
+    toast.error('Area tidak valid - pastikan drag dari kiri atas ke kanan bawah'); 
+    return; 
+  }
+  
+  const clipFeature = scanMode === 'kabupaten' ? selectedKabupaten : null;
+  const grid = generateTilesFromBounds(activeBounds, TILE_METER, clipFeature);
+  
+  if (!grid.length) { toast.error('Tidak ada tile! Gambar area lebih besar.'); return; }
 
     setTileGrid(grid); setPreviewResults([]); setIsScanning(true); setIsPaused(false);
     setIsDrawingArea(false); setStep('result'); setShowAnalysis(false);

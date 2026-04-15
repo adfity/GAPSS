@@ -8,28 +8,29 @@ import {
   RefreshCw, Wifi, WifiOff,
 } from 'lucide-react';
 
-// ─── BMKG API Endpoints ───────────────────────────────────────────────────────
-
 const BMKG_ENDPOINTS = {
   autogempa:      'https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json',
   gempaterkini:   'https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json',
   gempadirasakan: 'https://data.bmkg.go.id/DataMKG/TEWS/gempadirasakan.json',
-  tsunami:        'https://data.bmkg.go.id/DataMKG/TEWS/tsunamiwarning.json',
-  cuacaekstrim:   'https://data.bmkg.go.id/DataMKG/MEWS/cuacaekstrim/cuacaekstrim.json',
-  // Kebakaran hutan & lahan (BMKG MEWS)
-  karhutla:       'https://data.bmkg.go.id/DataMKG/MEWS/hotspot/hotspot.json',
-  // Peringatan dini cuaca (gelombang tinggi, angin kencang, dll)
-  peringatandini: 'https://data.bmkg.go.id/DataMKG/MEWS/peringatandini/peringatandini.json',
 };
 
-// ─── Batas Wilayah ────────────────────────────────────────────────────────────
+const CUACA_KOTA_LIST = [
+  { id: 'cuaca_jakarta',    label: 'Jakarta Pusat',  lat: -6.1753,  lng: 106.8271, adm4: '31.71.03.1001', color: '#0ea5e9' },
+  { id: 'cuaca_surabaya',   label: 'Surabaya',       lat: -7.2575,  lng: 112.7521, adm4: '35.78.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_bandung',    label: 'Bandung',         lat: -6.9175,  lng: 107.6191, adm4: '32.73.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_medan',      label: 'Medan',           lat: 3.5952,   lng: 98.6722,  adm4: '12.71.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_makassar',   label: 'Makassar',        lat: -5.1477,  lng: 119.4327, adm4: '73.71.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_denpasar',   label: 'Denpasar',        lat: -8.6705,  lng: 115.2126, adm4: '51.71.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_yogyakarta', label: 'Yogyakarta',      lat: -7.7956,  lng: 110.3695, adm4: '34.71.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_semarang',   label: 'Semarang',        lat: -6.9932,  lng: 110.4203, adm4: '33.74.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_palembang',  label: 'Palembang',       lat: -2.9761,  lng: 104.7754, adm4: '16.71.01.1001', color: '#0ea5e9' },
+  { id: 'cuaca_pontianak',  label: 'Pontianak',       lat: -0.0263,  lng: 109.3425, adm4: '61.71.01.1001', color: '#0ea5e9' },
+];
 
 const BOUNDARY_LAYERS = [
   { id: 'batas_provinsi',  label: 'Batas Provinsi',  color: '#3b82f6', desc: 'Batas administrasi tingkat provinsi' },
   { id: 'batas_kabupaten', label: 'Batas Kabupaten', color: '#f59e0b', desc: 'Batas administrasi tingkat kabupaten/kota' },
 ];
-
-// ─── Waypoint Layers ──────────────────────────────────────────────────────────
 
 const WAYPOINT_PENDIDIKAN = [
   { id: 'waypoint_university',   label: 'Universitas / Institut',  category: 'university',   endpoint: '/api/waypoint/pendidikan/university/',   color: '#3b82f6', desc: 'Perguruan tinggi negeri & swasta' },
@@ -76,24 +77,16 @@ const WAYPOINT_PERTAHANAN = [
   { id: 'waypoint_mil_naval',      label: 'Pangkalan Laut (TNI AL)',     category: 'naval_base',      endpoint: '/api/waypoint/pertahanan/naval-base/',    color: '#1e40af', desc: 'Lanal & fasilitas TNI AL' },
 ];
 
-// ─── BMKG Layer Definitions ───────────────────────────────────────────────────
-
 export const BMKG_LAYER_IDS = {
   GEMPA_TERKINI:   'bmkg_gempa_terkini',
   GEMPA_DIRASAKAN: 'bmkg_gempa_dirasakan',
-  TSUNAMI:         'bmkg_tsunami',
-  CUACA_EKSTRIM:   'bmkg_cuaca_ekstrim',
-  KARHUTLA:        'bmkg_karhutla',
-  PERINGATAN_DINI: 'bmkg_peringatan_dini',
+  CUACA_KOTA:      'bmkg_cuaca_kota',
 };
 
 const BMKG_LAYERS_DEF = [
   { id: BMKG_LAYER_IDS.GEMPA_TERKINI,   label: 'Gempa M5+ Terkini',             color: '#ef4444', desc: 'Gempa signifikan magnitudo 5+ dari BMKG' },
   { id: BMKG_LAYER_IDS.GEMPA_DIRASAKAN, label: 'Gempa Dirasakan (15 terakhir)', color: '#f97316', desc: '15 gempa terakhir yang dirasakan masyarakat' },
-  { id: BMKG_LAYER_IDS.TSUNAMI,         label: 'Peringatan Tsunami',            color: '#7c3aed', desc: 'Status peringatan dini tsunami aktif' },
-  { id: BMKG_LAYER_IDS.CUACA_EKSTRIM,   label: 'Cuaca Ekstrim per Wilayah',     color: '#0ea5e9', desc: 'Peringatan cuaca ekstrim dari BMKG' },
-  { id: BMKG_LAYER_IDS.KARHUTLA,        label: 'Hotspot / Kebakaran Hutan',     color: '#f59e0b', desc: 'Titik api aktif dari pantauan satelit BMKG' },
-  { id: BMKG_LAYER_IDS.PERINGATAN_DINI, label: 'Peringatan Dini Cuaca',         color: '#06b6d4', desc: 'Gelombang tinggi, angin kencang, banjir, dll' },
+  { id: BMKG_LAYER_IDS.CUACA_KOTA,      label: 'Prakiraan Cuaca Kota',          color: '#0ea5e9', desc: 'Cuaca terkini 10 kota besar via api.bmkg.go.id' },
 ];
 
 export const WAYPOINT_LAYERS = [
@@ -103,8 +96,6 @@ export const WAYPOINT_LAYERS = [
   ...WAYPOINT_MBG,
   ...WAYPOINT_PERTAHANAN,
 ];
-
-// ─── Legend Map ───────────────────────────────────────────────────────────────
 
 const LEGEND_MAP = {
   batas_provinsi:             { label: 'Batas Provinsi',                      color: '#3b82f6', type: 'dashed' },
@@ -141,22 +132,14 @@ const LEGEND_MAP = {
   waypoint_mil_naval:         { label: 'Pangkalan Laut (TNI AL)',            color: '#1e40af', type: 'dot' },
   bmkg_gempa_terkini:         { label: 'Gempa M5+ Terkini',                 color: '#ef4444', type: 'dot' },
   bmkg_gempa_dirasakan:       { label: 'Gempa Dirasakan',                   color: '#f97316', type: 'dot' },
-  bmkg_tsunami:               { label: 'Peringatan Tsunami',                color: '#7c3aed', type: 'dot' },
-  bmkg_cuaca_ekstrim:         { label: 'Cuaca Ekstrim',                     color: '#0ea5e9', type: 'dot' },
-  bmkg_karhutla:              { label: 'Hotspot / Kebakaran Hutan',         color: '#f59e0b', type: 'dot' },
-  bmkg_peringatan_dini:       { label: 'Peringatan Dini Cuaca',             color: '#06b6d4', type: 'dot' },
+  bmkg_cuaca_kota:            { label: 'Prakiraan Cuaca Kota',              color: '#0ea5e9', type: 'dot' },
 };
-
-// ─── BMKG Hooks ───────────────────────────────────────────────────────────────
 
 export function useBmkgData(activeLayers) {
   const [bmkgData, setBmkgData] = useState({
     gempa_terkini:   null,
     gempa_dirasakan: null,
-    tsunami:         null,
-    cuaca_ekstrim:   null,
-    karhutla:        null,
-    peringatan_dini: null,
+    cuaca_kota:      {},
   });
   const [bmkgStatus, setBmkgStatus] = useState({ loading: false, lastUpdate: null, error: null });
   const intervalRef = useRef(null);
@@ -176,6 +159,7 @@ export function useBmkgData(activeLayers) {
             .catch(() => ({ key: 'gempa_terkini', data: null }))
         );
       }
+
       if (activeLayers.includes(BMKG_LAYER_IDS.GEMPA_DIRASAKAN)) {
         fetches.push(
           fetch(BMKG_ENDPOINTS.gempadirasakan)
@@ -183,41 +167,35 @@ export function useBmkgData(activeLayers) {
             .catch(() => ({ key: 'gempa_dirasakan', data: null }))
         );
       }
-      if (activeLayers.includes(BMKG_LAYER_IDS.TSUNAMI)) {
-        fetches.push(
-          fetch(BMKG_ENDPOINTS.tsunami)
-            .then(r => r.json()).then(d => ({ key: 'tsunami', data: d }))
-            .catch(() => ({ key: 'tsunami', data: null }))
+
+      if (activeLayers.includes(BMKG_LAYER_IDS.CUACA_KOTA)) {
+        const cuacaFetches = CUACA_KOTA_LIST.map(kota =>
+          fetch(`https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=${kota.adm4}`)
+            .then(r => r.json())
+            .then(d => ({ kotaId: kota.id, data: d }))
+            .catch(() => ({ kotaId: kota.id, data: null }))
         );
-      }
-      if (activeLayers.includes(BMKG_LAYER_IDS.CUACA_EKSTRIM)) {
         fetches.push(
-          fetch(BMKG_ENDPOINTS.cuacaekstrim)
-            .then(r => r.json()).then(d => ({ key: 'cuaca_ekstrim', data: d }))
-            .catch(() => ({ key: 'cuaca_ekstrim', data: null }))
-        );
-      }
-      if (activeLayers.includes(BMKG_LAYER_IDS.KARHUTLA)) {
-        fetches.push(
-          fetch(BMKG_ENDPOINTS.karhutla)
-            .then(r => r.json()).then(d => ({ key: 'karhutla', data: d }))
-            .catch(() => ({ key: 'karhutla', data: null }))
-        );
-      }
-      if (activeLayers.includes(BMKG_LAYER_IDS.PERINGATAN_DINI)) {
-        fetches.push(
-          fetch(BMKG_ENDPOINTS.peringatandini)
-            .then(r => r.json()).then(d => ({ key: 'peringatan_dini', data: d }))
-            .catch(() => ({ key: 'peringatan_dini', data: null }))
+          Promise.all(cuacaFetches).then(results => ({ key: 'cuaca_kota', data: results }))
         );
       }
 
       const results = await Promise.all(fetches);
+
       setBmkgData(prev => {
         const next = { ...prev };
-        results.forEach(({ key, data }) => { next[key] = data; });
+        results.forEach(({ key, data }) => {
+          if (key === 'cuaca_kota') {
+            const cuacaMap = {};
+            data.forEach(({ kotaId, data: d }) => { cuacaMap[kotaId] = d; });
+            next.cuaca_kota = cuacaMap;
+          } else {
+            next[key] = data;
+          }
+        });
         return next;
       });
+
       setBmkgStatus({ loading: false, lastUpdate: new Date(), error: null });
     } catch (err) {
       setBmkgStatus(s => ({ ...s, loading: false, error: 'Gagal fetch data BMKG' }));
@@ -263,8 +241,6 @@ export function useAutoGempa() {
   return { autoGempa, dismissed, dismiss: () => setDismissed(true) };
 }
 
-// ─── BMKG Parser Helpers ──────────────────────────────────────────────────────
-
 function parseGempaList(data) {
   const raw = data?.Infogempa?.gempa;
   if (!raw) return [];
@@ -279,92 +255,63 @@ function parseGempaList(data) {
 }
 
 /**
- * Parse cuaca ekstrim — mendukung beberapa format API BMKG:
- * format 1: { data: [{ provinsi, kota: [{ kota_nama, potensi, lat, lon }] }] }
- * format 2: { Wilayah: [{ NamaWilayah, Cuaca: [{ lat, lon, Uraian }] }] }
+ * Response api.bmkg.go.id/publik/prakiraan-cuaca?adm4=xxx:
+ * {
+ *   "data": [
+ *     {
+ *       "lokasi": { "adm1","adm2","adm3","adm4","provinsi","kotkab","kecamatan","desa","lon","lat","timezone" },
+ *       "cuaca": [
+ *         [ { "datetime","t","tmax","tmin","hu","humax","humin","ws","wd","wd_deg","weather","weather_desc","weather_desc_en","image","utc_datetime","local_datetime" }, ... ],
+ *         ...
+ *       ]
+ *     }
+ *   ]
+ * }
+ *
+ * FIX: data dibungkus dalam response.data[0], bukan langsung response.
  */
-function parseCuacaEkstrim(data) {
-  if (!data) return [];
-  try {
-    // Format 1
-    if (Array.isArray(data?.data)) {
-      return data.data.flatMap(row => {
-        const provinsi   = row?.provinsi || '';
-        const kota_list  = Array.isArray(row?.kota) ? row.kota : [];
-        return kota_list.map(k => ({
-          provinsi,
-          kota:    k?.kota_nama || k?.nama || '',
-          potensi: k?.potensi   || k?.cuaca || '',
-          lat:     parseFloat(k?.lat) || null,
-          lng:     parseFloat(k?.lon) || null,
-        })).filter(k => k.lat && k.lng);
-      });
-    }
-    // Format 2 — array wilayah
-    if (Array.isArray(data?.Wilayah)) {
-      return data.Wilayah.flatMap(w => {
-        const provinsi  = w?.NamaWilayah || '';
-        const cuacaList = Array.isArray(w?.Cuaca) ? w.Cuaca : [];
-        return cuacaList.map(c => ({
-          provinsi,
-          kota:    c?.NamaWilayah || provinsi,
-          potensi: c?.Uraian || c?.cuaca || '',
-          lat:     parseFloat(c?.lat) || null,
-          lng:     parseFloat(c?.lon) || null,
-        })).filter(c => c.lat && c.lng);
-      });
-    }
-    // Format 3 — flat array
-    if (Array.isArray(data)) {
-      return data.map(item => ({
-        provinsi: item?.provinsi || item?.NamaWilayah || '',
-        kota:     item?.kota     || item?.nama || '',
-        potensi:  item?.potensi  || item?.Uraian || '',
-        lat:      parseFloat(item?.lat || item?.latitude) || null,
-        lng:      parseFloat(item?.lon || item?.longitude) || null,
-      })).filter(i => i.lat && i.lng);
-    }
-    return [];
-  } catch { return []; }
-}
+function parseCuacaKota(cuacaMap) {
+  if (!cuacaMap || typeof cuacaMap !== 'object') return [];
+  return CUACA_KOTA_LIST.map(kota => {
+    const raw = cuacaMap[kota.id];
+    if (!raw) return { ...kota, cuaca: null };
 
-/**
- * Parse hotspot karhutla — format BMKG hotspot.json
- * { hotspot: [{ lat, lon, provinsi, kabupaten, confidence }] }
- */
-function parseKarhutla(data) {
-  if (!data) return [];
-  try {
-    const list = data?.hotspot || data?.data || data || [];
-    if (!Array.isArray(list)) return [];
-    return list.map(h => ({
-      lat:        parseFloat(h?.lat || h?.latitude)  || null,
-      lng:        parseFloat(h?.lon || h?.longitude || h?.lng) || null,
-      provinsi:   h?.provinsi || h?.Provinsi || '',
-      kabupaten:  h?.kabupaten || h?.Kabupaten || '',
-      confidence: h?.confidence || h?.Confidence || '',
-      waktu:      h?.waktu || h?.datetime || '',
-    })).filter(h => h.lat && h.lng);
-  } catch { return []; }
-}
+    // Response BMKG: { data: [ { lokasi, cuaca } ] }
+    // Coba berbagai kemungkinan struktur response
+    let lokasi = {};
+    let cuacaSlots = [];
 
-/**
- * Parse peringatan dini cuaca
- */
-function parsePeringatanDini(data) {
-  if (!data) return [];
-  try {
-    const list = data?.data || data?.peringatan || data || [];
-    if (!Array.isArray(list)) return [];
-    return list.map(p => ({
-      lat:      parseFloat(p?.lat || p?.latitude)  || null,
-      lng:      parseFloat(p?.lon || p?.longitude) || null,
-      wilayah:  p?.wilayah || p?.Wilayah || p?.nama || '',
-      jenis:    p?.jenis   || p?.Jenis   || p?.type || '',
-      uraian:   p?.uraian  || p?.Uraian  || p?.deskripsi || '',
-      waktu:    p?.waktu   || p?.datetime || '',
-    })).filter(p => p.lat && p.lng);
-  } catch { return []; }
+    if (raw?.data?.[0]) {
+      // Format baru: { data: [{ lokasi, cuaca }] }
+      lokasi      = raw.data[0]?.lokasi || {};
+      cuacaSlots  = (raw.data[0]?.cuaca || []).flat();
+    } else if (raw?.lokasi) {
+      // Format lama: { lokasi, cuaca }
+      lokasi      = raw.lokasi || {};
+      cuacaSlots  = (raw.cuaca || []).flat();
+    } else if (Array.isArray(raw?.cuaca)) {
+      cuacaSlots  = raw.cuaca.flat();
+    }
+
+    if (!cuacaSlots.length) return { ...kota, cuaca: null };
+
+    // Ambil slot cuaca terdekat dengan waktu sekarang
+    const now = new Date();
+    const nearest = cuacaSlots.reduce((prev, cur) => {
+      if (!prev) return cur;
+      const diffPrev = Math.abs(new Date(prev.local_datetime || prev.utc_datetime || prev.datetime) - now);
+      const diffCur  = Math.abs(new Date(cur.local_datetime  || cur.utc_datetime  || cur.datetime)  - now);
+      return diffCur < diffPrev ? cur : prev;
+    }, null);
+
+    return {
+      ...kota,
+      lat:         parseFloat(lokasi.lat) || kota.lat,
+      lng:         parseFloat(lokasi.lon) || kota.lng,
+      namaLengkap: [lokasi.desa, lokasi.kecamatan, lokasi.kotkab, lokasi.provinsi].filter(Boolean).join(', '),
+      cuaca:       nearest,
+    };
+  });
 }
 
 function gempaRadius(mag) {
@@ -383,7 +330,18 @@ function gempaColor(mag) {
   return '#22c55e';
 }
 
-// ─── Popup Helpers ────────────────────────────────────────────────────────────
+function cuacaBgColor(code) {
+  const c = parseInt(code) || 0;
+  if (c === 0)            return '#fbbf24';
+  if (c === 1 || c === 2) return '#60a5fa';
+  if (c === 3)            return '#3b82f6';
+  if (c === 4)            return '#64748b';
+  if (c === 5)            return '#94a3b8';
+  if (c >= 60 && c < 65)  return '#38bdf8';
+  if (c >= 65 && c < 70)  return '#0ea5e9';
+  if (c >= 80)            return '#0284c7';
+  return '#0ea5e9';
+}
 
 function formatLuas(m2) {
   if (m2 == null) return null;
@@ -453,8 +411,6 @@ function buildKabupatenPopup(props) {
   </div>`;
 }
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
-
 export function useBoundaryData(activeLayers) {
   const [boundaryData, setBoundaryData] = useState({ provinsi: null, kabupaten: null });
 
@@ -508,8 +464,6 @@ export function useWaypointData(activeLayers) {
   return { waypointData };
 }
 
-// ─── Map Components ───────────────────────────────────────────────────────────
-
 export function BoundaryLayer({ activeLayers, boundaryData, getBoundaryStyle, onEachBoundary }) {
   if (!boundaryData) return null;
   return (
@@ -534,11 +488,9 @@ export function WaypointLayer({ activeLayers, waypointData }) {
       {WAYPOINT_LAYERS.map((layer) => {
         if (!activeLayers.includes(layer.id)) return null;
         const fc = waypointData[layer.id];
-        // Dukung GeoJSON FeatureCollection maupun array biasa
         const features = fc?.features || (Array.isArray(fc) ? fc : null);
         if (!features?.length) return null;
         return features.map((feature, i) => {
-          // Dukung GeoJSON feature maupun objek koordinat langsung
           let lat, lng;
           if (feature?.geometry?.coordinates) {
             lng = feature.geometry.coordinates[0];
@@ -592,15 +544,13 @@ export function WaypointLayer({ activeLayers, waypointData }) {
 }
 
 export function BmkgLayer({ activeLayers, bmkgData }) {
-  const gempaList      = parseGempaList(bmkgData.gempa_terkini);
-  const dirasakanList  = parseGempaList(bmkgData.gempa_dirasakan);
-  const cuacaList      = parseCuacaEkstrim(bmkgData.cuaca_ekstrim);
-  const karhutlaList   = parseKarhutla(bmkgData.karhutla);
-  const peringatanList = parsePeringatanDini(bmkgData.peringatan_dini);
+  const gempaList     = parseGempaList(bmkgData.gempa_terkini);
+  const dirasakanList = parseGempaList(bmkgData.gempa_dirasakan);
+  const cuacaKotaList = parseCuacaKota(bmkgData.cuaca_kota);
 
   const renderGempa = (list, layerId, colorFn, key) =>
     activeLayers.includes(layerId) && list.map((g, i) => {
-      const mag   = parseFloat(g.Magnitude) || 0;
+      const mag    = parseFloat(g.Magnitude) || 0;
       const color  = colorFn(mag);
       const radius = gempaRadius(mag);
       return (
@@ -618,10 +568,10 @@ export function BmkgLayer({ activeLayers, bmkgData }) {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{g.Wilayah || '-'}</div>
               </div>
               <div style={{ padding: '8px 12px 10px', fontSize: 11, color: '#94a3b8' }}>
-                {g.Tanggal    && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Tanggal:</b> {g.Tanggal} {g.Jam}</p>}
-                {g.Kedalaman  && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Kedalaman:</b> {g.Kedalaman}</p>}
-                {g.Potensi    && <p style={{ margin: '3px 0', color: '#fbbf24' }}><b>Potensi:</b> {g.Potensi}</p>}
-                {g.Dirasakan  && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Dirasakan:</b> {g.Dirasakan}</p>}
+                {g.Tanggal   && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Tanggal:</b> {g.Tanggal} {g.Jam}</p>}
+                {g.Kedalaman && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Kedalaman:</b> {g.Kedalaman}</p>}
+                {g.Potensi   && <p style={{ margin: '3px 0', color: '#fbbf24' }}><b>Potensi:</b> {g.Potensi}</p>}
+                {g.Dirasakan && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Dirasakan:</b> {g.Dirasakan}</p>}
               </div>
             </div>
           </Popup>
@@ -634,123 +584,75 @@ export function BmkgLayer({ activeLayers, bmkgData }) {
       {renderGempa(gempaList,     BMKG_LAYER_IDS.GEMPA_TERKINI,   gempaColor, 'gempa-terkini')}
       {renderGempa(dirasakanList, BMKG_LAYER_IDS.GEMPA_DIRASAKAN, gempaColor, 'gempa-dirasakan')}
 
-      {/* ── Cuaca Ekstrim ───────────────────────────────────────────────── */}
-      {activeLayers.includes(BMKG_LAYER_IDS.CUACA_EKSTRIM) && cuacaList.map((c, i) => (
-        <CircleMarker
-          key={`cuaca-${i}`}
-          center={[c.lat, c.lng]}
-          radius={8}
-          pathOptions={{ color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.5, weight: 2 }}
-        >
-          <Popup className="terra-popup">
-            <div style={{ fontFamily: "'Inter', sans-serif", minWidth: 220, background: '#0f172a', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ background: 'linear-gradient(135deg, #075985, #0ea5e9)', padding: '10px 13px' }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 3 }}>BMKG — Cuaca Ekstrim</div>
-                <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{c.kota || c.provinsi || 'Wilayah'}</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{c.provinsi}</div>
-              </div>
-              <div style={{ padding: '8px 12px 10px', fontSize: 11, color: '#94a3b8' }}>
-                {c.potensi && <p style={{ margin: '3px 0', color: '#7dd3fc' }}>{c.potensi}</p>}
-              </div>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
+      {activeLayers.includes(BMKG_LAYER_IDS.CUACA_KOTA) && cuacaKotaList.map((kota, i) => {
+        if (!kota.lat || !kota.lng) return null;
+        const c         = kota.cuaca;
+        const bgColor   = c ? cuacaBgColor(c.weather) : '#0ea5e9';
+        const suhu      = c?.t  != null ? `${c.t}°C`      : '-';
+        const kelembab  = c?.hu != null ? `${c.hu}%`      : '-';
+        const angin     = c?.ws != null ? `${c.ws} km/j`  : '-';
+        const arahAngin = c?.wd_deg != null
+          ? `${c.wd_deg}° ${c.wd || ''}`
+          : (c?.wd || '-');
+        const deskripsi = c?.weather_desc || (c ? 'Data tersedia' : 'Tidak ada data');
+        const waktuStr  = c?.local_datetime
+          ? new Date(c.local_datetime).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
+          : '';
 
-      {/* ── Tsunami Warning ─────────────────────────────────────────────── */}
-      {activeLayers.includes(BMKG_LAYER_IDS.TSUNAMI) && (() => {
-        const t = bmkgData.tsunami?.Infotsunami?.tsunami;
-        if (!t) {
-          // Tampilkan placeholder jika tidak ada data tsunami aktif
-          return null;
-        }
-        const [latStr, lngStr] = (t.Coordinates || '').split(',');
-        const lat = parseFloat(latStr);
-        const lng = parseFloat(lngStr);
-        if (isNaN(lat) || isNaN(lng)) return null;
         return (
           <CircleMarker
-            key="tsunami-warning"
-            center={[lat, lng]}
-            radius={20}
-            pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.35, weight: 3, dashArray: '6,4' }}
+            key={`cuaca-kota-${i}`}
+            center={[kota.lat, kota.lng]}
+            radius={10}
+            pathOptions={{ color: bgColor, fillColor: bgColor, fillOpacity: 0.75, weight: 2 }}
           >
             <Popup className="terra-popup">
-              <div style={{ fontFamily: "'Inter', sans-serif", minWidth: 230, background: '#0f172a', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ background: 'linear-gradient(135deg, #4c1d95, #7c3aed)', padding: '10px 13px' }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 3 }}>BMKG — Peringatan Tsunami</div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{t.Wilayah || 'Status Aktif'}</div>
+              <div style={{ fontFamily: "'Inter', sans-serif", minWidth: 240, background: '#0f172a', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ background: `linear-gradient(135deg, ${bgColor}cc, ${bgColor})`, padding: '10px 13px' }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 3 }}>
+                    ☁ BMKG — Prakiraan Cuaca
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {c?.image && (
+                      <img src={c.image} alt={deskripsi} style={{ width: 32, height: 32, objectFit: 'contain', flexShrink: 0 }} />
+                    )}
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#fff', lineHeight: 1.2 }}>{kota.label}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{deskripsi}</div>
+                    </div>
+                  </div>
+                  {waktuStr && (
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', marginTop: 5 }}>
+                      Prakiraan: {waktuStr} WIB
+                    </div>
+                  )}
                 </div>
                 <div style={{ padding: '8px 12px 10px', fontSize: 11, color: '#94a3b8' }}>
-                  {t.Magnitude && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Magnitudo:</b> {t.Magnitude}</p>}
-                  {t.Tanggal   && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Tanggal:</b> {t.Tanggal} {t.Jam}</p>}
-                  {t.Potensi   && <p style={{ margin: '3px 0', color: '#c4b5fd' }}><b>Status:</b> {t.Potensi}</p>}
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        );
-      })()}
-
-      {/* ── Hotspot / Karhutla ──────────────────────────────────────────── */}
-      {activeLayers.includes(BMKG_LAYER_IDS.KARHUTLA) && karhutlaList.map((h, i) => {
-        const confNum = parseInt(h.confidence) || 0;
-        const color   = confNum >= 80 ? '#ef4444' : confNum >= 50 ? '#f97316' : '#f59e0b';
-        return (
-          <CircleMarker
-            key={`karhutla-${i}`}
-            center={[h.lat, h.lng]}
-            radius={5}
-            pathOptions={{ color, fillColor: color, fillOpacity: 0.8, weight: 1 }}
-          >
-            <Popup className="terra-popup">
-              <div style={{ fontFamily: "'Inter', sans-serif", minWidth: 210, background: '#0f172a', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ background: 'linear-gradient(135deg, #78350f, #f59e0b)', padding: '10px 13px' }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 3 }}>🔥 BMKG — Hotspot Aktif</div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>{h.kabupaten || h.provinsi || 'Titik Api'}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{h.provinsi}</div>
-                </div>
-                <div style={{ padding: '8px 12px 10px', fontSize: 11, color: '#94a3b8' }}>
-                  {h.confidence && <p style={{ margin: '3px 0', color: color }}><b>Confidence:</b> {h.confidence}%</p>}
-                  {h.waktu      && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Waktu:</b> {h.waktu}</p>}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px' }}>
+                    <div><span style={{ color: '#64748b', fontSize: 10 }}>SUHU</span><br /><b style={{ color: '#fde68a', fontSize: 15 }}>{suhu}</b></div>
+                    <div><span style={{ color: '#64748b', fontSize: 10 }}>KELEMBABAN</span><br /><b style={{ color: '#7dd3fc', fontSize: 15 }}>{kelembab}</b></div>
+                    <div style={{ marginTop: 4 }}><span style={{ color: '#64748b', fontSize: 10 }}>KECEPATAN ANGIN</span><br /><b style={{ color: '#a5f3fc' }}>{angin}</b></div>
+                    <div style={{ marginTop: 4 }}><span style={{ color: '#64748b', fontSize: 10 }}>ARAH ANGIN</span><br /><b style={{ color: '#a5f3fc' }}>{arahAngin}</b></div>
+                  </div>
+                  {kota.namaLengkap && (
+                    <div style={{ marginTop: 7, fontSize: 9, color: '#475569', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 5 }}>
+                      {kota.namaLengkap}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 3, fontSize: 9, color: '#334155' }}>
+                    Sumber: BMKG · api.bmkg.go.id
+                  </div>
                 </div>
               </div>
             </Popup>
           </CircleMarker>
         );
       })}
-
-      {/* ── Peringatan Dini Cuaca ────────────────────────────────────────── */}
-      {activeLayers.includes(BMKG_LAYER_IDS.PERINGATAN_DINI) && peringatanList.map((p, i) => (
-        <CircleMarker
-          key={`peringatan-${i}`}
-          center={[p.lat, p.lng]}
-          radius={9}
-          pathOptions={{ color: '#06b6d4', fillColor: '#06b6d4', fillOpacity: 0.45, weight: 2, dashArray: '4,3' }}
-        >
-          <Popup className="terra-popup">
-            <div style={{ fontFamily: "'Inter', sans-serif", minWidth: 210, background: '#0f172a', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ background: 'linear-gradient(135deg, #164e63, #06b6d4)', padding: '10px 13px' }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: 3 }}>⚡ BMKG — Peringatan Dini</div>
-                <div style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>{p.wilayah || 'Wilayah'}</div>
-                {p.jenis && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{p.jenis}</div>}
-              </div>
-              <div style={{ padding: '8px 12px 10px', fontSize: 11, color: '#94a3b8' }}>
-                {p.uraian && <p style={{ margin: '3px 0', color: '#67e8f9' }}>{p.uraian}</p>}
-                {p.waktu  && <p style={{ margin: '3px 0' }}><b style={{ color: '#e2e8f0' }}>Waktu:</b> {p.waktu}</p>}
-              </div>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
     </>
   );
 }
 
-// ─── Realtime Alert Banner ────────────────────────────────────────────────────
-
 export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeBersih }) {
-  // Sembunyikan saat mode bersih atau sudah di-dismiss
   if (!autoGempa || dismissed || modeBersih) return null;
 
   const mag        = parseFloat(autoGempa.Magnitude) || 0;
@@ -767,16 +669,16 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
   return (
     <div
       style={{
-        position:    'fixed',
-        bottom:      '3rem',
-        left:        '1rem',
-        zIndex:      1200,
-        maxWidth:    340,
+        position:     'fixed',
+        bottom:       '3rem',
+        left:         '1rem',
+        zIndex:       1200,
+        maxWidth:     340,
         borderRadius: 14,
-        overflow:    'hidden',
-        boxShadow:   `0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px ${accentColor}40`,
-        fontFamily:  "'Inter', 'Segoe UI', sans-serif",
-        animation:   'bmkgSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        overflow:     'hidden',
+        boxShadow:    `0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px ${accentColor}40`,
+        fontFamily:   "'Inter', 'Segoe UI', sans-serif",
+        animation:    'bmkgSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
       }}
     >
       <style>{`
@@ -801,33 +703,28 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
                 BMKG — {isTsunami ? 'POTENSI TSUNAMI' : 'Gempa Bumi Terbaru'}
               </span>
             </div>
-
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
               <span style={{ fontSize: 28, fontWeight: 900, color: '#fff', lineHeight: 1 }}>M {autoGempa.Magnitude}</span>
               {autoGempa.Kedalaman && (
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>kedalaman {autoGempa.Kedalaman}</span>
               )}
             </div>
-
             {autoGempa.Wilayah && (
               <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)', marginBottom: 4, lineHeight: 1.3 }}>
                 {autoGempa.Wilayah}
               </div>
             )}
-
             {autoGempa.Tanggal && (
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>
                 {autoGempa.Tanggal} — {autoGempa.Jam}
               </div>
             )}
-
             {autoGempa.Potensi && (
               <div style={{ marginTop: 6, fontSize: 10, fontWeight: 700, color: isTsunami ? '#c4b5fd' : '#fde68a', background: 'rgba(0,0,0,0.2)', borderRadius: 6, padding: '3px 7px', display: 'inline-block' }}>
                 {autoGempa.Potensi}
               </div>
             )}
           </div>
-
           <button
             onClick={onDismiss}
             style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: 'rgba(255,255,255,0.7)', transition: 'background 0.15s' }}
@@ -846,8 +743,6 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
     </div>
   );
 }
-
-// ─── UI Components ────────────────────────────────────────────────────────────
 
 function LayerGroup({ label, dotColor, children, defaultOpen = true, isDark }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -894,7 +789,6 @@ function LayerCard({ layer, checked, onToggle, isDark, badge }) {
       {checked && (
         <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: `radial-gradient(ellipse at left, ${layer.color}, transparent 70%)` }} />
       )}
-
       <span
         className="w-4 h-4 rounded-[5px] border-[1.5px] flex-shrink-0 flex items-center justify-center transition-all duration-150 relative z-10"
         style={checked
@@ -908,7 +802,6 @@ function LayerCard({ layer, checked, onToggle, isDark, badge }) {
           </svg>
         )}
       </span>
-
       <div className="flex-1 min-w-0 relative z-10">
         <div className="flex items-center gap-1.5">
           <p className={`text-[12px] font-semibold leading-tight truncate transition-colors duration-150 ${checked ? (isDark ? 'text-slate-100' : 'text-slate-900') : (isDark ? 'text-slate-300 group-hover:text-slate-100' : 'text-slate-700 group-hover:text-slate-900')}`}>
@@ -926,7 +819,6 @@ function LayerCard({ layer, checked, onToggle, isDark, badge }) {
           </p>
         )}
       </div>
-
       <span
         className={`w-1.5 h-1.5 rounded-full flex-shrink-0 relative z-10 transition-all duration-300 ${checked ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}
         style={{ backgroundColor: layer.color, boxShadow: `0 0 6px ${layer.color}` }}
@@ -979,8 +871,6 @@ function LegendBar({ activeLayers, isOpen, onToggle, isDark }) {
   );
 }
 
-// ─── BMKG Status Bar ──────────────────────────────────────────────────────────
-
 function BmkgStatusBar({ bmkgStatus, refetchBmkg, activeLayers, isDark }) {
   const anyBmkgActive = Object.values(BMKG_LAYER_IDS).some(id => activeLayers.includes(id));
   if (!anyBmkgActive) return null;
@@ -1017,8 +907,6 @@ function BmkgStatusBar({ bmkgStatus, refetchBmkg, activeLayers, isDark }) {
   );
 }
 
-// ─── Main Panel ───────────────────────────────────────────────────────────────
-
 export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgStatus, refetchBmkg }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const totalActive = activeLayers.filter(id => LEGEND_MAP[id]).length;
@@ -1029,7 +917,6 @@ export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgS
       style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}
       onWheel={(e) => e.stopPropagation()}
     >
-      {/* Header */}
       <div className={`px-4 pt-4 pb-3 flex-shrink-0 border-b ${isDark ? 'bg-gradient-to-b from-slate-800 to-slate-900 border-slate-700/50' : 'bg-gradient-to-b from-slate-100 to-slate-50 border-slate-200/50'}`}>
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-500 rounded-t-2xl" />
         <div className="flex items-center justify-between mb-1">
@@ -1054,7 +941,6 @@ export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgS
         </div>
       </div>
 
-      {/* Scrollable Body */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-700">
         <div className="px-2 py-3 space-y-1">
 
@@ -1064,9 +950,16 @@ export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgS
             ))}
           </LayerGroup>
 
-          <LayerGroup label="Bencana Alam (BMKG)" dotColor="#ef4444" defaultOpen={true} isDark={isDark}>
+          <LayerGroup label="Bencana Alam & Cuaca (BMKG)" dotColor="#ef4444" defaultOpen={true} isDark={isDark}>
             {BMKG_LAYERS_DEF.map(layer => (
-              <LayerCard key={layer.id} layer={layer} checked={activeLayers.includes(layer.id)} onToggle={() => onToggleLayer(layer.id)} isDark={isDark} badge="LIVE" />
+              <LayerCard
+                key={layer.id}
+                layer={layer}
+                checked={activeLayers.includes(layer.id)}
+                onToggle={() => onToggleLayer(layer.id)}
+                isDark={isDark}
+                badge="LIVE"
+              />
             ))}
           </LayerGroup>
 
