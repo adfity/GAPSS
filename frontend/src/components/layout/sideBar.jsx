@@ -134,7 +134,7 @@ export default function SideBar() {
           })}
         </nav>
 
-        {/* ========== PERBAIKAN FOOTER ========== */}
+        
         <div className="px-5 py-4 border-t border-white/30 dark:border-slate-700/40 mt-auto">
           <div className="flex items-center justify-center gap-2">
             {/* Indikator hijau dengan efek glow halus di dark mode */}

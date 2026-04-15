@@ -18,7 +18,7 @@ export const metadata = {
     default: "GAPSS",
     template: "%s | GAPSS"
   },
-  description: "app masih magang",
+  description: "app gacor",
   icons: {
     icon: "/putigapss.png", 
   },

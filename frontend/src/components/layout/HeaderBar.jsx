@@ -111,8 +111,7 @@ export default function HeaderBar() {
             {/* ── Logo ── */}
             <div className="flex items-center h-full px-5 border-r border-white/20 dark:border-slate-700/30 shrink-0">
                 <Link href="/" className="flex items-center hover:opacity-85 transition-opacity">
-                    <Image src="/icons/bterra.png" alt="TerraSeg" width={100} height={40} className="block dark:hidden" />
-                    <Image src="/icons/wterra.png" alt="TerraSeg" width={100} height={40} className="hidden dark:block" />
+                    <Image src="/icons/GAPSS.png" alt="Synap" width={100} height={40} />
                 </Link>
             </div>
 
