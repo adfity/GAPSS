@@ -440,7 +440,7 @@ export function TrendPanel({ daftarTersimpan, onTutup, embedded = false }) {
           {/* Filter bar */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-              {['ALL','PDRB','KEMISKINAN','INVESTASI'].map(ind => {
+              {['IED (SEMUA KOMPONEN)','KONSUMSI RUMAH TANGGA','INVESTASI (PMTB)','PDRB PERKAPITA'].map(ind => {
                 const ada = indsAvailable.includes(ind);
                 return (
                   <button key={ind} onClick={() => ada && setFilterInd(ind)}

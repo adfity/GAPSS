@@ -6,7 +6,7 @@ import {
   GraduationCap, RotateCcw, Info, FileText,
   Search, Map, Calendar, Loader2,
   BarChart2, BookOpen, Users, Check, TrendingUp,
-  Home, ClipboardList,
+  Home, ClipboardList, Maximize2, Minimize2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -78,6 +78,61 @@ function MapEventHandler({ setKoordinatCursor, setCurrentZoom }) {
   return <Inner />;
 }
 
+// ── GeoJSON props builder (key dipass langsung di JSX)
+function buildGeoProps(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih) {
+  return {
+    data: { type: 'FeatureCollection', features: hasilAnalisis.matched_features.features },
+    style: (fitur) => {
+      const a   = fitur.properties?.education_analysis || {};
+      const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+      const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+      const vis = kategoriTerpilih === 'SEMUA' || kat === kategoriTerpilih;
+      const hl  = provinsiDipilih === a.nama_provinsi;
+      return { fillColor: w, weight: hl ? 3 : 1.5, opacity: (vis && w !== '#cbd5e1') ? 1 : 0, color: hl ? '#fff' : 'rgba(255,255,255,0.6)', fillOpacity: (vis && w !== '#cbd5e1') ? 0.82 : 0 };
+    },
+    onEachFeature: (fitur, lapisan) => {
+      const a   = fitur.properties?.education_analysis || {};
+      const dp  = a.data_pendidikan || {};
+      const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
+      const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
+      const wawasan = a.insights?.map(i => `<div style="margin-bottom:3px;padding-left:6px;border-left:2px solid ${w};font-size:9px;">${i}</div>`).join('') || '';
+      lapisan.bindTooltip(
+        `<div style="font-family:inherit;padding:3px;min-width:140px;">
+           <div style="font-weight:900;font-size:11px;text-transform:uppercase;color:#0f172a;">${a.nama_provinsi || ''}</div>
+           <div style="font-size:9px;font-weight:700;color:${w};margin-top:2px;">${kat || '-'}</div>
+           <div style="font-size:8px;color:#64748b;margin-top:1px;">Skor: <strong>${a.skor_total ?? '-'}</strong></div>
+         </div>`, { sticky: true, opacity: 0.96 }
+      );
+      let indHTML = '';
+      if (indikatorTerpilih === 'SEMUA') {
+        indHTML = `<div style="display:grid;gap:3px;">
+          <div style="background:#f5f3ff;padding:5px;border-radius:5px;border-left:2px solid #8b5cf6;"><div style="font-size:7px;font-weight:700;color:#4c1d95;">LAMA SEKOLAH</div><div style="font-size:11px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' th' : '-'}</div></div>
+          <div style="background:#eff6ff;padding:5px;border-radius:5px;border-left:2px solid #3b82f6;"><div style="font-size:7px;font-weight:700;color:#1e3a8a;">SKOR APS</div><div style="font-size:11px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>
+          <div style="background:#f0fdf4;padding:5px;border-radius:5px;border-left:2px solid #10b981;"><div style="font-size:7px;font-weight:700;color:#14532d;">RASIO M/G</div><div style="font-size:11px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>
+        </div>`;
+      } else if (indikatorTerpilih === 'RLS') {
+        indHTML = `<div style="background:#f5f3ff;padding:8px;border-radius:8px;border-left:3px solid #8b5cf6;"><div style="font-size:8px;font-weight:700;color:#4c1d95;">RATA-RATA LAMA SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' tahun' : '-'}</div></div>`;
+      } else if (indikatorTerpilih === 'APS') {
+        indHTML = `<div style="background:#eff6ff;padding:8px;border-radius:8px;border-left:3px solid #3b82f6;"><div style="font-size:8px;font-weight:700;color:#1e3a8a;">ANGKA PARTISIPASI SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>`;
+      } else if (indikatorTerpilih === 'RASIO') {
+        indHTML = `<div style="background:#f0fdf4;padding:8px;border-radius:8px;border-left:3px solid #10b981;"><div style="font-size:8px;font-weight:700;color:#14532d;">RASIO MURID-GURU</div><div style="font-size:16px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>`;
+      }
+      lapisan.bindPopup(
+        `<div style="font-family:inherit;min-width:240px;">
+           <div style="background:${w};color:white;padding:8px 10px;border-radius:8px 8px 0 0;margin:-1px -1px 8px -1px;">
+             <div style="font-weight:900;font-size:12px;">${a.nama_provinsi || ''}</div>
+             <div style="font-size:10px;font-weight:700;opacity:0.9;">${kat || '-'} · Skor: ${a.skor_total ?? '-'}</div>
+           </div>
+           <div style="padding:0 4px 4px;">
+             <div style="margin-bottom:6px;">${indHTML}</div>
+             <div style="font-size:9px;color:#334155;line-height:1.4;background:#f8fafc;padding:6px;border-radius:5px;">${wawasan}</div>
+           </div>
+         </div>`, { maxWidth: 280, maxHeight: 400 }
+      );
+    },
+  };
+}
+
 // ══════════════════════════════════════════
 // PETA SECTION
 // ══════════════════════════════════════════
@@ -94,8 +149,9 @@ function PetaSection({
   kombinasiTersedia, onPilihKombo, sedangMuatAwal,
   jumlahKategori,
 }) {
-  const [showBasemap, setShowBasemap] = useState(false);
-  const [menuFilter,  setMenuFilter]  = useState(false);
+  const [showBasemap,  setShowBasemap]  = useState(false);
+  const [menuFilter,   setMenuFilter]   = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const hitungScaleKm = (zoom) => ({5:1000,6:500,7:200,8:100,9:50,10:25})[Math.floor(zoom)] || 1000;
 
@@ -106,219 +162,222 @@ function PetaSection({
     return { SEMUA:'Semua Indikator', RLS:'Analisis RLS', APS:'Analisis APS', RASIO:'Analisis Rasio' }[indikatorTerpilih] || 'Analisis';
   };
 
-  return (
-    <Card className="overflow-hidden border-2">
-      <div className="relative" style={{ height: 520 }}>
-        {/* Loading */}
-        {sedangMuatAwal && (
-          <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 size={28} className="text-blue-500 animate-spin"/>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Memuat data dari database...</p>
-            </div>
+  const geoKey   = `${hasilAnalisis?.tahun}-${indikatorTerpilih}-${kategoriTerpilih}-${provinsiDipilih}`;
+  const geoKeyFs = `fs-${geoKey}`;
+  const geoProps = hasilAnalisis?.matched_features?.features
+    ? buildGeoProps(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih)
+    : null;
+
+  // ── Sub-komponen reusable ──────────────────────────────────────────────────
+  const KontrolKiri = () => (
+    <div className="absolute top-3 left-3 z-[400] flex flex-col gap-1.5">
+      <MapBtn onClick={() => petaRef.current?.zoomIn()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">+</MapBtn>
+      <MapBtn onClick={() => petaRef.current?.zoomOut()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">−</MapBtn>
+      <div className="relative">
+        <MapBtn onClick={() => setShowBasemap(!showBasemap)}>
+          <Map size={14} className="text-slate-600 dark:text-slate-300"/>
+        </MapBtn>
+        {showBasemap && (
+          <div className="absolute left-full ml-2 top-0 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl z-[500] border border-slate-200 dark:border-slate-700 py-1">
+            <div className="px-3 py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">Basemap</div>
+            {Object.entries(BASEMAPS).map(([k, bm]) => (
+              <button key={k} onClick={() => { setBasemap(k); setShowBasemap(false); }}
+                className={cn('w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
+                  basemap === k ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-700 dark:text-slate-300')}>
+                {bm.label} {basemap === k && <Check size={12}/>}
+              </button>
+            ))}
           </div>
         )}
+      </div>
+      {hasilAnalisis && (
+        <div className="relative">
+          {searchOpen ? (
+            <div className="absolute left-full ml-2 top-0 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 w-56">
+              <div className="p-2 flex gap-1.5">
+                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && handleSearch()} placeholder="Cari provinsi..." autoFocus
+                  className="flex-1 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-blue-500 outline-none"/>
+                <button onClick={() => handleSearch()} className="bg-blue-600 hover:bg-blue-700 text-white px-2 rounded-lg"><Search size={12}/></button>
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(''); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-600 px-2 rounded-lg text-slate-700 dark:text-slate-200"><X size={12}/></button>
+              </div>
+              {suggestions.length > 0 && (
+                <div className="border-t border-slate-100 dark:border-slate-700 max-h-36 overflow-y-auto">
+                  {suggestions.map((s, i) => (
+                    <button key={i} onClick={() => handleSearch(s.nama)}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between text-xs">
+                      <span className="text-slate-900 dark:text-slate-200">{s.nama}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold ml-2" style={{ backgroundColor: s.warna + '20', color: s.warna }}>{s.kategori}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <MapBtn onClick={() => setSearchOpen(true)}><Search size={13} className="text-slate-600 dark:text-slate-300"/></MapBtn>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
-        {/* Leaflet Map */}
-        {leafletReady && MapCont && (
-          <MapCont center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
-            <TileLay key={basemap} url={BASEMAPS[basemap].url} attribution={BASEMAPS[basemap].attribution}/>
-            <MapEventHandler setKoordinatCursor={setKoordinatCursor} setCurrentZoom={setCurrentZoom}/>
-            {hasilAnalisis?.matched_features?.features && (
-              <GeoComp
-                key={`${hasilAnalisis.tahun}-${indikatorTerpilih}-${kategoriTerpilih}-${provinsiDipilih}`}
-                data={{ type: 'FeatureCollection', features: hasilAnalisis.matched_features.features }}
-                style={(fitur) => {
-                  const a   = fitur.properties?.education_analysis || {};
-                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
-                  const vis = kategoriTerpilih === 'SEMUA' || kat === kategoriTerpilih;
-                  const hl  = provinsiDipilih === a.nama_provinsi;
-                  return { fillColor: w, weight: hl ? 3 : 1.5, opacity: (vis && w !== '#cbd5e1') ? 1 : 0, color: hl ? '#fff' : 'rgba(255,255,255,0.6)', fillOpacity: (vis && w !== '#cbd5e1') ? 0.82 : 0 };
-                }}
-                onEachFeature={(fitur, lapisan) => {
-                  const a   = fitur.properties?.education_analysis || {};
-                  const dp  = a.data_pendidikan || {};
-                  const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
-                  const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-                  const wawasan = a.insights?.map(i => `<div style="margin-bottom:3px;padding-left:6px;border-left:2px solid ${w};font-size:9px;">${i}</div>`).join('') || '';
-                  lapisan.bindTooltip(
-                    `<div style="font-family:inherit;padding:3px;min-width:140px;">
-                       <div style="font-weight:900;font-size:11px;text-transform:uppercase;color:#0f172a;">${a.nama_provinsi || ''}</div>
-                       <div style="font-size:9px;font-weight:700;color:${w};margin-top:2px;">${kat || '-'}</div>
-                       <div style="font-size:8px;color:#64748b;margin-top:1px;">Skor: <strong>${a.skor_total ?? '-'}</strong></div>
-                     </div>`, { sticky: true, opacity: 0.96 }
-                  );
-                  let indHTML = '';
-                  if (indikatorTerpilih === 'SEMUA') {
-                    indHTML = `<div style="display:grid;gap:3px;">
-                      <div style="background:#f5f3ff;padding:5px;border-radius:5px;border-left:2px solid #8b5cf6;"><div style="font-size:7px;font-weight:700;color:#4c1d95;">LAMA SEKOLAH</div><div style="font-size:11px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' th' : '-'}</div></div>
-                      <div style="background:#eff6ff;padding:5px;border-radius:5px;border-left:2px solid #3b82f6;"><div style="font-size:7px;font-weight:700;color:#1e3a8a;">SKOR APS</div><div style="font-size:11px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>
-                      <div style="background:#f0fdf4;padding:5px;border-radius:5px;border-left:2px solid #10b981;"><div style="font-size:7px;font-weight:700;color:#14532d;">RASIO M/G</div><div style="font-size:11px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>
-                    </div>`;
-                  } else if (indikatorTerpilih === 'RLS') {
-                    indHTML = `<div style="background:#f5f3ff;padding:8px;border-radius:8px;border-left:3px solid #8b5cf6;"><div style="font-size:8px;font-weight:700;color:#4c1d95;">RATA-RATA LAMA SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#7c3aed;">${dp.RLS ? dp.RLS + ' tahun' : '-'}</div></div>`;
-                  } else if (indikatorTerpilih === 'APS') {
-                    indHTML = `<div style="background:#eff6ff;padding:8px;border-radius:8px;border-left:3px solid #3b82f6;"><div style="font-size:8px;font-weight:700;color:#1e3a8a;">ANGKA PARTISIPASI SEKOLAH</div><div style="font-size:16px;font-weight:900;color:#2563eb;">${dp.SKOR_APS || '-'}</div></div>`;
-                  } else if (indikatorTerpilih === 'RASIO') {
-                    indHTML = `<div style="background:#f0fdf4;padding:8px;border-radius:8px;border-left:3px solid #10b981;"><div style="font-size:8px;font-weight:700;color:#14532d;">RASIO MURID-GURU</div><div style="font-size:16px;font-weight:900;color:#059669;">${dp.RASIO_RATA || '-'}</div></div>`;
-                  }
-                  lapisan.bindPopup(
-                    `<div style="font-family:inherit;min-width:240px;">
-                       <div style="background:${w};color:white;padding:8px 10px;border-radius:8px 8px 0 0;margin:-1px -1px 8px -1px;">
-                         <div style="font-weight:900;font-size:12px;">${a.nama_provinsi || ''}</div>
-                         <div style="font-size:10px;font-weight:700;opacity:0.9;">${kat || '-'} · Skor: ${a.skor_total ?? '-'}</div>
-                       </div>
-                       <div style="padding:0 4px 4px;">
-                         <div style="margin-bottom:6px;">${indHTML}</div>
-                         <div style="font-size:9px;color:#334155;line-height:1.4;background:#f8fafc;padding:6px;border-radius:5px;">${wawasan}</div>
-                       </div>
-                     </div>`, { maxWidth: 280, maxHeight: 400 }
-                  );
-                }}
-              />
+  const NavTengah = () => (
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
+      <SelectorAnalisis
+        hasilAnalisis={hasilAnalisis}
+        kombinasiTersedia={kombinasiTersedia}
+        tahunTerpilih={tahunTerpilih}
+        onPilih={onPilihKombo}
+        sedangMuatAwal={sedangMuatAwal}
+      />
+    </div>
+  );
+
+  const LegendaKanan = () => (
+    <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2 items-end">
+      <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-1.5 rounded-lg shadow border border-slate-200 dark:border-slate-600">
+        <div className="text-[10px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+          <span className="text-blue-600 dark:text-blue-400 font-bold">Lat:</span> {koordinatCursor.lat} |{' '}
+          <span className="text-blue-600 dark:text-blue-400 font-bold">Lng:</span> {koordinatCursor.lng}
+        </div>
+      </div>
+      <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+        <div className="h-1.5 bg-slate-300 dark:bg-slate-600 mb-1" style={{ width: '64px', borderLeft: '2px solid #64748b', borderRight: '2px solid #64748b', borderBottom: '2px solid #64748b' }}/>
+        <div className="text-[10px] font-medium text-center text-slate-700 dark:text-slate-300">{hitungScaleKm(currentZoom)} km</div>
+      </div>
+      <div className="bg-white/95 dark:bg-slate-800/90 p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-600 min-w-[110px]">
+        <div className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Status IKP</div>
+        {Object.entries(KATEGORI).map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between gap-2 mb-1.5 last:mb-0">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: v.warna }}/>
+              <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{v.label}</span>
+            </div>
+            {hasilAnalisis && (
+              <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-1.5 py-0.5 rounded">
+                {jumlahKategori[k]}
+              </span>
             )}
-          </MapCont>
-        )}
-
-        {/* Kiri atas: Zoom + Basemap + Search */}
-        <div className="absolute top-3 left-3 z-[400] flex flex-col gap-1.5">
-          <MapBtn onClick={() => petaRef.current?.zoomIn()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">+</MapBtn>
-          <MapBtn onClick={() => petaRef.current?.zoomOut()} className="font-bold text-xl text-slate-700 dark:text-slate-200 leading-none">−</MapBtn>
-          <div className="relative">
-            <MapBtn onClick={() => setShowBasemap(!showBasemap)}>
-              <Map size={14} className="text-slate-600 dark:text-slate-300"/>
-            </MapBtn>
-            {showBasemap && (
-              <div className="absolute left-full ml-2 top-0 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl z-[500] border border-slate-200 dark:border-slate-700 py-1">
-                <div className="px-3 py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">Basemap</div>
-                {Object.entries(BASEMAPS).map(([k, bm]) => (
-                  <button key={k} onClick={() => { setBasemap(k); setShowBasemap(false); }}
-                    className={cn('w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
-                      basemap === k ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-700 dark:text-slate-300')}>
-                    {bm.label} {basemap === k && <Check size={12}/>}
+          </div>
+        ))}
+        {hasilAnalisis && (
+          <div className="relative mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+            <button onClick={() => setMenuFilter(!menuFilter)}
+              className="w-full flex items-center justify-between gap-1 px-2 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+              <Filter size={9}/> {kategoriTerpilih} <ChevronDown size={9}/>
+            </button>
+            {menuFilter && (
+              <div className="absolute bottom-full mb-1 right-0 w-full bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-[500] py-1">
+                {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => (
+                  <button key={k} onClick={() => { setKategoriTerpilih(k); setMenuFilter(false); }}
+                    className={cn('w-full text-left px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
+                      kategoriTerpilih === k ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200')}>
+                    {k}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          {hasilAnalisis && (
-            <div className="relative">
-              {searchOpen ? (
-                <div className="absolute left-full ml-2 top-0 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 w-56">
-                  <div className="p-2 flex gap-1.5">
-                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && handleSearch()} placeholder="Cari provinsi..." autoFocus
-                      className="flex-1 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-blue-500 outline-none"/>
-                    <button onClick={() => handleSearch()} className="bg-blue-600 hover:bg-blue-700 text-white px-2 rounded-lg"><Search size={12}/></button>
-                    <button onClick={() => { setSearchOpen(false); setSearchQuery(''); setProvinsiDipilih(null); }} className="bg-slate-200 dark:bg-slate-600 px-2 rounded-lg text-slate-700 dark:text-slate-200"><X size={12}/></button>
-                  </div>
-                  {suggestions.length > 0 && (
-                    <div className="border-t border-slate-100 dark:border-slate-700 max-h-36 overflow-y-auto">
-                      {suggestions.map((s, i) => (
-                        <button key={i} onClick={() => handleSearch(s.nama)}
-                          className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between text-xs">
-                          <span className="text-slate-900 dark:text-slate-200">{s.nama}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold ml-2" style={{ backgroundColor: s.warna + '20', color: s.warna }}>{s.kategori}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <MapBtn onClick={() => setSearchOpen(true)}><Search size={13} className="text-slate-600 dark:text-slate-300"/></MapBtn>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Tengah atas: Selector */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
-          <SelectorAnalisis
-            hasilAnalisis={hasilAnalisis}
-            kombinasiTersedia={kombinasiTersedia}
-            tahunTerpilih={tahunTerpilih}
-            onPilih={onPilihKombo}
-            sedangMuatAwal={sedangMuatAwal}
-          />
-        </div>
-
-        {/* Kanan atas: Koordinat + Legenda */}
-        <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2 items-end">
-          <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-1.5 rounded-lg shadow border border-slate-200 dark:border-slate-600">
-            <div className="text-[10px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
-              <span className="text-blue-600 dark:text-blue-400 font-bold">Lat:</span> {koordinatCursor.lat} |{' '}
-              <span className="text-blue-600 dark:text-blue-400 font-bold">Lng:</span> {koordinatCursor.lng}
-            </div>
-          </div>
-          <div className="bg-white/95 dark:bg-slate-800/90 px-3 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-            <div className="h-1.5 bg-slate-300 dark:bg-slate-600 mb-1" style={{ width: '64px', borderLeft: '2px solid #64748b', borderRight: '2px solid #64748b', borderBottom: '2px solid #64748b' }}/>
-            <div className="text-[10px] font-medium text-center text-slate-700 dark:text-slate-300">{hitungScaleKm(currentZoom)} km</div>
-          </div>
-          {/* Status IKP legend */}
-          <div className="bg-white/95 dark:bg-slate-800/90 p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-600 min-w-[110px]">
-            <div className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Status IKP</div>
-            {Object.entries(KATEGORI).map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between gap-2 mb-1.5 last:mb-0">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: v.warna }}/>
-                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{v.label}</span>
-                </div>
-                {hasilAnalisis && (
-                  <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-1.5 py-0.5 rounded">
-                    {jumlahKategori[k]}
-                  </span>
-                )}
-              </div>
-            ))}
-            {hasilAnalisis && (
-              <div className="relative mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                <button onClick={() => setMenuFilter(!menuFilter)}
-                  className="w-full flex items-center justify-between gap-1 px-2 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                  <Filter size={9}/> {kategoriTerpilih} <ChevronDown size={9}/>
-                </button>
-                {menuFilter && (
-                  <div className="absolute bottom-full mb-1 right-0 w-full bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-[500] py-1">
-                    {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => (
-                      <button key={k} onClick={() => { setKategoriTerpilih(k); setMenuFilter(false); }}
-                        className={cn('w-full text-left px-3 py-1.5 text-[10px] font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-slate-700',
-                          kategoriTerpilih === k ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200')}>
-                        {k}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bawah tengah: Action buttons */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] flex gap-2">
-          <Btn onClick={onAnalisis} disabled={sedangMenganalisis || sedangCekData} variant="primary"
-            className="px-5 uppercase tracking-wider text-xs shadow-xl whitespace-nowrap"
-            style={{ boxShadow: '0 10px 30px rgba(37,99,235,0.30)' }}>
-            {(sedangCekData || sedangMenganalisis) ? <Loader2 size={13} className="animate-spin"/> : <Play size={13}/>}
-            {getButtonText()}
-          </Btn>
-          {dataBaruDariBPS && hasilAnalisis && (
-            <Btn variant="save" onClick={onSimpan} className="px-5 uppercase tracking-wider text-xs shadow-xl">
-              <Save size={13}/> Simpan
-            </Btn>
-          )}
-          {hasilAnalisis && (
-            <Btn variant="danger" onClick={onReset} className="px-5 uppercase tracking-wider text-xs shadow-xl">
-              <RotateCcw size={13}/> Reset
-            </Btn>
-          )}
-        </div>
+        )}
       </div>
-    </Card>
+    </div>
+  );
+
+  const ActionButtons = () => (
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] flex gap-2">
+      <Btn onClick={onAnalisis} disabled={sedangMenganalisis || sedangCekData} variant="primary"
+        className="px-5 uppercase tracking-wider text-xs shadow-xl whitespace-nowrap"
+        style={{ boxShadow: '0 10px 30px rgba(37,99,235,0.30)' }}>
+        {(sedangCekData || sedangMenganalisis) ? <Loader2 size={13} className="animate-spin"/> : <Play size={13}/>}
+        {getButtonText()}
+      </Btn>
+      {dataBaruDariBPS && hasilAnalisis && (
+        <Btn variant="save" onClick={onSimpan} className="px-5 uppercase tracking-wider text-xs shadow-xl">
+          <Save size={13}/> Simpan
+        </Btn>
+      )}
+      {hasilAnalisis && (
+        <Btn variant="danger" onClick={onReset} className="px-5 uppercase tracking-wider text-xs shadow-xl">
+          <RotateCcw size={13}/> Reset
+        </Btn>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {/* ════════════════════════════════════════════
+          FULLSCREEN OVERLAY
+      ════════════════════════════════════════════ */}
+      {isFullscreen && (
+        <div
+          className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col overflow-hidden"
+          style={{ height: '100dvh', width: '100vw', top: 0, left: 0 }}
+        >
+          <div className="relative flex-1 min-h-0">
+            {leafletReady && MapCont && (
+              <MapCont center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} style={{ height: '100%', width: '100%' }} zoomControl={false} ref={petaRef}>
+                <TileLay key={basemap} url={BASEMAPS[basemap].url} attribution={BASEMAPS[basemap].attribution}/>
+                <MapEventHandler setKoordinatCursor={setKoordinatCursor} setCurrentZoom={setCurrentZoom}/>
+                {geoProps && <GeoComp key={geoKeyFs} {...geoProps} />}
+              </MapCont>
+            )}
+            <KontrolKiri />
+            <NavTengah />
+            <LegendaKanan />
+            {/* Tombol Restore — pojok kiri bawah */}
+            <div className="absolute bottom-4 left-4 z-[400]">
+              <button onClick={() => setIsFullscreen(false)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm border border-slate-200 dark:border-slate-600 rounded-xl shadow-md hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-400 transition-all active:scale-95 group">
+                <Minimize2 size={13} className="text-slate-600 dark:text-slate-300 group-hover:text-red-500 transition-colors"/>
+                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 group-hover:text-red-500 transition-colors">Restore</span>
+              </button>
+            </div>
+            <ActionButtons />
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════
+          CARD NORMAL
+      ════════════════════════════════════════════ */}
+      <Card className="overflow-hidden border-2">
+        <div className="relative" style={{ height: 520 }}>
+          {sedangMuatAwal && (
+            <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={28} className="text-blue-500 animate-spin"/>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Memuat data dari database...</p>
+              </div>
+            </div>
+          )}
+          {leafletReady && MapCont && (
+            <MapCont center={PUSAT_DEFAULT} zoom={ZOOM_DEFAULT} className="h-full w-full z-0" zoomControl={false} ref={petaRef}>
+              <TileLay key={basemap} url={BASEMAPS[basemap].url} attribution={BASEMAPS[basemap].attribution}/>
+              <MapEventHandler setKoordinatCursor={setKoordinatCursor} setCurrentZoom={setCurrentZoom}/>
+              {geoProps && <GeoComp key={geoKey} {...geoProps} />}
+            </MapCont>
+          )}
+          <KontrolKiri />
+          <NavTengah />
+          <LegendaKanan />
+          {/* Tombol Maximize — pojok kiri bawah */}
+          <div className="absolute bottom-4 left-4 z-[400]">
+            <button onClick={() => setIsFullscreen(true)} title="Buka peta fullscreen"
+              className="flex items-center gap-1.5 px-3 py-2 bg-white/90 dark:bg-slate-700/90 backdrop-blur-sm border border-slate-200 dark:border-slate-600 rounded-xl shadow-md hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all active:scale-95 group">
+              <Maximize2 size={13} className="text-slate-600 dark:text-slate-300 group-hover:text-blue-600 transition-colors"/>
+              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 group-hover:text-blue-600 transition-colors">Maximize</span>
+            </button>
+          </div>
+          <ActionButtons />
+        </div>
+      </Card>
+    </>
   );
 }
 
 // ══════════════════════════════════════════
-// TAB INFO — stats + tabel (tanpa expand insight)
+// TAB INFO
 // ══════════════════════════════════════════
 function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih, eksporData }) {
   const [menuUnduh, setMenuUnduh] = useState(false);
@@ -353,7 +412,6 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
 
   return (
     <div className="space-y-4">
-      {/* Badge header */}
       <div className="flex flex-wrap gap-2 items-center">
         {hasilAnalisis.timestamp && (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -371,8 +429,6 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
           </span>
         )}
       </div>
-
-      {/* Dataset aktif */}
       {hasilAnalisis.dataset_aktif?.length > 0 && (
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Dataset aktif:</span>
@@ -383,8 +439,6 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
           ))}
         </div>
       )}
-
-      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statsConfig.map(s => (
           <div key={s.label} className={cn('border rounded-xl p-3', s.cls)}>
@@ -393,8 +447,6 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
           </div>
         ))}
       </div>
-
-      {/* Keterangan IKP */}
       <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Dasar Penilaian IKP Pendidikan</div>
         <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
@@ -404,13 +456,9 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
           <span className="font-bold text-red-600 dark:text-red-400">KRITIS</span> {'< 0.50'}
         </p>
       </div>
-
-      {/* ── TABEL ── */}
       <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-            {dataTerfilter.length} provinsi · Tahun {hasilAnalisis.tahun}
-          </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">{dataTerfilter.length} provinsi · Tahun {hasilAnalisis.tahun}</p>
           <div className="flex items-center gap-2">
             <select value={kategoriTerpilih} onChange={e => setKategoriTerpilih(e.target.value)}
               className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
@@ -433,7 +481,6 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
             </div>
           </div>
         </div>
-
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/60">
@@ -455,11 +502,8 @@ function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTer
                 const dp  = d.data_pendidikan || {};
                 const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
                 const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
-
                 return (
-                  <tr
-                    key={d.nama_provinsi}
-                    className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                  <tr key={d.nama_provinsi} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                     <td className="px-3 py-2.5 text-center text-xs text-slate-400 dark:text-slate-500">{idx + 1}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
@@ -536,7 +580,6 @@ function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setK
           {['SEMUA','KRITIS','SEDANG','BAIK'].map(k => <option key={k} value={k}>{k}</option>)}
         </select>
       </div>
-
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/60">
@@ -555,7 +598,6 @@ function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setK
               const w   = getWarnaByIndikator(fitur, indikatorTerpilih);
               const kat = getKategoriByIndikator(fitur, indikatorTerpilih);
               const pStyle = PRIORITY_STYLE[rek?.priority] || PRIORITY_STYLE['Sedang'];
-
               return (
                 <tr key={d.nama_provinsi} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                   <td className="px-3 py-2.5 text-center text-xs text-slate-400 dark:text-slate-500">{idx + 1}</td>
@@ -571,19 +613,14 @@ function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setK
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {rek?.priority ? (
-                      <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold border uppercase', pStyle.badge)}>
-                        {rek.priority}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-400">-</span>
-                    )}
+                      <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold border uppercase', pStyle.badge)}>{rek.priority}</span>
+                    ) : <span className="text-[10px] text-slate-400">-</span>}
                   </td>
                   <td className="px-4 py-2.5 max-w-md">
                     <ul className="space-y-0.5">
                       {rek?.actions?.map((action, i) => (
                         <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
-                          <Check size={10} className="text-blue-400 shrink-0 mt-0.5"/>
-                          {action}
+                          <Check size={10} className="text-blue-400 shrink-0 mt-0.5"/>{action}
                         </li>
                       )) || <li className="text-[10px] text-slate-400 italic">Pertahankan kondisi saat ini</li>}
                     </ul>
@@ -604,37 +641,37 @@ function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setK
 export default function PendidikanPage() {
   const API = 'http://127.0.0.1:8000/api';
 
-  const [hasilAnalisis, setHasilAnalisis]           = useState(null);
-  const [kategoriTerpilih, setKategoriTerpilih]     = useState('SEMUA');
-  const [indikatorTerpilih, setIndikatorTerpilih]   = useState('SEMUA');
-  const [isClient, setIsClient]                     = useState(false);
-  const [activeTab, setActiveTab]                   = useState('info');
-  const [daftarTersimpan, setDaftarTersimpan]       = useState([]);
-  const [sedangMuatAwal, setSedangMuatAwal]         = useState(true);
-  const [dataBaruDariBPS, setDataBaruDariBPS]       = useState(false);
-  const [tahunTerpilih, setTahunTerpilih]           = useState(2024);
-  const [sedangMenganalisis, setSedangMenganalisis] = useState(false);
-  const [sedangCekData, setSedangCekData]           = useState(false);
-  const [hasilCekData, setHasilCekData]             = useState(null);
-  const [pilihanIndikator, setPilihanIndikator]     = useState('ALL');
-  const [pernahAnalisis, setPernahAnalisis]         = useState(false);
-  const [alertKomboTidakAda, setAlertKomboTidakAda] = useState(null);
+  const [hasilAnalisis,        setHasilAnalisis]        = useState(null);
+  const [kategoriTerpilih,     setKategoriTerpilih]     = useState('SEMUA');
+  const [indikatorTerpilih,    setIndikatorTerpilih]    = useState('SEMUA');
+  const [isClient,             setIsClient]             = useState(false);
+  const [activeTab,            setActiveTab]            = useState('info');
+  const [daftarTersimpan,      setDaftarTersimpan]      = useState([]);
+  const [sedangMuatAwal,       setSedangMuatAwal]       = useState(true);
+  const [dataBaruDariBPS,      setDataBaruDariBPS]      = useState(false);
+  const [tahunTerpilih,        setTahunTerpilih]        = useState(2024);
+  const [sedangMenganalisis,   setSedangMenganalisis]   = useState(false);
+  const [sedangCekData,        setSedangCekData]        = useState(false);
+  const [hasilCekData,         setHasilCekData]         = useState(null);
+  const [pilihanIndikator,     setPilihanIndikator]     = useState('ALL');
+  const [pernahAnalisis,       setPernahAnalisis]       = useState(false);
+  const [alertKomboTidakAda,   setAlertKomboTidakAda]  = useState(null);
   const [modalAnalisisTerbuka, setModalAnalisisTerbuka] = useState(false);
-  const [modalSaveTerbuka, setModalSaveTerbuka]     = useState(false);
-  const [namaSimpan, setNamaSimpan]                 = useState('');
-  const [sedangMenyimpan, setSedangMenyimpan]       = useState(false);
-  const [basemap, setBasemap]                       = useState('OSM');
-  const [koordinatCursor, setKoordinatCursor]       = useState({ lat: '0.0000', lng: '0.0000' });
-  const [currentZoom, setCurrentZoom]               = useState(ZOOM_DEFAULT);
-  const [provinsiDipilih, setProvinsiDipilih]       = useState(null);
-  const [searchOpen, setSearchOpen]                 = useState(false);
-  const [searchQuery, setSearchQuery]               = useState('');
-  const [suggestions, setSuggestions]               = useState([]);
-  const [loadingDataset, setLoadingDataset]         = useState({ RLS: false, APS: false, RASIO: false });
-  const [leafletReady, setLeafletReady]             = useState(false);
-  const [MapCont, setMapCont]                       = useState(null);
-  const [TileLay, setTileLay]                       = useState(null);
-  const [GeoComp, setGeoComp]                       = useState(null);
+  const [modalSaveTerbuka,     setModalSaveTerbuka]     = useState(false);
+  const [namaSimpan,           setNamaSimpan]           = useState('');
+  const [sedangMenyimpan,      setSedangMenyimpan]      = useState(false);
+  const [basemap,              setBasemap]              = useState('OSM');
+  const [koordinatCursor,      setKoordinatCursor]      = useState({ lat: '0.0000', lng: '0.0000' });
+  const [currentZoom,          setCurrentZoom]          = useState(ZOOM_DEFAULT);
+  const [provinsiDipilih,      setProvinsiDipilih]      = useState(null);
+  const [searchOpen,           setSearchOpen]           = useState(false);
+  const [searchQuery,          setSearchQuery]          = useState('');
+  const [suggestions,          setSuggestions]          = useState([]);
+  const [loadingDataset,       setLoadingDataset]       = useState({ RLS: false, APS: false, RASIO: false });
+  const [leafletReady,         setLeafletReady]         = useState(false);
+  const [MapCont,              setMapCont]              = useState(null);
+  const [TileLay,              setTileLay]              = useState(null);
+  const [GeoComp,              setGeoComp]              = useState(null);
 
   const petaRef    = useRef(null);
   const pendingRef = useRef(null);
@@ -856,8 +893,6 @@ export default function PendidikanPage() {
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
       <HeaderBar/>
       <SideBar/>
-
-      {/* Modals */}
       <ModalAlertKomboTidakAda info={alertKomboTidakAda} onTutup={() => setAlertKomboTidakAda(null)} onAmbilDariBPS={handleAmbilDariBPS}/>
       <ModalCekData
         tahun={pendingRef.current?.tahunFetch || tahunTerpilih}
@@ -866,7 +901,6 @@ export default function PendidikanPage() {
         onTutup={() => setHasilCekData(null)} onLanjut={lanjutkanAnalisis}
       />
 
-      {/* Modal Analisis */}
       {modalAnalisisTerbuka && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-lg p-8">
@@ -915,7 +949,6 @@ export default function PendidikanPage() {
         </div>
       )}
 
-      {/* Modal Save */}
       {modalSaveTerbuka && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-md p-8">
@@ -938,7 +971,6 @@ export default function PendidikanPage() {
         </div>
       )}
 
-      {/* MAIN */}
       <main className="pt-[60px] pb-16 min-h-screen">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-2">
           <div className="flex items-start justify-between pt-7 pb-5">
@@ -962,22 +994,13 @@ export default function PendidikanPage() {
           ) : (
             <div className="space-y-4">
               <PetaSection
-                hasilAnalisis={hasilAnalisis}
-                tahunTerpilih={tahunTerpilih}
-                indikatorTerpilih={indikatorTerpilih}
-                kategoriTerpilih={kategoriTerpilih}
-                setKategoriTerpilih={setKategoriTerpilih}
-                sedangMenganalisis={sedangMenganalisis}
-                sedangCekData={sedangCekData}
-                dataBaruDariBPS={dataBaruDariBPS}
-                pernahAnalisis={pernahAnalisis}
+                hasilAnalisis={hasilAnalisis} tahunTerpilih={tahunTerpilih}
+                indikatorTerpilih={indikatorTerpilih} kategoriTerpilih={kategoriTerpilih} setKategoriTerpilih={setKategoriTerpilih}
+                sedangMenganalisis={sedangMenganalisis} sedangCekData={sedangCekData}
+                dataBaruDariBPS={dataBaruDariBPS} pernahAnalisis={pernahAnalisis}
                 onAnalisis={() => pernahAnalisis ? cekDanAnalisis() : (setPilihanIndikator('ALL'), setModalAnalisisTerbuka(true))}
                 onSimpan={() => { setNamaSimpan(''); setModalSaveTerbuka(true); }}
-                onReset={() => {
-                  setHasilAnalisis(null); setKategoriTerpilih('SEMUA'); setIndikatorTerpilih('SEMUA');
-                  setProvinsiDipilih(null); setPernahAnalisis(false); setDataBaruDariBPS(false);
-                  toast.success('Analisis direset');
-                }}
+                onReset={() => { setHasilAnalisis(null); setKategoriTerpilih('SEMUA'); setIndikatorTerpilih('SEMUA'); setProvinsiDipilih(null); setPernahAnalisis(false); setDataBaruDariBPS(false); toast.success('Analisis direset'); }}
                 leafletReady={leafletReady} MapCont={MapCont} TileLay={TileLay} GeoComp={GeoComp}
                 petaRef={petaRef} basemap={basemap} setBasemap={setBasemap}
                 koordinatCursor={koordinatCursor} setKoordinatCursor={setKoordinatCursor}
@@ -987,23 +1010,18 @@ export default function PendidikanPage() {
                 searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 suggestions={suggestions} handleSearch={handleSearch}
                 kombinasiTersedia={kombinasiTersedia} onPilihKombo={handlePilihKombo}
-                sedangMuatAwal={false}
-                jumlahKategori={jumlahKategori}
+                sedangMuatAwal={false} jumlahKategori={jumlahKategori}
               />
 
-              {/* TABS */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
                 <div className="flex border-b border-slate-100 dark:border-slate-700">
                   {TABS.map(({ id, label, Icon }) => {
                     const active = activeTab === id;
                     return (
                       <button key={id} onClick={() => setActiveTab(id)}
-                        className={cn(
-                          'flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all relative flex-1',
-                          active
-                            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/30'
-                        )}>
+                        className={cn('flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all relative flex-1',
+                          active ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/30')}>
                         <Icon size={15}/>
                         <span className="hidden sm:inline">{label}</span>
                         {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full"/>}
@@ -1012,45 +1030,16 @@ export default function PendidikanPage() {
                   })}
                 </div>
                 <div className="p-5">
-                  {activeTab === 'info'      && (
-                    <TabInfo
-                      hasilAnalisis={hasilAnalisis}
-                      jumlahKategori={jumlahKategori}
-                      indikatorTerpilih={indikatorTerpilih}
-                      kategoriTerpilih={kategoriTerpilih}
-                      setKategoriTerpilih={setKategoriTerpilih}
-                      eksporData={eksporData}
-                    />
-                  )}
-                  {activeTab === 'kebijakan' && (
-                    <TabKebijakan
-                      hasilAnalisis={hasilAnalisis}
-                      indikatorTerpilih={indikatorTerpilih}
-                      kategoriTerpilih={kategoriTerpilih}
-                      setKategoriTerpilih={setKategoriTerpilih}
-                    />
-                  )}
-                  {activeTab === 'metadata'  && (
-                    <MetadataPanel
-                      hasilAnalisis={hasilAnalisis}
-                      indikatorTerpilih={indikatorTerpilih}
-                      tahunTerpilih={tahunTerpilih}
-                      loadingDataset={loadingDataset}
-                      onTutup={null}
-                      onUnduhDataset={unduhDataset}
-                      embedded={true}
-                    />
-                  )}
-                  {activeTab === 'tren'      && (
-                    <TrendPanel daftarTersimpan={daftarTersimpan} onTutup={null} embedded={true}/>
-                  )}
+                  {activeTab === 'info'      && <TabInfo hasilAnalisis={hasilAnalisis} jumlahKategori={jumlahKategori} indikatorTerpilih={indikatorTerpilih} kategoriTerpilih={kategoriTerpilih} setKategoriTerpilih={setKategoriTerpilih} eksporData={eksporData}/>}
+                  {activeTab === 'kebijakan' && <TabKebijakan hasilAnalisis={hasilAnalisis} indikatorTerpilih={indikatorTerpilih} kategoriTerpilih={kategoriTerpilih} setKategoriTerpilih={setKategoriTerpilih}/>}
+                  {activeTab === 'metadata'  && <MetadataPanel hasilAnalisis={hasilAnalisis} indikatorTerpilih={indikatorTerpilih} tahunTerpilih={tahunTerpilih} loadingDataset={loadingDataset} onTutup={null} onUnduhDataset={unduhDataset} embedded={true}/>}
+                  {activeTab === 'tren'      && <TrendPanel daftarTersimpan={daftarTersimpan} onTutup={null} embedded={true}/>}
                 </div>
               </div>
             </div>
           )}
         </div>
       </main>
-
       <Footerauth/>
     </div>
   );

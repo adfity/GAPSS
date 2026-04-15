@@ -433,7 +433,7 @@ def download_investasi_xlsx(request):
 # HELPER: BANK KEBIJAKAN dari PostgreSQL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_bank_kebijakan_by_kategori(kategori_list: list, limit_per_kategori: int = 8) -> list:
+def get_bank_kebijakan2_by_kategori(kategori_list: list, limit_per_kategori: int = 8) -> list:
     results = []
     conn    = None
     try:
@@ -445,7 +445,7 @@ def get_bank_kebijakan_by_kategori(kategori_list: list, limit_per_kategori: int 
                 SELECT id, kategori_utama, sub_sektor, prioritas, no_aksi,
                        nama_aksi, detail_aksi, timeline, budget_est,
                        sektor_terkait, indikator_dampak
-                FROM bank_kebijakan
+                FROM bank_kebijakan2
                 WHERE domain = 'ekonomi' AND kategori_utama = %s
                 ORDER BY no_aksi ASC
                 LIMIT %s
@@ -461,7 +461,7 @@ def get_bank_kebijakan_by_kategori(kategori_list: list, limit_per_kategori: int 
                 })
         cur.close()
     except Exception as e:
-        print(f"  ✗ Error get_bank_kebijakan_by_kategori: {e}")
+        print(f"  ✗ Error get_bank_kebijakan2_by_kategori: {e}")
     finally:
         if conn:
             conn.close()
@@ -727,7 +727,7 @@ def normalize_province_name(name: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api_view(["GET"])
-def get_bank_kebijakan(request):
+def get_bank_kebijakan2(request):
     """
     GET /api/bank-kebijakan/
     Query params:
@@ -763,7 +763,7 @@ def get_bank_kebijakan(request):
             SELECT id, domain, kategori_utama, sub_sektor, prioritas, no_aksi,
                    nama_aksi, detail_aksi, timeline, budget_est,
                    sektor_terkait, indikator_dampak
-            FROM bank_kebijakan
+            FROM bank_kebijakan2
             {where_sql}
             ORDER BY no_aksi ASC
             LIMIT %s
@@ -773,7 +773,7 @@ def get_bank_kebijakan(request):
 
         cur.execute("""
             SELECT kategori_utama, COUNT(*) as jumlah
-            FROM bank_kebijakan
+            FROM bank_kebijakan2
             WHERE domain = %s
             GROUP BY kategori_utama
             ORDER BY kategori_utama
@@ -884,7 +884,7 @@ def analyze_ekonomi_bps(request):
             insights        = analytics.generate_insights(prov_name, data_ekonomi, kategori, scores['skor_total'], indikator)
 
             kategori_list   = build_kategori_list(kategori, data_ekonomi, analytics.indikator_config)
-            recommendations = get_bank_kebijakan_by_kategori(kategori_list, limit_per_kategori=8)
+            recommendations = get_bank_kebijakan2_by_kategori(kategori_list, limit_per_kategori=8)
 
             normalized_prov = normalize_province_name(prov_name)
             matched_feature = (province_map.get(normalized_prov) or province_map.get(prov_name))
