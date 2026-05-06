@@ -11,9 +11,9 @@ import { useBoundaryData, BoundaryLayer } from './panel/layers';
 import { toast } from 'react-hot-toast';
 
 const glass = [
-  "bg-white/85 dark:bg-slate-900/85",
+  "bg-white/30 dark:bg-slate-900/30",
   "backdrop-blur-md",
-  "border border-white/70 dark:border-slate-700/60",
+  "border border-white/20 dark:border-slate-700/30",
   "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
 ].join(" ");
 
@@ -86,7 +86,7 @@ export function ZoomButtons({ modeBersih }) {
         onClick={() => map.zoomIn()}
         title="Zoom In"
         className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                    text-black dark:text-white hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+            text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40 transition-all active:scale-90`}
       >
         <Plus size={15} strokeWidth={2.5} />
       </button>
@@ -94,7 +94,7 @@ export function ZoomButtons({ modeBersih }) {
         onClick={() => map.zoomOut()}
         title="Zoom Out"
         className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                    text-black dark:text-white hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-90`}
+            text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40 transition-all active:scale-90`}
       >
         <Minus size={15} strokeWidth={2.5} />
       </button>
@@ -138,7 +138,7 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
         className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90
           ${modeBersih
             ? 'bg-sky-500 shadow-[0_0_14px_rgba(14,165,233,0.5)] text-white'
-            : `${glass} text-black dark:text-white`
+: `${glass} text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40`
           }`}
       >
         {modeBersih ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -162,6 +162,7 @@ export function MapReset({ trigger, onDone }) {
 // ─── Sidebar Buttons ──────────────────────────────────────────────────────────
 
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
+  const map = useMap();
   const [isMobile, setIsMobile] = useState(false);
   const [isDark,   setIsDark]   = useState(false);
 
@@ -180,28 +181,61 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
     { id: 'home',    icon: <Home size={17} />,    label: 'Beranda' },
     { id: 'basemap', icon: <MapIcon size={17} />,  label: 'Basemap' },
     { id: 'layers',  icon: <Layers size={17} />,   label: 'Layer'   },
-    {
-      id: 'radius',
-      icon: <img src={isDark ? '/icons/Wradius.png' : '/icons/bradius.png'} className="w-[18px] h-[18px] object-contain" alt="Radius" />,
-      label: 'Radius',
-    },
-    {
-      id: 'areascan',
-      icon: <img src={isDark ? '/icons/wgeo.png' : '/icons/bgeo.png'} className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
-      label: 'GeoAI',
-    },
+//     {
+//   id: 'radius',
+//   icon: <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />,
+//   label: 'Radius',
+// },
+{
+  id: 'areascan',
+  icon: <img src="/icons/wgeo.png" className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
+  label: 'GeoAI',
+},
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
   ];
 
-  const handleButtonClick = (btnId) => {
-    if (btnId === 'home') {
-      setGoHome(true);
+
+  const handleLocateMe = () => {
+  if (!navigator.geolocation) {
+    toast.error('Browser tidak mendukung geolokasi');
+    return;
+  }
+  const id = toast.loading('Mencari lokasi...');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      // setActivePanel(null) dulu supaya panel tidak terbuka
       setActivePanel(null);
-      toast.success('Kembali ke tampilan default');
-    } else {
-      setActivePanel(activePanel === btnId ? null : btnId);
-    }
-  };
+      // Akses map via ref — kita butuh prop mapRef
+      map.flyTo([latitude, longitude], 16, { animate: true, duration: 1.2 });
+      toast.success(
+        `📍 Lokasi ditemukan · akurasi ±${Math.round(accuracy)}m`,
+        { id, duration: 3000 }
+      );
+    },
+    (err) => {
+      const msg = {
+        1: 'Izin lokasi ditolak',
+        2: 'Lokasi tidak tersedia',
+        3: 'Waktu habis',
+      }[err.code] || 'Gagal mendapatkan lokasi';
+      toast.error(msg, { id });
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+};
+
+  const handleButtonClick = (btnId) => {
+  if (btnId === 'home') {
+    setGoHome(true);
+    setActivePanel(null);
+    toast.success('Kembali ke tampilan default');
+  } else if (btnId === 'share') {
+    handleLocateMe();
+  } else {
+    setActivePanel(activePanel === btnId ? null : btnId);
+  }
+};
 
   if (modeBersih) return null;
 
@@ -223,7 +257,7 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
                 onClick={() => handleButtonClick(btn.id)}
                 title={btn.label}
                 className={`relative w-11 h-11 rounded-[14px] flex items-center justify-center transition-all duration-200 active:scale-90
-                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.4)]' : 'text-black dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.4)]' : 'text-white hover:bg-white/10 dark:hover:bg-slate-700/50'}`}
               >
                 {active ? activeIcon(btn) : btn.icon}
                 {active && <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-sky-400" />}
@@ -250,13 +284,13 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
               <button
                 onClick={() => handleButtonClick(btn.id)}
                 className={`relative w-11 h-11 rounded-[14px] flex items-center justify-center transition-all duration-200 active:scale-90
-                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)]' : 'text-black dark:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800'}`}
+                  ${active ? 'bg-sky-500 text-white shadow-[0_4px_16px_rgba(14,165,233,0.35)]' : 'text-white hover:bg-white/10 dark:hover:bg-slate-700/50'}`}
               >
                 {active ? activeIcon(btn) : btn.icon}
                 {active && <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[3px] w-[3px] h-5 rounded-full bg-sky-400" />}
               </button>
               <div className="pointer-events-none absolute right-[54px] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center">
-                <span className={`${glass} rounded-xl px-3 py-1.5 text-[11px] font-semibold text-black dark:text-white whitespace-nowrap tracking-wide`}>
+                <span className={`${glass} rounded-xl px-3 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap tracking-wide`}>
                   {btn.label}
                 </span>
                 <span className="block w-2 h-2 -ml-1 rotate-45 bg-white/85 dark:bg-slate-900/85 border-r border-t border-white/70 dark:border-slate-700/60" />
@@ -541,6 +575,7 @@ export default function MapStuff(props) {
         setActivePanel={props.setActivePanel}
         setGoHome={props.setGoHome}
         modeBersih={modeBersih}
+        mapRef={props.mapRef}
       />
     </>
   );

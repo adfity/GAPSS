@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { Sun, Moon, LogOut, ChevronDown, ChevronUp, UserCog } from "lucide-react";
+import { Sun, Moon, LogOut, ChevronDown, ChevronUp, UserCog, LayoutGrid } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -44,7 +44,6 @@ export default function HeaderBar() {
         return () => window.removeEventListener("sidebar-state", onSidebarChange);
     }, []);
 
-    // Close dropdown on outside click
     useEffect(() => {
         const handleOutside = (e) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -91,11 +90,6 @@ export default function HeaderBar() {
         }, 800);
     };
 
-    const handleToggleSidebar = () => {
-        window.dispatchEvent(new CustomEvent("toggle-sidebar"));
-    };
-
-    // Get initials for avatar fallback
     const getInitials = (name) => {
         return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
     };
@@ -108,41 +102,37 @@ export default function HeaderBar() {
             backdrop-blur-md
             border-b border-white/20 dark:border-slate-700/30
         ">
-            {/* ── Logo ── */}
+            {/* Logo */}
             <div className="flex items-center h-full px-5 border-r border-white/20 dark:border-slate-700/30 shrink-0">
                 <Link href="/" className="flex items-center hover:opacity-85 transition-opacity">
-                    <Image src="/icons/GAPSS.png" alt="Synap" width={100} height={40} />
+                    <Image src="/icons/GAPSS.png" alt="GAPSS" width={100} height={40} />
                 </Link>
             </div>
 
-            {/* ── Hamburger — non-landing pages only ── */}
+            {/* Tombol LayoutGrid — non-landing only */}
             {!isLandingPage && (
                 <button
-                    onClick={handleToggleSidebar}
+                    onClick={() => window.dispatchEvent(new CustomEvent("toggle-sidebar"))}
+                    onMouseEnter={() => window.dispatchEvent(new CustomEvent("toggle-sidebar-open"))}
                     aria-label={sidebarOpen ? "Tutup Menu" : "Buka Menu"}
-                    className="
-                        ml-5 flex flex-col justify-center items-center gap-[5.5px]
-                        w-9 h-9 rounded-lg shrink-0
-                        text-black dark:text-slate-300
-                        hover:bg-white/40 dark:hover:bg-slate-700/40
-                        transition-all duration-200
-                    "
+                    className="ml-5 flex items-center justify-center w-9 h-9 rounded-lg shrink-0
+                               text-slate-600 dark:text-slate-300
+                               hover:bg-white/40 dark:hover:bg-slate-700/40
+                               transition-all duration-200"
                 >
-                    <span className={`block h-[2.5px] w-[22px] rounded-full bg-current transition-all duration-300 origin-center ${sidebarOpen ? "rotate-45 translate-y-[8px]" : ""}`} />
-                    <span className={`block h-[2.5px] w-[22px] rounded-full bg-current transition-all duration-300 ${sidebarOpen ? "opacity-0 scale-x-0" : ""}`} />
-                    <span className={`block h-[2.5px] w-[22px] rounded-full bg-current transition-all duration-300 origin-center ${sidebarOpen ? "-rotate-45 -translate-y-[8px]" : ""}`} />
+                    <LayoutGrid size={20} />
                 </button>
             )}
 
-            {/* ── Center Nav — landing page only ── */}
+            {/* Center Nav — landing page only */}
             {isLandingPage && (
                 <nav className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                     <div className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border border-white/30 dark:border-slate-700/30 shadow-md">
                         {[
-                            { href: "#home", label: "Home" },
-                            { href: "#features", label: "Fitur" },
+                            { href: "#home",         label: "Home"       },
+                            { href: "#features",     label: "Fitur"      },
                             { href: "#how-it-works", label: "Cara Kerja" },
-                            { href: "#cta", label: "Daftar" }
+                            { href: "#cta",          label: "Daftar"     },
                         ].map(item => (
                             <a
                                 key={item.href}
@@ -161,7 +151,7 @@ export default function HeaderBar() {
                 </nav>
             )}
 
-            {/* ── Right Actions ── */}
+            {/* Right Actions */}
             <div className="ml-auto flex items-center gap-3 pr-5">
 
                 {/* Theme toggle */}
@@ -180,12 +170,10 @@ export default function HeaderBar() {
                 {/* User area */}
                 {isLoggedIn ? (
                     <div className="relative" ref={dropdownRef}>
-                        {/* Trigger button */}
                         <button
                             onClick={() => setDropdownOpen((v) => !v)}
                             className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/40 dark:hover:bg-slate-700/40 transition-all duration-200"
                         >
-                            {/* Avatar */}
                             <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 select-none">
                                 {getInitials(userName)}
                             </div>
@@ -198,7 +186,6 @@ export default function HeaderBar() {
                             }
                         </button>
 
-                        {/* Dropdown panel */}
                         {dropdownOpen && (
                             <div className="
                                 absolute right-0 top-[calc(100%+8px)]
@@ -209,7 +196,6 @@ export default function HeaderBar() {
                                 overflow-hidden
                                 animate-in fade-in slide-in-from-top-2 duration-150
                             ">
-                                {/* User info header */}
                                 <div className="px-4 py-4 border-b border-slate-100 dark:border-slate-800">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white text-[13px] font-bold shrink-0 select-none">
@@ -228,7 +214,6 @@ export default function HeaderBar() {
                                     </div>
                                 </div>
 
-                                {/* Menu items */}
                                 <div className="p-2">
                                     <Link
                                         href="/profile"
@@ -238,11 +223,8 @@ export default function HeaderBar() {
                                         <UserCog size={16} className="text-slate-400 dark:text-slate-500 shrink-0" />
                                         Edit Profile
                                     </Link>
-
-
                                 </div>
 
-                                {/* Sign out — separated */}
                                 <div className="p-2 border-t border-slate-100 dark:border-slate-800">
                                     <button
                                         onClick={handleSignOut}

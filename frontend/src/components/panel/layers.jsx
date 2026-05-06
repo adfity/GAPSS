@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Edit2, Eye, EyeOff, Trash2, Check, Palette } from 'lucide-react';
 import axios from 'axios';
 import { GeoJSON, CircleMarker, Popup, useMap } from 'react-leaflet';
 import {
@@ -35,7 +36,10 @@ const BOUNDARY_LAYERS = [
 const WAYPOINT_PENDIDIKAN = [
   { id: 'waypoint_university',   label: 'Universitas / Institut',  category: 'university',   endpoint: '/api/waypoint/pendidikan/university/',   color: '#3b82f6', desc: 'Perguruan tinggi negeri & swasta' },
   { id: 'waypoint_college',      label: 'Politeknik / Akademi',    category: 'college',      endpoint: '/api/waypoint/pendidikan/college/',      color: '#8b5cf6', desc: 'Vokasi & akademi kejuruan' },
-  { id: 'waypoint_school',       label: 'Sekolah (SD/SMP/SMA)',    category: 'school',       endpoint: '/api/waypoint/pendidikan/school/',       color: '#06b6d4', desc: 'Pendidikan dasar & menengah' },
+  { id: 'waypoint_sma', label: 'SMA',  category: 'sma', endpoint: '/api/waypoint/pendidikan/sma/', color: '#06b6d4', desc: 'Sekolah menengah atas' },
+  { id: 'waypoint_smk', label: 'SMK', category: 'smk', endpoint: '/api/waypoint/pendidikan/smk/', color: '#0891b2', desc: 'Sekolah menengah kejuruan' },
+  { id: 'waypoint_smp', label: 'SMP', category: 'smp', endpoint: '/api/waypoint/pendidikan/smp/', color: '#7c3aed', desc: 'Sekolah menengah pertama' },
+  { id: 'waypoint_sd',  label: 'SD',   category: 'sd',  endpoint: '/api/waypoint/pendidikan/sd/',  color: '#a855f7', desc: 'Sekolah dasar' },
   { id: 'waypoint_kindergarten', label: 'TK / PAUD',               category: 'kindergarten', endpoint: '/api/waypoint/pendidikan/kindergarten/', color: '#10b981', desc: 'Pendidikan anak usia dini' },
 ];
 
@@ -102,7 +106,10 @@ const LEGEND_MAP = {
   batas_kabupaten:            { label: 'Batas Kabupaten',                     color: '#f59e0b', type: 'dashed' },
   waypoint_university:        { label: 'Universitas / Institut',              color: '#3b82f6', type: 'dot' },
   waypoint_college:           { label: 'Politeknik / Akademi',               color: '#8b5cf6', type: 'dot' },
-  waypoint_school:            { label: 'Sekolah',                             color: '#06b6d4', type: 'dot' },
+  waypoint_sma: { label: 'SMA',  color: '#06b6d4', type: 'dot' },
+  waypoint_smk: { label: 'SMK', color: '#0891b2', type: 'dot' },
+  waypoint_smp: { label: 'SMP', color: '#7c3aed', type: 'dot' },
+  waypoint_sd:  { label: 'SD',   color: '#a855f7', type: 'dot' },
   waypoint_kindergarten:      { label: 'TK / PAUD',                          color: '#10b981', type: 'dot' },
   waypoint_hospital:          { label: 'Rumah Sakit',                         color: '#ef4444', type: 'dot' },
   waypoint_clinic:            { label: 'Klinik / Puskesmas',                 color: '#f97316', type: 'dot' },
@@ -653,11 +660,28 @@ export function BmkgLayer({ activeLayers, bmkgData }) {
 }
 
 export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeBersih }) {
+  const [minimized, setMinimized] = useState(false);
+  const [dragX, setDragX] = useState(0);
+  const [dragY, setDragY] = useState(0);
+  const dragStart = useRef(null);
+
+  // Auto-minimize setelah 12 detik (bukan dismiss)
+  useEffect(() => {
+    if (!autoGempa || dismissed) return;
+    const t = setTimeout(() => setMinimized(true), 12000);
+    return () => clearTimeout(t);
+  }, [autoGempa, dismissed]);
+
+  // Reset minimized saat gempa baru masuk
+  useEffect(() => {
+    if (autoGempa) setMinimized(false);
+  }, [autoGempa?.Tanggal, autoGempa?.Jam]);
+
   if (!autoGempa || dismissed || modeBersih) return null;
 
-  const mag        = parseFloat(autoGempa.Magnitude) || 0;
-  const isHighMag  = mag >= 6.0;
-  const isTsunami  = (autoGempa.Potensi || '').toLowerCase().includes('tsunami');
+  const mag       = parseFloat(autoGempa.Magnitude) || 0;
+  const isHighMag = mag >= 6.0;
+  const isTsunami = (autoGempa.Potensi || '').toLowerCase().includes('tsunami');
 
   const accentColor = isTsunami ? '#7c3aed' : isHighMag ? '#ef4444' : '#f97316';
   const bgGrad      = isTsunami
@@ -666,8 +690,81 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
       ? 'linear-gradient(135deg, rgba(127,29,29,0.97), rgba(185,28,28,0.97))'
       : 'linear-gradient(135deg, rgba(120,53,15,0.97), rgba(194,65,12,0.97))';
 
+  const handleMouseDown = (e) => {
+    dragStart.current = { x: e.clientX - dragX, y: e.clientY - dragY };
+  };
+  const handleMouseMove = (e) => {
+    if (!dragStart.current) return;
+    setDragX(e.clientX - dragStart.current.x);
+    setDragY(e.clientY - dragStart.current.y);
+  };
+  const handleMouseUp = () => { dragStart.current = null; };
+
+  // ── Minimized pill ──────────────────────────────────────────────────────
+  if (minimized) {
+    return (
+      <>
+        <style>{`
+          @keyframes bmkgPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+          @keyframes bmkgSlideUp {
+            from { opacity:0; transform:translate(${dragX}px, calc(${dragY}px + 60px)); }
+            to   { opacity:1; transform:translate(${dragX}px, ${dragY}px); }
+          }
+        `}</style>
+        <div
+          onClick={() => setMinimized(false)}
+          style={{
+            position:     'fixed',
+            bottom:       '1.5rem',
+            left:         '1rem',
+            zIndex:       1200,
+            transform:    `translate(${dragX}px, ${dragY}px)`,
+            display:      'flex',
+            alignItems:   'center',
+            gap:          8,
+            padding:      '7px 14px 7px 10px',
+            borderRadius: 99,
+            background:   bgGrad,
+            boxShadow:    `0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px ${accentColor}50`,
+            cursor:       'pointer',
+            fontFamily:   "'Inter','Segoe UI',sans-serif",
+            animation:    'bmkgSlideUp 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+            userSelect:   'none',
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* pulse dot */}
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: accentColor,
+            animation: 'bmkgPulse 1s infinite',
+            flexShrink: 0,
+          }} />
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>
+            {isTsunami ? '⚠ TSUNAMI' : `Gempa M ${autoGempa.Magnitude}`}
+          </span>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.6)',
+            background: 'rgba(255,255,255,0.12)',
+            padding: '2px 6px', borderRadius: 99, marginLeft: 2,
+          }}>
+            TAP UNTUK BUKA
+          </span>
+        </div>
+      </>
+    );
+  }
+
+  // ── Full banner ─────────────────────────────────────────────────────────
   return (
     <div
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
       style={{
         position:     'fixed',
         bottom:       '3rem',
@@ -677,19 +774,19 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
         borderRadius: 14,
         overflow:     'hidden',
         boxShadow:    `0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px ${accentColor}40`,
-        fontFamily:   "'Inter', 'Segoe UI', sans-serif",
-        animation:    'bmkgSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        fontFamily:   "'Inter','Segoe UI',sans-serif",
+        animation:    'bmkgSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+        cursor:       'grab',
+        transform:    `translate(${dragX}px, ${dragY}px)`,
+        userSelect:   'none',
       }}
     >
       <style>{`
         @keyframes bmkgSlideIn {
-          from { opacity: 0; transform: translateY(20px) scale(0.95); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
+          from { opacity:0; transform:translate(${dragX}px, calc(${dragY}px + 20px)) scale(0.95); }
+          to   { opacity:1; transform:translate(${dragX}px, ${dragY}px) scale(1); }
         }
-        @keyframes bmkgPulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.4; }
-        }
+        @keyframes bmkgPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
       `}</style>
 
       <div style={{ height: 3, background: accentColor, animation: isTsunami || isHighMag ? 'bmkgPulse 1.2s infinite' : 'none' }} />
@@ -725,14 +822,22 @@ export function BmkgAlertBanner({ autoGempa, dismissed, onDismiss, isDark, modeB
               </div>
             )}
           </div>
-          <button
-            onClick={onDismiss}
-            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: 'rgba(255,255,255,0.7)', transition: 'background 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-          >
-            <X size={13} />
-          </button>
+
+          {/* Tombol kanan: minimize + close */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+            {/* Minimize */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
+              style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}
+              title="Kecilkan"
+            >
+              {/* minus icon */}
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+            
+          </div>
         </div>
       </div>
 
@@ -907,7 +1012,690 @@ function BmkgStatusBar({ bmkgStatus, refetchBmkg, activeLayers, isDark }) {
   );
 }
 
-export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgStatus, refetchBmkg }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCAL LAYER SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LOCAL_LAYER_COLORS = [
+  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
+  '#ec4899','#14b8a6','#f97316','#84cc16','#06b6d4',
+];
+
+async function loadShpJs() {
+  if (window.shp) return window.shp;
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/shpjs@4.0.4/dist/shp.js';
+    s.onload = () => res(window.shp);
+    s.onerror = () => rej(new Error('Gagal memuat library shpjs'));
+    document.head.appendChild(s);
+  });
+}
+
+async function parseFileToGeoJSON(file, allFiles = []) {
+  const name = file.name.toLowerCase();
+  const ext  = name.split('.').pop();
+  const base = name.replace(/\.[^.]+$/, '');
+
+  if (ext === 'geojson' || ext === 'json') {
+    const text = await file.text();
+    try { return JSON.parse(text); }
+    catch { throw new Error('File JSON tidak valid / rusak.'); }
+  }
+
+  if (ext === 'zip') {
+    const shp = await loadShpJs();
+    const buf = await file.arrayBuffer();
+    try {
+      const result = await shp(buf);
+      if (Array.isArray(result)) {
+        const allFeatures = result.flatMap(fc => fc.features || []);
+        return { type: 'FeatureCollection', features: allFeatures };
+      }
+      return result;
+    } catch (e) {
+      throw new Error(`Gagal baca Shapefile ZIP: ${e.message}`);
+    }
+  }
+
+  if (ext === 'shp') {
+    const shpLib = await loadShpJs();
+    const dbfFile = allFiles.find(f =>
+      f.name.toLowerCase().replace(/\.[^.]+$/, '') === base &&
+      f.name.toLowerCase().endsWith('.dbf')
+    );
+    const shpBuf = await file.arrayBuffer();
+    const dbfBuf = dbfFile ? await dbfFile.arrayBuffer() : null;
+    try {
+      const geoms = await shpLib.parseShp(shpBuf);
+      const attrs = dbfBuf ? await shpLib.parseDbf(dbfBuf) : null;
+const features = geoms.map((geom, i) => ({
+  type: 'Feature',
+  geometry: geom,
+  properties: attrs
+    ? Object.fromEntries(
+        Object.entries(attrs[i] || {}).map(([k, v]) => [
+          k.trim(),  // trim whitespace dari key DBF
+          v === null || v === undefined ? '' : String(v).trim(),
+        ])
+      )
+    : {},
+}));
+      return { type: 'FeatureCollection', features };
+    } catch (e) {
+      throw new Error(`Gagal baca .shp: ${e.message}`);
+    }
+  }
+
+  throw new Error(
+    `Format ".${ext}" tidak didukung. Gunakan: .geojson, .json, .shp (+ .dbf), atau .zip`
+  );
+}
+
+export function useLocalLayers() {
+  const [localLayers, setLocalLayers] = useState([]);
+
+  const addLayer = async (file, allFiles = []) => {
+    try {
+      const geojson = await parseFileToGeoJSON(file, allFiles);
+      const fc = geojson.type === 'FeatureCollection'
+        ? geojson
+        : { type: 'FeatureCollection', features: Array.isArray(geojson) ? geojson : [geojson] };
+
+      const colorIdx = localLayers.length % LOCAL_LAYER_COLORS.length;
+      const newLayer = {
+        id:      `local_${Date.now()}`,
+        name:    file.name.replace(/\.[^.]+$/, ''),
+        color:   LOCAL_LAYER_COLORS[colorIdx],
+        visible: true,
+        opacity: 0.85,
+        geojson: fc,
+        count:   fc.features?.length || 0,
+        error:   null,
+      };
+      setLocalLayers(prev => [...prev, newLayer]);
+      return { success: true, layer: newLayer };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updateLayer = (id, patch) =>
+  setLocalLayers(prev => prev.map(l =>
+    l.id === id ? { ...l, ...patch, _v: (l._v || 0) + 1 } : l
+  ));
+
+  const removeLayer = (id) =>
+    setLocalLayers(prev => prev.filter(l => l.id !== id));
+
+  const toggleVisible = (id) =>
+    setLocalLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+
+  return { localLayers, addLayer, updateLayer, removeLayer, toggleVisible };
+}
+
+export function RenameModal({ layer, onClose, onApply, isDark }) {
+  const allKeys = Array.from(
+  new Set(
+    (layer.geojson?.features || []).flatMap(f =>
+      Object.keys(f.properties || {})
+    )
+  )
+);
+
+  // State untuk rename kolom
+  const [keyMap, setKeyMap] = useState(Object.fromEntries(allKeys.map(k => [k, k])));
+
+  // State untuk edit nilai — semua fitur, semua kolom
+  const [valueMap, setValueMap] = useState(() => {
+    const vm = {};
+    (layer.geojson?.features || []).forEach((f, i) => {
+      vm[i] = { ...(f.properties || {}) };
+    });
+    return vm;
+  });
+
+  const [activeTab, setActiveTab] = useState('rename'); // 'rename' | 'values'
+  const features = layer.geojson?.features || [];
+
+  const handleApply = () => {
+    const newGeojson = {
+      ...layer.geojson,
+      features: features.map((f, i) => {
+        const newProps = {};
+        Object.entries(valueMap[i] || f.properties || {}).forEach(([k, v]) => {
+          const newKey = keyMap[k] || k;
+          newProps[newKey] = v;
+        });
+        return { ...f, properties: newProps };
+      }),
+    };
+    onApply(newGeojson);
+  };
+
+  const tabStyle = (tab) => ({
+    flex: 1, padding: '7px 0', border: 'none', borderRadius: 8, cursor: 'pointer',
+    fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+    background: activeTab === tab ? 'linear-gradient(135deg,#3b82f6,#6366f1)' : 'rgba(255,255,255,0.05)',
+    color: activeTab === tab ? '#fff' : '#64748b',
+  });
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16, padding: '20px', width: 400,
+        maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 25px 80px rgba(0,0,0,0.5)',
+        fontFamily: "'Inter','Segoe UI',sans-serif",
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>
+            Edit Layer
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{layer.name}</div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 4 }}>
+          <button style={tabStyle('rename')} onClick={() => setActiveTab('rename')}>✏ Rename Kolom</button>
+          <button style={tabStyle('values')} onClick={() => setActiveTab('values')}>📝 Edit Nilai</button>
+        </div>
+
+        {/* Tab: Rename Kolom */}
+        {activeTab === 'rename' && (
+          <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 10 }}>Rename nama kolom atribut</div>
+            {allKeys.map(key => (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '5px 8px',
+                  background: 'rgba(255,255,255,0.05)', borderRadius: 6,
+                  color: '#64748b', minWidth: 90, maxWidth: 110,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  flexShrink: 0, fontFamily: 'monospace',
+                }} title={key}>{key}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <input
+                  value={keyMap[key] ?? key}
+                  onChange={e => setKeyMap(prev => ({ ...prev, [key]: e.target.value }))}
+                  style={{
+                    flex: 1, fontSize: 11, fontWeight: 600, padding: '5px 9px',
+                    background: '#0f172a', color: '#e2e8f0',
+                    border: `1px solid ${keyMap[key] !== key ? '#3b82f6' : '#1e293b'}`,
+                    borderRadius: 7, outline: 'none', fontFamily: 'inherit',
+                    boxShadow: keyMap[key] !== key ? '0 0 0 2px rgba(59,130,246,0.2)' : 'none',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tab: Edit Nilai */}
+        {activeTab === 'values' && (
+          <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 10 }}>
+              Edit nilai atribut per fitur ({features.length} fitur)
+            </div>
+            {features.map((f, fi) => {
+              const name = f.properties?.name || f.properties?.NAMOBJ || f.properties?.nama || f.properties?.KABUPATEN || `Fitur ${fi + 1}`;
+              return (
+                <div key={fi} style={{
+                  marginBottom: 12, background: 'rgba(255,255,255,0.03)',
+                  borderRadius: 10, padding: '10px 12px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#3b82f6', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    #{fi + 1} · {String(name).slice(0, 40)}
+                  </div>
+                  {allKeys.map(key => (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: '#475569',
+                        textTransform: 'uppercase', minWidth: 80, flexShrink: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{keyMap[key] || key}</span>
+                      <input
+                        value={valueMap[fi]?.[key] ?? ''}
+                        onChange={e => setValueMap(prev => ({
+                          ...prev,
+                          [fi]: { ...prev[fi], [key]: e.target.value }
+                        }))}
+                        style={{
+                          flex: 1, fontSize: 11, fontWeight: 600, padding: '4px 8px',
+                          background: '#0f172a', color: '#e2e8f0',
+                          border: `1px solid ${valueMap[fi]?.[key] !== (f.properties?.[key] ?? '') ? '#10b981' : '#1e293b'}`,
+                          borderRadius: 6, outline: 'none', fontFamily: 'inherit',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '8px 0', borderRadius: 9,
+            border: '1px solid #334155', background: 'transparent',
+            color: '#64748b', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>Batal</button>
+          <button onClick={handleApply} style={{
+            flex: 2, padding: '8px 0', borderRadius: 9, border: 'none',
+            background: 'linear-gradient(135deg,#3b82f6,#6366f1)',
+            color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(59,130,246,0.4)',
+          }}>✓ Terapkan & Simpan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LocalGeoLayer: render di peta (pakai di komponen Map) ──────────────────
+export function LocalGeoLayer({ localLayers, onRenameLayer, onEditFeature }) {
+
+  useEffect(() => {
+    window.__renameLayer = onRenameLayer;
+    window.__editFeature = onEditFeature;
+    return () => {
+      delete window.__renameLayer;
+      delete window.__editFeature;
+    };
+  }, [onRenameLayer, onEditFeature]);
+
+  return (
+    <>
+      {localLayers.filter(l => l.visible).map(layer => {
+        if (!layer.geojson?.features?.length) return null;
+
+        const pointFeatures    = layer.geojson.features.filter(f => f.geometry?.type === 'Point' || f.geometry?.type === 'MultiPoint');
+        const nonPointFeatures = layer.geojson.features.filter(f => f.geometry?.type !== 'Point' && f.geometry?.type !== 'MultiPoint');
+
+        const nonPointFC = { ...layer.geojson, features: nonPointFeatures };
+        const style = {
+          color:       layer.color,
+          weight:      2,
+          fillColor:   layer.color,
+          fillOpacity: layer.opacity * 0.35,
+          opacity:     layer.opacity,
+        };
+
+        const popupContent = (props, layerId) => {
+  const entries = Object.entries(props || {}).filter(([k]) => !k.startsWith('_'));
+  if (!entries.length) return '<span style="color:#94a3b8;font-size:11px">Tidak ada atribut</span>';
+  const rows = entries.map(([k, v]) =>
+    `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+      <span style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;">${k}</span>
+      <span style="font-size:11px;color:#e2e8f0;text-align:right;max-width:160px;word-break:break-word">${v ?? '-'}</span>
+    </div>`
+  ).join('');
+  return rows + `<div style="margin-top:6px;text-align:right">
+    <span onclick="window.__renameLayer && window.__renameLayer('${layerId}')"
+      style="font-size:9px;color:#3b82f6;cursor:pointer;text-decoration:underline;">
+      ✏ Edit & Rename
+    </span>
+  </div>`;
+};
+
+
+        return (
+          <React.Fragment key={layer.id}>
+            {nonPointFeatures.length > 0 && (
+              <GeoJSON
+  key={`${layer.id}-poly-${layer._v || 0}`}
+  data={nonPointFC}
+                style={style}
+                onEachFeature={(feature, lyr) => {
+                  const featureIndex = nonPointFeatures.indexOf(feature);
+                  lyr.bindPopup(
+                    `<div style="font-family:'Inter',sans-serif;min-width:200px;background:#0f172a;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08)">
+                      <div style="background:${layer.color};padding:8px 11px">
+                        <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px">Layer Lokal · ${layer.name}</div>
+                        <div style="font-size:13px;font-weight:900;color:#fff">${feature.properties?.name || feature.properties?.NAMOBJ || feature.properties?.nama || 'Feature'}</div>
+                      </div>
+                      <div style="padding:8px 10px 10px">${popupContent(feature.properties, layer.id, featureIndex)}</div>
+                    </div>`,
+                    { maxWidth: 280, className: 'terra-popup' }
+                  );
+                  lyr.on({
+                    mouseover: e => e.target.setStyle({ weight: 3, fillOpacity: layer.opacity * 0.5 }),
+                    mouseout:  e => e.target.setStyle(style),
+                  });
+                }}
+              />
+            )}
+            {pointFeatures.map((f, i) => {
+              const coords = f.geometry.coordinates;
+              const [lng, lat] = Array.isArray(coords[0]) ? coords[0] : coords;
+              if (isNaN(lat) || isNaN(lng)) return null;
+              return (
+                <CircleMarker
+                  key={`${layer.id}-pt-${i}-${layer._v || 0}`}
+                  center={[lat, lng]}
+                  radius={7}
+                  pathOptions={{ color: layer.color, fillColor: layer.color, fillOpacity: layer.opacity, weight: 1.5 }}
+                >
+                  <Popup className="terra-popup">
+                    <div style={{ fontFamily: "'Inter',sans-serif", minWidth: 200, background: '#0f172a', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ background: layer.color, padding: '8px 11px' }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 2 }}>Layer Lokal · {layer.name}</div>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: '#fff' }}>{f.properties?.name || f.properties?.nama || 'Point Feature'}</div>
+                      </div>
+                      <div style={{ padding: '8px 10px 10px', fontSize: 11 }} dangerouslySetInnerHTML={{ __html: popupContent(f.properties, layer.id, i) }} />
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+// ─── LocalLayerPanel: UI manajemen layer lokal ───────────────────────────────
+function ColorPicker({ value, onChange, isDark }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ width: 20, height: 20, borderRadius: 5, background: value, border: '2px solid rgba(255,255,255,0.2)', cursor: 'pointer', flexShrink: 0 }}
+        title="Ganti warna"
+      />
+      {open && (
+        <div
+          style={{
+            position: 'absolute', top: 24, left: 0, zIndex: 9999,
+            background: isDark ? '#1e293b' : '#fff',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+            borderRadius: 10, padding: 8,
+            display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 5,
+            boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+          }}
+        >
+          {LOCAL_LAYER_COLORS.map(c => (
+            <button
+              key={c}
+              onClick={() => { onChange(c); setOpen(false); }}
+              style={{
+                width: 20, height: 20, borderRadius: 5, background: c,
+                border: c === value ? '2px solid #fff' : '2px solid transparent',
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+          {/* Custom hex input */}
+          <input
+            type="color"
+            defaultValue={value}
+            onChange={e => { onChange(e.target.value); setOpen(false); }}
+            style={{ width: 20, height: 20, padding: 0, border: 'none', borderRadius: 5, cursor: 'pointer', gridColumn: 'span 5' }}
+            title="Warna kustom"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LocalLayerRow({ layer, onUpdate, onRemove, onToggleVisible, isDark }) {
+  const [editing, setEditing] = useState(false);
+  const [nameInput, setNameInput] = useState(layer.name);
+
+  const commitName = () => {
+    if (nameInput.trim()) onUpdate(layer.id, { name: nameInput.trim() });
+    else setNameInput(layer.name);
+    setEditing(false);
+  };
+
+  return (
+    <div
+      className="rounded-xl border transition-all duration-150"
+      style={{
+        borderColor: layer.visible ? `${layer.color}50` : (isDark ? 'rgb(51 65 85 / 0.4)' : 'rgb(209 213 219 / 0.4)'),
+        backgroundColor: layer.visible ? `${layer.color}0d` : 'transparent',
+        padding: '8px 10px',
+        opacity: layer.visible ? 1 : 0.6,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Visibility toggle */}
+        <button
+          onClick={() => onToggleVisible(layer.id)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: layer.visible ? layer.color : (isDark ? '#475569' : '#94a3b8'), padding: 2, flexShrink: 0 }}
+          title={layer.visible ? 'Sembunyikan' : 'Tampilkan'}
+        >
+          {layer.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+        </button>
+
+        {/* Color picker */}
+        <ColorPicker
+          value={layer.color}
+          onChange={c => onUpdate(layer.id, { color: c })}
+          isDark={isDark}
+        />
+
+        {/* Name (editable) */}
+        {editing ? (
+          <input
+            autoFocus
+            value={nameInput}
+            onChange={e => setNameInput(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { setNameInput(layer.name); setEditing(false); } }}
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              borderBottom: `1px solid ${layer.color}`,
+              color: isDark ? '#e2e8f0' : '#1e293b',
+              fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+              padding: '1px 2px',
+            }}
+          />
+        ) : (
+          <span
+            style={{ flex: 1, fontSize: 12, fontWeight: 600, color: isDark ? '#e2e8f0' : '#1e293b', cursor: 'text', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            onClick={() => setEditing(true)}
+            title="Klik untuk edit nama"
+          >
+            {layer.name}
+          </span>
+        )}
+
+        {/* Feature count badge */}
+        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 99, background: `${layer.color}25`, color: layer.color, flexShrink: 0 }}>
+          {layer.count.toLocaleString('id-ID')}
+        </span>
+
+        {/* Download */}
+        <button
+          onClick={() => {
+            const blob = new Blob([JSON.stringify(layer.geojson, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${layer.name}.geojson`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', padding: 2, flexShrink: 0 }}
+          title="Download GeoJSON"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+
+        {/* Edit / Delete */}
+        <button
+          onClick={() => setEditing(true)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: isDark ? '#475569' : '#94a3b8', padding: 2, flexShrink: 0 }}
+          title="Edit nama"
+        >
+          <Edit2 size={11} />
+        </button>
+        <button
+          onClick={() => onRemove(layer.id)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2, flexShrink: 0 }}
+          title="Hapus layer"
+        >
+          <Trash2 size={11} />
+        </button>
+      </div>
+
+      {/* Opacity slider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, paddingLeft: 2 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#475569' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.08em', whiteSpace: 'nowrap' }}>Opacity</span>
+        <input
+          type="range" min="0.1" max="1" step="0.05"
+          value={layer.opacity}
+          onChange={e => onUpdate(layer.id, { opacity: parseFloat(e.target.value) })}
+          style={{ flex: 1, accentColor: layer.color, height: 3 }}
+        />
+        <span style={{ fontSize: 9, color: isDark ? '#475569' : '#94a3b8', minWidth: 28, textAlign: 'right' }}>
+          {Math.round(layer.opacity * 100)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function LocalLayerPanel({ localLayers, addLayer, updateLayer, removeLayer, toggleVisible, isDark }) {
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFiles = async (files) => {
+    if (!files?.length) return;
+    const fileArr = Array.from(files);
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    // Hanya proses file "utama" — .dbf/.prj/.shx diabaikan (dibaca otomatis)
+    const mainFiles = fileArr.filter(f => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      return ['geojson', 'json', 'zip', 'shp'].includes(ext);
+    });
+
+    for (const file of mainFiles) {
+      const result = await addLayer(file, fileArr);
+      if (!result.success) {
+        setUploadError(result.error);
+      } else {
+        setUploadSuccess(`"${result.layer.name}" dimuat (${result.layer.count.toLocaleString('id-ID')} fitur)`);
+        setTimeout(() => setUploadSuccess(null), 4000);
+      }
+    }
+    setUploading(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  return (
+    <div className={`border-b flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-slate-200/50'}`}>
+      {/* Header grup */}
+      <div className={`px-3 py-2 flex items-center gap-2.5 ${isDark ? '' : ''}`}>
+        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#10b981', boxShadow: '0 0 6px #10b98180' }} />
+        <span className={`flex-1 text-left text-[10px] font-black uppercase tracking-[0.12em] leading-none ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          Layer Lokal
+        </span>
+        {localLayers.length > 0 && (
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-300/50 text-slate-600'}`}>
+            {localLayers.length}
+          </span>
+        )}
+      </div>
+
+      <div className={`h-px mx-3 mb-1.5 bg-gradient-to-r from-transparent to-transparent ${isDark ? 'via-slate-700/50' : 'via-slate-300/50'}`} />
+
+      <div className="px-2 pb-3 space-y-2">
+        {/* Drop zone */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-xl border-2 border-dashed cursor-pointer transition-all duration-150 flex flex-col items-center justify-center py-3 gap-1.5"
+          style={{
+            borderColor: dragging ? '#10b981' : (isDark ? 'rgba(71,85,105,0.6)' : 'rgba(156,163,175,0.6)'),
+            background:  dragging ? 'rgba(16,185,129,0.08)' : 'transparent',
+          }}
+        >
+          <Upload size={16} style={{ color: dragging ? '#10b981' : (isDark ? '#475569' : '#94a3b8') }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: dragging ? '#10b981' : (isDark ? '#64748b' : '#9ca3af') }}>
+            {uploading ? 'Memproses...' : 'Klik atau drop file di sini'}
+          </span>
+          <span style={{ fontSize: 9, color: isDark ? '#334155' : '#d1d5db' }}>
+            .geojson · .zip · atau pilih .shp + .dbf bersamaan
+          </span>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".geojson,.json,.zip,.shp,.dbf,.prj,.shx"
+          multiple
+          style={{ display: 'none' }}
+          onChange={e => handleFiles(e.target.files)}
+        />
+
+        {/* Status messages */}
+        {uploadError && (
+          <div style={{ fontSize: 10, color: '#ef4444', background: 'rgba(239,68,68,0.1)', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <AlertTriangle size={10} />
+            {uploadError}
+          </div>
+        )}
+        {uploadSuccess && (
+          <div style={{ fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Check size={10} />
+            {uploadSuccess}
+          </div>
+        )}
+
+        {/* Layer list */}
+        {localLayers.map(layer => (
+          <LocalLayerRow
+            key={layer.id}
+            layer={layer}
+            onUpdate={updateLayer}
+            onRemove={removeLayer}
+            onToggleVisible={toggleVisible}
+            isDark={isDark}
+          />
+        ))}
+
+        {localLayers.length === 0 && !uploading && (
+          <p style={{ fontSize: 10, color: isDark ? '#334155' : '#d1d5db', textAlign: 'center', padding: '2px 0' }}>
+            Belum ada layer lokal
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgStatus, refetchBmkg, localLayers, addLayer, updateLayer, removeLayer, toggleVisible }) {
   const [legendOpen, setLegendOpen] = useState(true);
   const totalActive = activeLayers.filter(id => LEGEND_MAP[id]).length;
 
@@ -942,6 +1730,17 @@ export default function LayersPanel({ activeLayers, onToggleLayer, isDark, bmkgS
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-700">
+
+          {/* ── LOCAL LAYERS di atas ── */}
+            <LocalLayerPanel
+              localLayers={localLayers || []}
+              addLayer={addLayer || (async () => {})}
+              updateLayer={updateLayer || (() => {})}
+              removeLayer={removeLayer || (() => {})}
+              toggleVisible={toggleVisible || (() => {})}
+              isDark={isDark}
+            />
+
         <div className="px-2 py-3 space-y-1">
 
           <LayerGroup label="Batas Wilayah" dotColor="#3b82f6" defaultOpen={true} isDark={isDark}>
