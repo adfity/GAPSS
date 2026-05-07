@@ -130,7 +130,10 @@ urlpatterns = [
     # ---------------------------------------------------------------------------------------------------------
     #  WAYPOINT PENDIDIKAN 
     path('waypoint/pendidikan/',              waypoint_views.waypoint_pendidikan),
-    path('waypoint/pendidikan/school/',       waypoint_views.waypoint_school),
+    path('waypoint/pendidikan/sd/',           waypoint_views.waypoint_sd),
+    path('waypoint/pendidikan/smp/',          waypoint_views.waypoint_smp),
+    path('waypoint/pendidikan/sma/',          waypoint_views.waypoint_sma),
+    path('waypoint/pendidikan/smk/',          waypoint_views.waypoint_smk),
     path('waypoint/pendidikan/kindergarten/', waypoint_views.waypoint_kindergarten),
     path('waypoint/pendidikan/college/',      waypoint_views.waypoint_college),
     path('waypoint/pendidikan/university/',   waypoint_views.waypoint_university),

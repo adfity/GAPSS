@@ -4,17 +4,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  Home, Map, Users, Utensils, TreePine, BarChart3,
-  ChevronRight, ChevronDown, ChevronsLeft,
+  Home, Users, Utensils, TreePine, BarChart3, ChevronsLeft,
 } from "lucide-react";
 
 const menuItems = [
-  { label: "Home", icon: Home, href: "/map" },
-  // { label: "Map",     icon: Map,  href: "/map"     },
-  { label: "SDM Nasional ",    icon: Users,  href: "/analisis/sdm"              },
-  { label: "Ketahanan Pangan",    icon: Utensils,  href: "/analisis/pangan"              },
-  { label: "Sumber Kekayaan Alam",icon: TreePine,  href: "/analisis/sda"                 },
-  { label: "Pertumbuhan Ekonomi", icon: BarChart3, href: "/not-found" },
+  { label: "Home",                 icon: Home,      href: "/map",             color: "#60a5fa" },
+  { label: "SDM Nasional",         icon: Users,     href: "/analisis/sdm",    color: "#a78bfa" },
+  { label: "Ketahanan Pangan",     icon: Utensils,  href: "/analisis/pangan", color: "#34d399" },
+  { label: "Sumber Kekayaan Alam", icon: TreePine,  href: "/analisis/sda",    color: "#38bdf8" },
+  { label: "Pertumbuhan Ekonomi",  icon: BarChart3, href: "/not-found",       color: "#fbbf24" },
 ];
 
 const notifyHeaderbar = (isOpen) => {
@@ -27,7 +25,7 @@ export default function SideBar() {
   const pathname      = usePathname();
   const isLandingPage = pathname === "/";
 
-  const [isOpen,      setIsOpen]      = useState(false);
+  const [isOpen,   setIsOpen]   = useState(false);
   const sidebarRef = useRef(null);
 
   if (isLandingPage) return null;
@@ -40,8 +38,18 @@ export default function SideBar() {
         return next;
       });
     };
+    const onOpen = () => {
+      setIsOpen((prev) => {
+        if (!prev) notifyHeaderbar(true);
+        return true;
+      });
+    };
     window.addEventListener("toggle-sidebar", onToggle);
-    return () => window.removeEventListener("toggle-sidebar", onToggle);
+    window.addEventListener("toggle-sidebar-open", onOpen);
+    return () => {
+      window.removeEventListener("toggle-sidebar", onToggle);
+      window.removeEventListener("toggle-sidebar-open", onOpen);
+    };
   }, []);
 
   useEffect(() => {
@@ -77,21 +85,19 @@ export default function SideBar() {
       <aside
         ref={sidebarRef}
         className={`fixed top-0 left-0 h-full z-[1300]
-                    w-[285px] flex flex-col
-                    bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl
+                    w-[260px] flex flex-col
+                    bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl
                     border-r border-white/20 dark:border-slate-700/30
                     shadow-2xl shadow-black/10
                     transition-transform duration-300 ease-in-out
                     ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        {/* Header: Logo + Close */}
+        {/* Header */}
         <div className="flex items-center justify-between px-5 h-[60px] shrink-0
                         border-b border-white/20 dark:border-slate-700/30">
           <Link href="/" onClick={close} className="flex items-center hover:opacity-85 transition-opacity">
-            <Image src="/icons/GAPSS.png" alt="Synap" width={100} height={40} />
+            <Image src="/icons/GAPSS.png" alt="GAPSS" width={100} height={40} />
           </Link>
-
-          {/* Close button */}
           <button
             onClick={close}
             aria-label="Tutup Sidebar"
@@ -101,50 +107,54 @@ export default function SideBar() {
                       text-[#1378b7] dark:text-cyan-400
                       transition-all duration-200 group select-none"
           >
-            <ChevronsLeft
-              size={18}
-              strokeWidth={4}
-              className="group-hover:-translate-x-0.5 transition-transform"
-            />
-            
+            <ChevronsLeft size={18} strokeWidth={4}
+              className="group-hover:-translate-x-0.5 transition-transform" />
           </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar space-y-1">
           {menuItems.map((item, idx) => {
-            const Icon = item.icon;
-
+            const Icon     = item.icon;
+            const isActive = isActiveHref(item.href);
             return (
               <Link
                 key={idx}
                 href={item.href}
                 onClick={close}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl
-                            text-[15px] font-semibold transition-all duration-200
-                            ${isActiveHref(item.href)
+                            text-[14px] font-semibold transition-all duration-200
+                            ${isActive
                               ? "bg-gradient-to-r from-[#1378b7] to-[#1e90d8] text-white shadow-md shadow-[#1378b7]/30"
                               : "text-slate-700 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-700/50 hover:text-black dark:hover:text-white"
                             }`}
+              >
+                {/* Icon dengan background warna */}
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{
+                    background: isActive ? "rgba(255,255,255,0.2)" : `${item.color}22`,
+                  }}
                 >
-                <Icon size={19} className="shrink-0" />
+                  <Icon
+                    size={16}
+                    strokeWidth={2}
+                    style={{ color: isActive ? "white" : item.color }}
+                  />
+                </div>
                 <span className="flex-1">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        
+        {/* Footer */}
         <div className="px-5 py-4 border-t border-white/30 dark:border-slate-700/40 mt-auto">
           <div className="flex items-center justify-center gap-2">
-            {/* Indikator hijau dengan efek glow halus di dark mode */}
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_4px_#10b981] dark:shadow-[0_0_6px_#34d399]" />
-            
-            {/* Teks dengan kontras tinggi di light & dark mode */}
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400
+                            shadow-[0_0_4px_#10b981] dark:shadow-[0_0_6px_#34d399]" />
             <p className="text-[11px] font-medium tracking-wide uppercase
-                          text-gray-600 dark:text-gray-400
-                          hover:text-gray-800 dark:hover:text-gray-300
-                          transition-colors duration-200">
+                          text-gray-600 dark:text-gray-400">
               Badan Informasi Geospasial
             </p>
           </div>

@@ -4,11 +4,10 @@ import axios from 'axios';
 import { MapContainer, TileLayer, ScaleControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import toast from 'react-hot-toast';
-
 import MapStuff from './MapStuff';
 import GeoAI from './panel/geoai';
 import BasemapPanel, { BASEMAP_OPTIONS } from './panel/basemap';
-import LayersPanel from './panel/layers';
+import LayersPanel, { useLocalLayers, LocalGeoLayer, RenameModal } from './panel/layers';
 import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
@@ -20,11 +19,12 @@ import {
   useAutoGempa,
   BmkgLayer,
   BmkgAlertBanner,
+  WAYPOINT_LAYERS,
 } from './panel/layers';
 
 // ─── Panel Wrapper ─────────────────────────────────────────────────────────────
 
-function PanelWrapper({ isMobile, onClose, children, isDark }) {
+function PanelWrapper({ isMobile, onClose, children, isDark, hidden = false }) {
   const base = isMobile
     ? 'fixed top-[60px] bottom-20 left-0 right-0 w-full rounded-none'
     : 'fixed top-[68px] bottom-6 right-20 w-80 rounded-2xl';
@@ -42,6 +42,7 @@ function PanelWrapper({ isMobile, onClose, children, isDark }) {
           ${bgColor} border ${borderColor} ${textColor}
         `}
         style={{
+          display: hidden ? 'none' : undefined,
           boxShadow: isDark
             ? '0 8px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)'
             : '0 8px 30px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.05)',
@@ -49,11 +50,16 @@ function PanelWrapper({ isMobile, onClose, children, isDark }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-400 z-10 rounded-t-2xl pointer-events-none" />
-        
-        {/* Tombol Close */}
-        <button
+
+        {/* Tombol Close — FIX #1: pakai <div> bukan <button> di dalam elemen yang
+            mungkin sudah di-render sebagai <button> oleh komponen parent,
+            sehingga tidak ada nested <button> di DOM. */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onClose}
-          className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors ${
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClose()}
+          className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${
             isDark
               ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
               : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -63,7 +69,7 @@ function PanelWrapper({ isMobile, onClose, children, isDark }) {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </div>
 
         {children}
       </aside>
@@ -113,12 +119,15 @@ export default function MainMap({ activePanel, setActivePanel }) {
 
   // Kabupaten overlay
   const [kabState, setKabState] = useState({
-    scanMode:             'manual',
-    kabupatenList:        [],
-    selectedKabupaten:    null,
-    isKabupatenClickMode: false,
-    handleSelect:         null,
-  });
+  scanMode: 'manual', kabupatenList: [], selectedKabupaten: null,
+  isKabupatenClickMode: false, handleSelect: null,
+});
+
+//  state untuk radius dari GeoAreaScanPanel
+const [radiusMapState, setRadiusMapState] = useState({
+  radiusLayers: [], activeRadius: null, radiusCenter: null,
+  waypointsInRadius: [], allRadiusPolygons: [], isRadiusMode: false,
+});
 
   // ── Responsive ────────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
@@ -145,7 +154,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
       });
     }
     if (!isAreaScan) setIsDrawingArea(false);
-  }, [activePanel]);
+  }, [activePanel, isScanning]);
 
   useEffect(() => {
     setShowPreviewBox(activePanel === 'geoai');
@@ -197,7 +206,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
         }
       );
     }
-  }, [autoGempa]);
+  }, [autoGempa, isDark]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const getCategoryColor = (cat) => ({
@@ -207,7 +216,41 @@ export default function MainMap({ activePanel, setActivePanel }) {
     jalan:     '#64748b',
   }[cat?.toLowerCase()] ?? '#ef4444');
 
+  // FIX #2: waypointData sudah di-declare di sini (sebelumnya sudah ada tapi
+  // tidak di-pass ke RadiusPanel). Sekarang kita pastikan ter-pass dengan benar.
   const { waypointData } = useWaypointData(activeLayers);
+  const { localLayers, addLayer, updateLayer, removeLayer, toggleVisible } = useLocalLayers();
+
+  const handleEditFeature = (layerId, featureIndex, key, newValue) => {
+  const layer = localLayers.find(l => l.id === layerId);
+  if (!layer) return;
+
+  updateLayer(layerId, {
+    geojson: {
+      ...layer.geojson,
+      features: layer.geojson.features.map((f, i) =>
+        i === featureIndex
+          ? { ...f, properties: { ...f.properties, [key]: newValue } }
+          : f
+      ),
+    },
+  });
+
+  const input = document.querySelector(
+    `input[data-layer="${layerId}"][data-fidx="${featureIndex}"][data-key="${key}"]`
+  );
+  if (input) {
+    input.style.borderColor = '#10b981';
+    input.style.background  = 'rgba(16,185,129,0.15)';
+    setTimeout(() => {
+      input.style.borderColor = 'transparent';
+      input.style.background  = 'rgba(255,255,255,0.05)';
+    }, 1000);
+  }
+};
+
+  const [renamingLayerId, setRenamingLayerId] = useState(null);
+const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
 
   const toggleLayer = (id) =>
     setActiveLayers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -221,6 +264,7 @@ export default function MainMap({ activePanel, setActivePanel }) {
 
   const closePanel = () => setActivePanel(null);
 
+  // Radius panel style helpers
   const radiusPanelCls    = isMobile
     ? 'fixed top-[60px] bottom-20 left-0 right-0 w-full rounded-none'
     : 'fixed top-[68px] bottom-6 right-20 w-80 rounded-2xl';
@@ -233,12 +277,6 @@ export default function MainMap({ activePanel, setActivePanel }) {
 
       {/* ─── Panels ──────────────────────────────────────────────────────── */}
 
-      {activePanel === 'basemap' && (
-        <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
-          <BasemapPanel activeUrl={currentBasemap.url} onSelect={setCurrentBasemap} isDark={isDark} />
-        </PanelWrapper>
-      )}
-
       {activePanel === 'layers' && (
         <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
           <LayersPanel
@@ -247,9 +285,27 @@ export default function MainMap({ activePanel, setActivePanel }) {
             isDark={isDark}
             bmkgStatus={bmkgStatus}
             refetchBmkg={refetchBmkg}
+            localLayers={localLayers}
+            addLayer={addLayer}
+            updateLayer={updateLayer}
+            removeLayer={removeLayer}
+            toggleVisible={toggleVisible}
           />
         </PanelWrapper>
       )}
+
+      {activePanel === 'basemap' && (
+  <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
+    <BasemapPanel
+      currentBasemap={currentBasemap}
+      onSelect={(bm) => {
+        setCurrentBasemap(bm);
+        closePanel();
+      }}
+      isDark={isDark}
+    />
+  </PanelWrapper>
+)}
 
       {activePanel === 'analysis' && (
         <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
@@ -278,31 +334,40 @@ export default function MainMap({ activePanel, setActivePanel }) {
       )}
 
       {activePanel === 'areascan' && (
-        <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
-          <GeoAreaScanPanel
-            mapRef={mapRef} zoomLevel={zoomLevel} onNewData={refreshData}
-            isDrawingArea={isDrawingArea}     setIsDrawingArea={setIsDrawingArea}
-            drawnBounds={drawnBounds}         setDrawnBounds={setDrawnBounds}
-            tileGrid={tileGrid}               setTileGrid={setTileGrid}
-            previewResults={previewResults}   setPreviewResults={setPreviewResults}
-            scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
-            tileStats={tileStats}             setTileStats={setTileStats}
-            isScanning={isScanning}           setIsScanning={setIsScanning}
-            onKabupatenStateChange={setKabState}
-            isDark={isDark}
-          />
-        </PanelWrapper>
-      )}
+  <PanelWrapper
+    isMobile={isMobile}
+    onClose={closePanel}
+    isDark={isDark}
+    hidden={isScanning && kabState.scanMode === 'kabupaten'}
+  >
+    <GeoAreaScanPanel
+      mapRef={mapRef} zoomLevel={zoomLevel} onNewData={refreshData}
+      isDrawingArea={isDrawingArea}     setIsDrawingArea={setIsDrawingArea}
+      drawnBounds={drawnBounds}         setDrawnBounds={setDrawnBounds}
+      tileGrid={tileGrid}               setTileGrid={setTileGrid}
+      previewResults={previewResults}   setPreviewResults={setPreviewResults}
+      scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
+      tileStats={tileStats}             setTileStats={setTileStats}
+      isScanning={isScanning}           setIsScanning={setIsScanning}
+      onKabupatenStateChange={setKabState}
+      isDark={isDark}
+      waypointData={waypointData}
+      waypointLayers={WAYPOINT_LAYERS}
+      activeLayers={activeLayers}
+      onRadiusStateChange={setRadiusMapState}
+    />
+  </PanelWrapper>
+)}
 
       {/* Search */}
-      <SearchLocation 
-  mapRef={mapRef} 
-  modeBersih={modeBersih} 
-  activeLayers={activeLayers}
-  isDark={isDark} 
-/>
+      <SearchLocation
+        mapRef={mapRef}
+        modeBersih={modeBersih}
+        activeLayers={activeLayers}
+        isDark={isDark}
+      />
 
-      {/* ─── BMKG Realtime Alert Banner — kiri bawah, hilang saat mode bersih */}
+      {/* ─── BMKG Realtime Alert Banner */}
       <BmkgAlertBanner
         autoGempa={autoGempa}
         dismissed={dismissed}
@@ -340,13 +405,19 @@ export default function MainMap({ activePanel, setActivePanel }) {
         />
 
         <AreaScanOverlay
-          isActive={activePanel === 'areascan'}
-          isDrawing={isDrawingArea}   onBoundsSet={setDrawnBounds}
-          drawnBounds={drawnBounds}   tileGrid={tileGrid}
-          scanningTileIdx={scanningTileIdx} previewResults={previewResults}
-          onTileClick={handleTileClick}     isScanning={isScanning}
-          isDark={isDark}
-        />
+  isActive={activePanel === 'areascan'}
+  isDrawing={isDrawingArea}   onBoundsSet={setDrawnBounds}
+  drawnBounds={drawnBounds}   tileGrid={tileGrid}
+  scanningTileIdx={scanningTileIdx} previewResults={previewResults}
+  onTileClick={handleTileClick}     isScanning={isScanning}
+  isDark={isDark}
+  isRadiusMode={radiusMapState.isRadiusMode}
+  radiusLayers={radiusMapState.radiusLayers}
+  activeRadius={radiusMapState.activeRadius}
+  radiusCenter={radiusMapState.radiusCenter}
+  waypointsInRadius={radiusMapState.waypointsInRadius}
+  allRadiusPolygons={radiusMapState.allRadiusPolygons}
+/>
 
         {activePanel === 'areascan' && kabState.scanMode === 'kabupaten' && (
           <KabupatenMapOverlay
@@ -359,16 +430,22 @@ export default function MainMap({ activePanel, setActivePanel }) {
           />
         )}
 
-        {/* BMKG Layer — gempa, tsunami, cuaca ekstrim, karhutla, peringatan dini */}
+        {/* BMKG Layer */}
         <BmkgLayer activeLayers={activeLayers} bmkgData={bmkgData} />
 
         {/* Waypoint layers */}
         <WaypointLayer activeLayers={activeLayers} waypointData={waypointData} />
 
-        {/* ScaleControl — dipindah ke kanan bawah */}
-        <ScaleControl position="bottomright" imperial={true} metric={true} />
+        {/* Local layers (upload lokal) */}
+        <LocalGeoLayer
+  localLayers={localLayers}
+  onRenameLayer={(id) => setRenamingLayerId(id)}
+  onEditFeature={handleEditFeature}
+/>
 
-        {/* RadiusPanel */}
+        {/* ScaleControl */}
+        {!modeBersih && <ScaleControl position="bottomright" imperial={true} metric={true} />}
+
         {activePanel === 'radius' && (
           <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
             <aside
@@ -386,11 +463,15 @@ export default function MainMap({ activePanel, setActivePanel }) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-violet-500 to-cyan-400 z-10 rounded-t-2xl" />
-              
-              {/* Tombol Close untuk Radius Panel */}
-              <button
+
+              {/* FIX #1 — Tombol Close: pakai <div role="button"> bukan <button>
+                  untuk menghindari nested button / HTML hydration error */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={closePanel}
-                className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors ${
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && closePanel()}
+                className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${
                   isDark
                     ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -400,18 +481,47 @@ export default function MainMap({ activePanel, setActivePanel }) {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </div>
 
+              {/* FIX #2 — Pass waypointData, waypointLayers, activeLayers ke
+                  RadiusPanel agar RadiusValidationPanel bisa mendeteksi waypoint
+                  yang aktif dari LayersPanel */}
               <RadiusPanel
-                activeRadius={activeRadius} setActiveRadius={setActiveRadius}
+                activeRadius={activeRadius}
+                setActiveRadius={setActiveRadius}
                 onRadiusCreated={(r) => console.log('Radius dibuat:', r)}
                 onRadiusCleared={(id) => console.log('Radius dihapus:', id)}
                 isDark={isDark}
+                /* ↓ Props baru untuk integrasi waypoint validation */
+                waypointData={waypointData}
+                waypointLayers={WAYPOINT_LAYERS}
+                activeLayers={activeLayers}
+                mapRef={mapRef}
               />
             </aside>
           </div>
         )}
       </MapContainer>
+
+          {renamingLayer && (
+  <RenameModal
+    layer={renamingLayer}
+    onClose={() => setRenamingLayerId(null)}
+    onApply={(newGeojson) => {
+      updateLayer(renamingLayer.id, { geojson: newGeojson });
+      setRenamingLayerId(null);
+
+      // Force close semua popup Leaflet yang terbuka
+      // agar saat diklik lagi, popup re-render dengan data terbaru
+      setTimeout(() => {
+        const map = mapRef.current;
+        if (map) map.closePopup();
+      }, 50);
+    }}
+    isDark={isDark}
+  />
+)}
+
     </div>
   );
 }

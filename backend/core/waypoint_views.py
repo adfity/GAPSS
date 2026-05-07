@@ -1,4 +1,5 @@
 import os
+import re
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -44,11 +45,59 @@ def waypoint_pendidikan(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
+# ─── Helper deteksi jenjang dari nama ────────────────────────────────────────
+SMK_PAT = re.compile(r'\b(SMK|SMKN|SMKS|Vocational|Kejuruan)\b', re.I)
+SMA_PAT = re.compile(r'\b(SMA|SMAN|SMAS|MA|MAN|MAS|SLTA|Aliyah)\b', re.I)
+SMP_PAT = re.compile(r'\b(SMP|SMPN|SMPS|MTs|MTsN|MTsS|SLTP|Tsanawiyah)\b', re.I)
+SD_PAT  = re.compile(r'\b(SD|SDN|SDS|MI|MIN|MIS|Ibtidaiyah|Elementary)\b', re.I)
+
+def _fetch_school_by_jenjang(jenjang: str):
+    db   = get_db()
+    docs = list(db["waypoint_pendidikan"].find(
+        {"properties.amenity": "school"}, {"_id": 0}
+    ))
+    filtered = []
+    for doc in docs:
+        name = doc.get("properties", {}).get("name", "")
+        if jenjang == "smk" and SMK_PAT.search(name):
+            filtered.append(doc)
+        elif jenjang == "sma" and not SMK_PAT.search(name) and SMA_PAT.search(name):
+            filtered.append(doc)
+        elif jenjang == "smp" and SMP_PAT.search(name):
+            filtered.append(doc)
+        elif jenjang == "sd" and SD_PAT.search(name):
+            filtered.append(doc)
+    return {"type": "FeatureCollection", "features": filtered}
+
 @api_view(['GET'])
-def waypoint_school(request):
-    """GET /api/waypoint/pendidikan/school/"""
+def waypoint_sd(request):
+    """GET /api/waypoint/pendidikan/sd/"""
     try:
-        return Response(_fetch("waypoint_pendidikan", "school"))
+        return Response(_fetch_school_by_jenjang("sd"))
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+def waypoint_smp(request):
+    """GET /api/waypoint/pendidikan/smp/"""
+    try:
+        return Response(_fetch_school_by_jenjang("smp"))
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+def waypoint_sma(request):
+    """GET /api/waypoint/pendidikan/sma/"""
+    try:
+        return Response(_fetch_school_by_jenjang("sma"))
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+def waypoint_smk(request):
+    """GET /api/waypoint/pendidikan/smk/"""
+    try:
+        return Response(_fetch_school_by_jenjang("smk"))
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 

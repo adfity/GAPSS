@@ -8,9 +8,9 @@ import { toast } from 'react-hot-toast';
 // ─── Styling ──────────────────────────────────────────────────────────────────
 
 const glass = [
-  "bg-white/85 dark:bg-slate-900/85",
+  "bg-white/30 dark:bg-slate-900/30",
   "backdrop-blur-md",
-  "border border-white/70 dark:border-slate-700/60",
+  "border border-white/20 dark:border-slate-700/30",
   "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
 ].join(" ");
 
@@ -525,7 +525,7 @@ export default function SearchLocation({ mapRef, modeBersih, activeLayers = [] }
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && searchQuery.trim() && searchSuggestions.length > 0 && handleSearch(searchSuggestions[0])}
               placeholder="Cari wilayah, fasilitas…"
-              className="flex-1 bg-transparent text-sm text-black dark:text-white placeholder-slate-400 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-white placeholder-white/50 outline-none min-w-0"
               autoFocus
             />
             <button
@@ -537,11 +537,11 @@ export default function SearchLocation({ mapRef, modeBersih, activeLayers = [] }
           </div>
 
           <div className="px-3 pb-2">
-            {activeLayers.some(id => id.startsWith('waypoint_')) || activeLayers.includes('batas_provinsi') || activeLayers.includes('batas_kabupaten')
-              ? <span className="text-[10px] text-slate-400">Ketik nama dari layer yang aktif</span>
-              : <span className="text-[10px] text-slate-500 italic">Aktifkan layer terlebih dahulu</span>
-            }
-          </div>
+  {activeLayers.some(id => id.startsWith('waypoint_')) || activeLayers.includes('batas_provinsi') || activeLayers.includes('batas_kabupaten')
+    ? <span className="text-[10px] text-white/70">Ketik nama dari layer yang aktif</span>
+    : <span className="text-[10px] text-white/60 italic">Aktifkan layer terlebih dahulu</span>
+  }
+</div>
 
           {searchSuggestions.length > 0 && (
             <div className="border-t border-slate-100 dark:border-slate-700/60 max-h-56 overflow-y-auto">
@@ -590,8 +590,8 @@ export default function SearchLocation({ mapRef, modeBersih, activeLayers = [] }
         <button
           onClick={() => setSearchTerbuka(true)}
           className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                      text-black dark:text-white hover:bg-white dark:hover:bg-slate-800
-                      transition-all active:scale-90`}
+            text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40
+            transition-all active:scale-90`}
           title="Cari Wilayah & Fasilitas"
         >
           <Search size={15} />
@@ -604,8 +604,8 @@ export default function SearchLocation({ mapRef, modeBersih, activeLayers = [] }
           onClick={clearHighlight}
           title="Hapus highlight"
           className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
-                      text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30
-                      transition-all active:scale-90`}
+            text-red-500 hover:!bg-red-500/10 dark:hover:!bg-red-500/10
+            transition-all active:scale-90`}
         >
           <Trash2 size={14} />
         </button>
