@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@geoman-io/leaflet-geoman-free": "^2.19.3",
     "@hookform/resolvers": "^5.2.2",
     "axios": "^1.13.2",
     "esri-leaflet": "^3.0.19",

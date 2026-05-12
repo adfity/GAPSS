@@ -27,26 +27,31 @@ body {
   font-size: 14px;
   padding: 6px 12px;
   border: 2px solid #000;
-  background: rgba(255,255,255,0.9);
+  background: transparent;
   font-weight: 600;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155; /* slate-700 */
+  background: #334155;
+  /* slate-700 */
   border-radius: 10px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #475569; /* slate-600 */
+  background: #475569;
+  /* slate-600 */
 }
 
 #home,
 #features,
 #how-it-works,
 #cta {
-  scroll-margin-top: 80px; /* header height */
+  scroll-margin-top: 80px;
+  /* header height */
 }
 
 /* Tambahkan ke global.css atau tailwind.config.js */
@@ -55,6 +60,7 @@ body {
     transform: translateY(-10px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -62,10 +68,49 @@ body {
 }
 
 @keyframes fadeInScale {
-  from { opacity: 0; transform: scale(0.98); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .animate-slideDown {
   animation: slideDown 0.2s ease-out;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Panel slide-in animation */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.panel-slide-in {
+  animation: slideInRight 0.25s ease-out;
+}
+
+/* Minimap styling */
+.minimap-container .leaflet-container {
+  border-radius: 12px;
 }
