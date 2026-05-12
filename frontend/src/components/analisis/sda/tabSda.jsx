@@ -1,206 +1,480 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
-  Download, BookOpen, Loader2, CheckCircle2, XCircle, AlertTriangle,
-  AlertCircle, Check, BarChart2, ChevronDown, Info, Bot,
-  Cpu, Activity, TrendingUp, ShieldCheck, Fish, Trees,
-  Filter, Calendar, Leaf, DollarSign, Users,
+  Download, ChevronDown, Info, BookOpen,
+  BarChart2, Check, TrendingUp, TrendingDown, ClipboardList,
+  AlertCircle, Search, X, Activity, ExternalLink, Fish, Trees, DollarSign,
+  Calendar,
 } from 'lucide-react';
-
+import * as XLSX from 'xlsx';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RTooltip, Legend, ResponsiveContainer, Cell, ReferenceLine,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, AreaChart, Area,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend,
 } from 'recharts';
-import toast from 'react-hot-toast';
-import { cn, Card, Btn, SectionBar, AIBadgeSDA } from './petaSection';
+import {
+  INDIKATOR_LABELS_SDA,
+  INDIKATOR_COLORS_SDA,
+  INDIKATOR_ICON_SDA,
+  TAHUN_TERSEDIA_SDA,
+  LABEL_INDEKS_UTAMA_SDA,
+  THRESHOLD_DESC_SDA,
+  THRESHOLD_MAP_SDA,
+} from './petaSda';
 
-// ─── Constants
-const STATUS_SDA = {
-  OPTIMAL: { warna: '#10b981', label: 'OPTIMAL' },
-  CUKUP:   { warna: '#3b82f6', label: 'CUKUP'   },
-  KURANG:  { warna: '#f97316', label: 'KURANG'  },
-  RENDAH:  { warna: '#ef4444', label: 'RENDAH'  },
+const cn = (...cls) => cls.filter(Boolean).join(' ');
+
+const TABS = [
+  { id: 'info',      label: 'Info',      Icon: Info       },
+  { id: 'kebijakan', label: 'Kebijakan', Icon: ClipboardList },
+  { id: 'metadata',  label: 'Metodologi',Icon: BookOpen   },
+  { id: 'tren',      label: 'Tren',      Icon: TrendingUp },
+];
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl px-4 py-3 text-xs">
+      <div className="font-bold text-slate-900 dark:text-white mb-2">Tahun {label}</div>
+      {payload.map((e, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 py-0.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }}/>
+            <span className="text-slate-600 dark:text-slate-300">{e.name}</span>
+          </div>
+          <span className="font-bold text-slate-900 dark:text-white">{e.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
-const DATASET_LABELS_SDA = {
-  IKAN:       'Produksi Perikanan Tangkap Laut',
-  PERKEBUNAN: 'Produksi 8 Komoditas Perkebunan',
-  NILAI_IKAN: 'Nilai Produksi Perikanan Tangkap',
-  PENDUDUK:   'Jumlah Penduduk',
-  PDRB:       'PDRB Sektor Pertanian & Perikanan',
-};
+// ─── TREND PANEL ─────────────────────────────────────────────────────────────
+export function TrendPanel_SDA({ daftarTersimpan }) {
+  const [filterInd, setFilterInd] = useState('ALL');
+  const [chartMode, setChartMode] = useState('distribusi');
 
-const PRIORITY_STYLE = {
-  'Sangat Tinggi': { bar: 'bg-red-600',   badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
-  Tinggi:          { bar: 'bg-red-500',   badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
-  Sedang:          { bar: 'bg-amber-500', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700' },
-  Rendah:          { bar: 'bg-blue-500',  badge: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' },
-};
+  const trendData = useMemo(() => {
+    const map = {};
+    daftarTersimpan.forEach(item => {
+      const ind = item.indikator || 'ALL';
+      const key = `${item.tahun}|${ind}`;
+      if (!map[key] || item.timestamp > map[key].timestamp) map[key] = item;
+    });
+    const byInd = {};
+    Object.values(map).forEach(item => {
+      const ind = item.indikator || 'ALL';
+      if (!byInd[ind]) byInd[ind] = [];
+      byInd[ind].push({
+        tahun:  item.tahun,
+        TINGGI: item.kategori_distribusi?.TINGGI ?? 0,
+        SEDANG: item.kategori_distribusi?.SEDANG ?? 0,
+        RENDAH: item.kategori_distribusi?.RENDAH ?? 0,
+      });
+    });
+    Object.keys(byInd).forEach(ind => byInd[ind].sort((a, b) => a.tahun - b.tahun));
+    return byInd;
+  }, [daftarTersimpan]);
 
-const insightStyle = (txt) => {
-  const t = txt.toLowerCase();
-  if (t.includes('tinggi') || t.includes('baik') || t.includes('dominan') || t.includes('signifikan') || t.includes('kuat'))
-    return { cls: 'bg-teal-50 dark:bg-teal-900/20 border-teal-100 dark:border-teal-800', Icon: CheckCircle2, iconCls: 'text-teal-500' };
-  if (t.includes('rendah') || t.includes('lemah') || t.includes('rawan') || t.includes('belum berkembang'))
-    return { cls: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800', Icon: XCircle, iconCls: 'text-red-400' };
-  if (t.includes('sedang') || t.includes('perlu') || t.includes('potensi') || t.includes('mendekati'))
-    return { cls: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800', Icon: AlertTriangle, iconCls: 'text-amber-500' };
-  return { cls: 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700', Icon: Info, iconCls: 'text-slate-400' };
-};
+  const chartData    = trendData[filterInd] || [];
+  const indsAvail    = Object.keys(trendData).filter(k => trendData[k].length > 0);
+  const tahunCovered = [...new Set(daftarTersimpan.map(d => d.tahun).filter(Boolean))].sort();
+  const latestData   = chartData[chartData.length - 1];
+  const delta = chartData.length >= 2
+    ? { TINGGI: chartData.at(-1).TINGGI - chartData.at(-2).TINGGI, RENDAH: chartData.at(-1).RENDAH - chartData.at(-2).RENDAH }
+    : null;
 
-// ══════════════════════════════════════════════════════════
-// Tab: Info (statistik + tabel provinsi)
-// ══════════════════════════════════════════════════════════
-export function TabInfoSDA({ hasilAnalisis, jumlahStatus, eksporData }) {
-  const [filterStatus, setFilterStatus] = useState('SEMUA');
-  const [menuUnduh,    setMenuUnduh]    = useState(false);
+  const DeltaBadge = ({ val, positif = true }) => {
+    if (val == null || val === 0) return <span className="text-[9px] text-slate-400">-</span>;
+    const good = (val > 0 && positif) || (val < 0 && !positif);
+    return (
+      <span className={cn('flex items-center gap-0.5 text-[9px] font-bold', good ? 'text-emerald-600' : 'text-red-500')}>
+        {val > 0 ? <TrendingUp size={9}/> : <TrendingDown size={9}/>}
+        {val > 0 ? `+${val}` : val}
+      </span>
+    );
+  };
 
-  if (!hasilAnalisis) return (
-    <div className="py-10 text-center">
-      <BarChart2 size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm text-slate-400 dark:text-slate-500">
-        Belum ada data. Klik <strong>Analisis SDA</strong> di peta untuk memulai.
-      </p>
+  const radarData = useMemo(() => ['TINGGI','SEDANG','RENDAH'].map(kat => {
+    const obj = { kategori: kat };
+    indsAvail.forEach(ind => {
+      const s = trendData[ind];
+      if (s?.length) obj[INDIKATOR_LABELS_SDA[ind] || ind] = s.at(-1)[kat] ?? 0;
+    });
+    return obj;
+  }), [trendData, indsAvail]);
+
+  if (daftarTersimpan.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-4">
+        <TrendingUp size={28} className="text-emerald-400"/>
+      </div>
+      <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Belum ada data tersimpan</p>
+      <p className="text-xs text-slate-400 mt-1">Jalankan analisis dan simpan untuk melihat tren</p>
     </div>
   );
 
-  const isAI     = hasilAnalisis.is_ai_prediction;
-  const summary  = hasilAnalisis?.analysis_summary || [];
-  const filtered = filterStatus === 'SEMUA' ? summary : summary.filter(p => p.status === filterStatus);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <TrendingUp className="text-emerald-500" size={20}/>
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Panel Tren SDA</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">{daftarTersimpan.length} analisis · {tahunCovered.length} tahun ({tahunCovered.join(', ')})</p>
+        </div>
+      </div>
 
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label:'Total Analisis', val: daftarTersimpan.length,    color:'emerald' },
+          { label:'Tahun Tercakup', val: tahunCovered.length,       color:'blue'   },
+          { label:'TINGGI Terbaru', val: latestData?.TINGGI ?? '-', color:'green',  delta: delta?.TINGGI, positif: true  },
+          { label:'RENDAH Terbaru', val: latestData?.RENDAH ?? '-', color:'red',    delta: delta?.RENDAH, positif: false },
+        ].map(c => (
+          <div key={c.label} className={`bg-${c.color}-50 dark:bg-${c.color}-900/20 rounded-xl p-3 border border-${c.color}-100 dark:border-${c.color}-800/30`}>
+            <div className={`text-[10px] font-semibold text-${c.color}-600 dark:text-${c.color}-400 mb-1`}>{c.label}</div>
+            <div className={`text-2xl font-black text-${c.color}-700 dark:text-${c.color}-300`}>{c.val}</div>
+            {c.delta != null && <DeltaBadge val={c.delta} positif={c.positif}/>}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+          {['ALL','IKAN','KEBUN','PDRB'].map(ind => {
+            const ada = indsAvail.includes(ind);
+            return (
+              <button key={ind} onClick={() => ada && setFilterInd(ind)}
+                className={cn('px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1',
+                  filterInd === ind ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white'
+                  : ada ? 'text-slate-500 hover:text-slate-700' : 'text-slate-300 cursor-not-allowed')}>
+                <span style={{ color: filterInd === ind ? INDIKATOR_COLORS_SDA[ind] : undefined }}>{INDIKATOR_ICON_SDA[ind]}</span>
+                {ind === 'ALL' ? 'Semua' : INDIKATOR_LABELS_SDA[ind].replace('Indeks ', '')}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 ml-auto">
+          {[['distribusi','Bar',<BarChart2 size={11}/>],['area','Area',<TrendingUp size={11}/>],['radar','Radar',<Activity size={11}/>]].map(([key,lbl,icon]) => (
+            <button key={key} onClick={() => setChartMode(key)}
+              className={cn('px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1',
+                chartMode === key ? 'bg-white dark:bg-slate-700 shadow text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
+              {icon} {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+        {chartData.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Tidak ada data</div>
+        ) : (
+          <>
+            <div className="text-xs font-bold text-slate-900 dark:text-white mb-3">{INDIKATOR_LABELS_SDA[filterInd]} · {chartData.length} titik data</div>
+            {chartMode === 'distribusi' && (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={chartData} margin={{ top:4, right:8, left:-20, bottom:0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.5}/>
+                  <XAxis dataKey="tahun" tick={{ fontSize:10, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{ fontSize:10, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
+                  <Tooltip content={<CustomTooltip/>}/>
+                  <Bar dataKey="TINGGI" name="TINGGI" stackId="a" fill="#10b981"/>
+                  <Bar dataKey="SEDANG" name="SEDANG" stackId="a" fill="#f59e0b"/>
+                  <Bar dataKey="RENDAH" name="RENDAH" stackId="a" fill="#ef4444" radius={[4,4,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            {chartMode === 'area' && (
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={chartData} margin={{ top:4, right:8, left:-20, bottom:0 }}>
+                  <defs>
+                    {[['gT','#10b981'],['gS','#f59e0b'],['gR','#ef4444']].map(([id,clr]) => (
+                      <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={clr} stopOpacity={0.3}/><stop offset="95%" stopColor={clr} stopOpacity={0}/>
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.5}/>
+                  <XAxis dataKey="tahun" tick={{ fontSize:10, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{ fontSize:10, fill:'#94a3b8' }} axisLine={false} tickLine={false}/>
+                  <Tooltip content={<CustomTooltip/>}/>
+                  {[['TINGGI','#10b981','gT'],['SEDANG','#f59e0b','gS'],['RENDAH','#ef4444','gR']].map(([key,clr,grad]) => (
+                    <Area key={key} type="monotone" dataKey={key} name={key} stroke={clr} strokeWidth={2} fill={`url(#${grad})`} dot={{ r:3, fill:clr }}/>
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+            {chartMode === 'radar' && (
+              <ResponsiveContainer width="100%" height={200}>
+                <RadarChart data={radarData} margin={{ top:10, right:20, left:20, bottom:10 }}>
+                  <PolarGrid stroke="#e2e8f0"/>
+                  <PolarAngleAxis dataKey="kategori" tick={{ fontSize:10, fill:'#94a3b8' }}/>
+                  <PolarRadiusAxis angle={90} domain={[0,34]} tick={{ fontSize:9, fill:'#94a3b8' }}/>
+                  {indsAvail.map(ind => (
+                    <Radar key={ind} name={INDIKATOR_LABELS_SDA[ind]} dataKey={INDIKATOR_LABELS_SDA[ind]}
+                      stroke={INDIKATOR_COLORS_SDA[ind]} fill={INDIKATOR_COLORS_SDA[ind]} fillOpacity={0.15} strokeWidth={2}/>
+                  ))}
+                  <Tooltip/><Legend iconSize={8} wrapperStyle={{ fontSize:'10px' }}/>
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Cakupan Tahun</div>
+        <div className="flex flex-wrap gap-1.5">
+          {TAHUN_TERSEDIA_SDA.map(thn => {
+            const ada = tahunCovered.includes(thn);
+            return (
+              <div key={thn} className={cn('px-2.5 py-1 rounded-lg text-[10px] font-semibold border',
+                ada ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 text-emerald-700' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 text-slate-400')}>
+                {thn}{ada && ' ✓'}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── METADATA PANEL ───────────────────────────────────────────────────────────
+export function MetadataPanel_SDA({ hasilAnalisis, indikatorTerpilih, tahunTerpilih }) {
+  const [openSections, setOpenSections] = useState({ formula: true, klasif: false, dataset: false, ref: false });
+  const toggle = (k) => setOpenSections(prev => ({ ...prev, [k]: !prev[k] }));
+  const ind = hasilAnalisis?.indikator || indikatorTerpilih || 'ALL';
+  const thn = hasilAnalisis?.tahun     || tahunTerpilih     || 2023;
+
+  const Section = ({ id, title, sub, color, children }) => (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm" style={{ overflowAnchor:'none' }}>
+      <div role="button" tabIndex={0} className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
+        onClick={() => toggle(id)} onKeyDown={(e) => e.key==='Enter' && toggle(id)}>
+        <div className="flex items-center gap-3">
+          <div className={cn('w-1 h-5 rounded-full', color)}/>
+          <div className="text-left">
+            <div className="text-sm font-bold text-slate-800 dark:text-white">{title}</div>
+            {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
+          </div>
+        </div>
+        <ChevronDown size={14} className={cn('text-slate-400 transition-transform flex-shrink-0', openSections[id] && 'rotate-180')}/>
+      </div>
+      {openSections[id] && (
+        <div className="px-5 pb-5 border-t border-slate-100 dark:border-slate-700 pt-4">{children}</div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3" style={{ overflowAnchor:'none' }}>
+      <div className="flex items-center gap-3 pb-1">
+        <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+          <BookOpen size={16} className="text-emerald-600 dark:text-emerald-400"/>
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Metodologi & Formula IPSDA</h2>
+          <p className="text-[10px] text-slate-400 mt-0.5">3 Komponen · MinMax Normalisasi · 3 Kelas · Threshold berbeda per indikator</p>
+        </div>
+      </div>
+
+      <Section id="formula" color="bg-emerald-500" title="Formula IPSDA" sub="3 komponen, MinMax normalisasi">
+        <div className="space-y-4">
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800">
+            <div className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mb-2">Formula Utama (ALL)</div>
+            <code className="block text-base font-mono font-black text-slate-900 dark:text-white">IPSDA = (I.Ikan + I.Kebun + I.PDRB) / 3</code>
+            <p className="text-[10px] text-slate-500 mt-2">Semua komponen dinormalisasi MinMax ke rentang 0–1 antar provinsi sebelum digabungkan.</p>
+          </div>
+
+          {[
+            { label:'I.Ikan — Indeks Produksi Ikan', formula:'ProdIkan(Ton) / Penduduk(RibuJiwa) → MinMax', color:'border-blue-200 bg-blue-50 dark:bg-blue-950/20', badge:'bg-blue-100 text-blue-700', threshold:'TINGGI ≥0.60 · SEDANG 0.25–0.60 · RENDAH <0.25', note:'Produksi Perikanan Tangkap laut (Ton) dibagi Penduduk untuk mendapatkan produktivitas per kapita.' },
+            { label:'I.Kebun — Indeks Produksi Kebun', formula:'(Σ8Komoditas/8)(Ton) / Penduduk(RibuJiwa) → MinMax', color:'border-green-200 bg-green-50 dark:bg-green-950/20', badge:'bg-green-100 text-green-700', threshold:'TINGGI ≥0.60 · SEDANG 0.25–0.60 · RENDAH <0.25', note:'Rata-rata produksi 8 komoditas (Sawit, Kelapa, Karet, Kopi, Kakao, Tebu, Teh, Tembakau) dalam Ton, dibagi Penduduk.' },
+            { label:'I.PDRB — Kontribusi SDA', formula:'PDRB Sektor A / Total PDRB → MinMax', color:'border-amber-200 bg-amber-50 dark:bg-amber-950/20', badge:'bg-amber-100 text-amber-700', threshold:'TINGGI ≥0.60 · SEDANG 0.25–0.60 · RENDAH <0.25', note:'Rasio PDRB Pertanian, Kehutanan & Perikanan (Sektor A) terhadap Total PDRB. Mencerminkan ketergantungan ekonomi pada SDA.' },
+          ].map((c, i) => (
+            <div key={i} className={cn('rounded-xl border-2 p-4', c.color)}>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <span className={cn('text-[10px] font-black px-2 py-0.5 rounded', c.badge)}>{c.label}</span>
+                <code className="text-xs font-mono font-black text-slate-600 dark:text-slate-300 flex-shrink-0 text-right">{c.formula}</code>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">{c.note}</p>
+              <div className="mt-2 p-2 bg-white/60 rounded-lg">
+                <span className="text-[9px] font-bold text-slate-600">{c.threshold}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section id="klasif" color="bg-rose-500" title="Klasifikasi Status IPSDA" sub="Threshold berbeda per indikator">
+        <div className="space-y-3">
+          {[
+            { ind:'ALL',   label:'IPSDA Gabungan', t:'>0.70',  s:'0.40–0.70', desc:'IPSDA gabungan 3 komponen. TINGGI = SDA berkontribusi signifikan; SEDANG = masih ada potensi belum dimaksimalkan; RENDAH = ketimpangan potensi SDA.' },
+            { ind:'IKAN',  label:'I.Ikan (MinMax)', t:'≥0.60', s:'0.25–0.60', desc:'Produktivitas ikan per kapita. Distribusi nilai aktual relatif antar provinsi.' },
+            { ind:'KEBUN', label:'I.Kebun (MinMax)', t:'≥0.60', s:'0.25–0.60', desc:'Produktivitas perkebunan 8 komoditas per kapita.' },
+            { ind:'PDRB',  label:'I.PDRB (MinMax)', t:'≥0.60', s:'0.25–0.60', desc:'Proporsi PDRB SDA. Setelah MinMax, nilai tinggi = kontribusi SDA besar relatif antar provinsi.' },
+          ].map(s => (
+            <div key={s.ind} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/50">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700">{s.label}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">TINGGI {s.t}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">SEDANG {s.s}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold">RENDAH sisanya</span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section id="dataset" color="bg-teal-500" title="Dataset Sumber" sub={`5 Dataset BPS — Tahun ${thn}`}>
+        <div className="space-y-3">
+          {[
+            { nama:'Produksi Perikanan Tangkap (Ton)', satuan:'Ton', komponen:'I.Ikan', sumber:'KKP via BPS Simdasi', note:'2017-2022: endpoint lama (satuan Ton). 2023-2024: endpoint baru (satuan Kg, dikonversi /1000).' },
+            { nama:'Produksi Tanaman Perkebunan', satuan:'Ribu Ton', komponen:'I.Kebun', sumber:'BPS var/132 (2023), var/2566 (2024)', note:'8 komoditas: Sawit, Kelapa, Karet, Kopi, Kakao, Tebu, Teh, Tembakau. Rata-rata sederhana 8 komoditas → Ton.' },
+            { nama:'PDRB Sektor A (Pertanian, Kehutanan, Perikanan)', satuan:'Miliar Rp', komponen:'I.PDRB', sumber:'BPS var/2268 turtahun=Tahunan', note:'Sektor A mencakup perkebunan sesuai KBLI BPS. Rasio = Sektor A / Total PDRB.' },
+            { nama:'PDRB Total', satuan:'Miliar Rp', komponen:'I.PDRB', sumber:'BPS var/2268 turvar=2022', note:'Total semua 17 sektor A–R,S,T,U sebagai denominator.' },
+            { nama:'Jumlah Penduduk', satuan:'Ribu Jiwa', komponen:'Denominator', sumber:'BPS var/958', note:'Sebagai pembagi untuk Indeks Ikan & Kebun. Data tersedia s/d 2022; tahun 2023-2024 menggunakan data 2022 sebagai proxy.' },
+          ].map((d, i) => (
+            <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{d.nama}</span>
+                <span className="text-[9px] font-bold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 flex-shrink-0">{d.komponen}</span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">{d.note}</p>
+              <div className="mt-2 flex gap-2 text-[9px] text-slate-400">
+                <span>Satuan: {d.satuan}</span>
+                <span>·</span>
+                <span>Sumber: {d.sumber}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section id="ref" color="bg-purple-500" title="Referensi Ilmiah" sub="4 sumber pendukung metodologi">
+        <div className="space-y-3">
+          {[
+            { badge:'Jurnal Ekonomi Regional · 2024', title:'Analisis Kontribusi Subsektor Perikanan dan Perkebunan Terhadap PDRB Provinsi Kepulauan Riau', color:'#3b82f6', note:'Memvalidasi subsektor perikanan dan perkebunan sebagai penyumbang terbesar PDRB di daerah kepulauan.' },
+            { badge:'Jurnal Ekonomi-Qu · 2019', title:'Analisis Location Quotient dan Shift-Share Sub Sektor Pertanian di Kabupaten Pekalongan', color:'#84cc16', note:'Pendekatan agregat terhadap 8 komoditas perkebunan unggulan untuk menghitung kontribusi sektor.' },
+            { badge:'Skripsi UIN Bukittinggi · 2025', title:'Analisis Sektor Unggulan terhadap Pertumbuhan Ekonomi Wilayah di Kabupaten Dharmasraya', color:'#f59e0b', note:'Sektor Pertanian, Kehutanan dan Perikanan (KBLI BPS) secara eksplisit mencakup perkebunan.' },
+            { badge:'Prosiding SainTek UT · 2025', title:'Analisis Perekonomian Daerah Berbasis Sektor Unggulan', color:'#10b981', note:'Nilai kontribusi <40% mengindikasikan kontribusi terbatas; 0.70 sebagai batas kinerja optimal.' },
+          ].map((r, i) => (
+            <div key={i} className="rounded-xl border p-4 dark:border-slate-700" style={{ borderColor: r.color + '40', backgroundColor: r.color + '08' }}>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full inline-block mb-1.5" style={{ backgroundColor: r.color + '20', color: r.color }}>{r.badge}</span>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">{r.title}</div>
+              <p className="text-[10px] text-slate-500 leading-relaxed">{r.note}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+// ─── TAB INFO ─────────────────────────────────────────────────────────────────
+function TabInfo({ hasilAnalisis, jumlahKategori, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih, eksporData, getWarna, getKategori }) {
+  const [menuUnduh, setMenuUnduh] = useState(false);
+
+  const dataTerfilter = useMemo(() => {
+    if (!hasilAnalisis?.matched_features?.features) return [];
+    let f = hasilAnalisis.matched_features.features;
+    if (kategoriTerpilih !== 'SEMUA')
+      f = f.filter(x => getKategori(x, indikatorTerpilih) === kategoriTerpilih);
+    return f;
+  }, [hasilAnalisis, kategoriTerpilih, indikatorTerpilih]);
+
+  if (!hasilAnalisis) return (
+    <div className="py-12 text-center">
+      <BarChart2 size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3"/>
+      <p className="text-sm text-slate-400">Belum ada data. Klik <strong>Analisis SDA</strong> di peta untuk memulai.</p>
+    </div>
+  );
+
+  const labelIdx   = LABEL_INDEKS_UTAMA_SDA[indikatorTerpilih] ?? 'IPSDA';
   const statsConfig = [
-    { label: 'TOTAL PROVINSI', val: hasilAnalisis.total_provinsi || hasilAnalisis.total_success || 0,
-      cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300' },
-    { label: 'OPTIMAL', val: jumlahStatus.OPTIMAL,
-      cls: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300' },
-    { label: 'CUKUP',   val: jumlahStatus.CUKUP,
-      cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300' },
-    { label: 'KURANG',  val: jumlahStatus.KURANG,
-      cls: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-300' },
-    { label: 'RENDAH',  val: jumlahStatus.RENDAH,
-      cls: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 text-red-700 dark:text-red-300' },
+    { label:'Total Provinsi', val: hasilAnalisis.total_success || 0, colorClass:'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 text-emerald-700 dark:text-emerald-300' },
+    { label:'TINGGI',         val: jumlahKategori['TINGGI'] ?? 0,    colorClass:'bg-green-50  dark:bg-green-900/20  border-green-100  text-green-700  dark:text-green-300'  },
+    { label:'SEDANG',         val: jumlahKategori['SEDANG'] ?? 0,    colorClass:'bg-amber-50  dark:bg-amber-900/20  border-amber-100  text-amber-700  dark:text-amber-300'  },
+    { label:'RENDAH',         val: jumlahKategori['RENDAH'] ?? 0,    colorClass:'bg-red-50    dark:bg-red-900/20    border-red-100    text-red-700    dark:text-red-300'    },
   ];
+
+  const showIkan  = indikatorTerpilih === 'ALL' || indikatorTerpilih === 'IKAN';
+  const showKebun = indikatorTerpilih === 'ALL' || indikatorTerpilih === 'KEBUN';
+  const showPdrb  = indikatorTerpilih === 'ALL' || indikatorTerpilih === 'PDRB';
 
   return (
     <div className="space-y-4">
-      {isAI && <AIBadgeSDA version={hasilAnalisis.model_version} scores={hasilAnalisis.model_scores} />}
+      <div className="flex flex-wrap gap-2 items-center">
+        {hasilAnalisis.timestamp && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+            <Calendar size={9}/> {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
+          </span>
+        )}
+        {hasilAnalisis.tahun && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 rounded-lg border border-emerald-200">
+            <Calendar size={9}/> Tahun {hasilAnalisis.tahun}
+          </span>
+        )}
+      </div>
 
-      {hasilAnalisis.timestamp && (
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-          <Calendar size={11} />
-          {isAI ? 'Waktu prediksi:' : 'Waktu pengambilan data:'}{' '}
-          {new Date(hasilAnalisis.timestamp).toLocaleString('id-ID')}
+      {/* Formula ringkas */}
+      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+          {indikatorTerpilih === 'ALL' ? 'Formula IPSDA Gabungan' : `Formula ${labelIdx} — ${INDIKATOR_LABELS_SDA[indikatorTerpilih]}`}
         </div>
-      )}
+        <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono leading-relaxed">
+          {indikatorTerpilih === 'ALL' && 'I.Ikan=ProdTon/Penduduk·I.Kebun=RataKebun/Penduduk·I.PDRB=SekA/Total → MinMax · IPSDA=(I.Ikan+I.Kebun+I.PDRB)/3'}
+          {indikatorTerpilih === 'IKAN'  && 'I.Ikan = Produksi Tangkap (Ton) / Penduduk (Ribu Jiwa) → MinMax antar provinsi'}
+          {indikatorTerpilih === 'KEBUN' && 'I.Kebun = Rata-rata 8 Komoditas (Ton) / Penduduk (Ribu Jiwa) → MinMax antar provinsi'}
+          {indikatorTerpilih === 'PDRB'  && 'I.PDRB = PDRB Sektor A / Total PDRB → MinMax antar provinsi'}
+        </p>
+        <p className="text-[11px] font-mono mt-1">
+          <span className="font-bold text-emerald-600">TINGGI</span>
+          {indikatorTerpilih === 'ALL'   && ' >0.70 · '}
+          {indikatorTerpilih !== 'ALL'   && ' ≥0.60 · '}
+          <span className="font-bold text-amber-600">SEDANG</span>
+          {indikatorTerpilih === 'ALL'   && ' 0.40–0.70 · '}
+          {indikatorTerpilih !== 'ALL'   && ' 0.25–0.60 · '}
+          <span className="font-bold text-red-600">RENDAH</span>
+          {indikatorTerpilih === 'ALL'   && ' <0.40'}
+          {indikatorTerpilih !== 'ALL'   && ' <0.25'}
+        </p>
+      </div>
 
-      {!isAI && hasilAnalisis.dataset_aktif?.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Dataset Aktif:</span>
-          {hasilAnalisis.dataset_aktif.map(k => (
-            <span key={k} className="text-[10px] font-medium px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-600">
-              {DATASET_LABELS_SDA[k]?.split(' ')[0] ?? k}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Stats cards — 5 kolom */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statsConfig.map(s => (
-          <div key={s.label} className={cn('border rounded-xl p-3', s.cls)}>
-            <div className="text-[9px] font-semibold uppercase tracking-wider opacity-60 mb-1">{s.label}</div>
+          <div key={s.label} className={cn('border rounded-xl p-3', s.colorClass)}>
+            <div className="text-[9px] font-semibold uppercase tracking-wider opacity-70 mb-1">{s.label}</div>
             <div className="text-2xl font-black">{s.val}</div>
           </div>
         ))}
       </div>
 
-      {!isAI && hasilAnalisis.ada_data_kosong && (
-        <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
-          <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-amber-700 dark:text-amber-300">
-            <strong>{hasilAnalisis.total_data_kosong}</strong> provinsi tidak dapat dipetakan karena datanya kosong.
-          </p>
-        </div>
-      )}
-
-      {/* Skor model AI */}
-      {isAI && hasilAnalisis.model_scores && (
-        <div className="border border-purple-200 dark:border-purple-700 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 flex items-center gap-2">
-            <Cpu size={13} className="text-purple-500" />
-            <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
-              Skor Model AI SDA (Cross-Validation 5-Fold)
-            </span>
-          </div>
-          <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-700">
-            {Object.entries(hasilAnalisis.model_scores).map(([k, s]) => (
-              <div key={k} className="px-3 py-2.5 text-center">
-                <div className="text-[9px] font-bold text-slate-400 uppercase mb-1">{k.replace('_',' ').toUpperCase()}</div>
-                <div className="text-sm font-black text-slate-800 dark:text-white">{s.cv_r2?.toFixed(3)}</div>
-                <div className="text-[9px] text-slate-400">R²</div>
-                <div className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 mt-0.5">{s.cv_mae?.toFixed(4)}</div>
-                <div className="text-[9px] text-slate-400">MAE</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Formula IPSDA */}
-      <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
-        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Dasar Penilaian IPSDA</div>
-        <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
-          IPSDA = (RPP_Ikan_n + RPP_Kebun_n + NPI_n + KPS_n) / 4{'  '}
-          <span className="text-slate-400">(Equal Weighting, normalisasi Min-Max)</span>
-          {'  ·  '}
-          <span className="font-bold text-emerald-600 dark:text-emerald-400">OPTIMAL</span> ≥ 0.70 {'·  '}
-          <span className="font-bold text-blue-600 dark:text-blue-400">CUKUP</span> 0.50–0.70 {'·  '}
-          <span className="font-bold text-orange-600 dark:text-orange-400">KURANG</span> 0.30–0.50 {'·  '}
-          <span className="font-bold text-red-600 dark:text-red-400">RENDAH</span> {'< 0.30'}
-        </p>
-      </div>
-
-      {/* ── Tabel Provinsi ── */}
       <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-            {filtered.length} provinsi · Tahun {hasilAnalisis.tahun}
-            {isAI && <span className="ml-2 text-purple-400 font-semibold">· 🤖 Prediksi AI</span>}
-            {!isAI && hasilAnalisis.ada_data_kosong && (
-              <span className="ml-2 text-amber-500">· {hasilAnalisis.total_data_kosong} data kosong</span>
-            )}
-          </p>
+          <p className="text-[11px] text-slate-400">{dataTerfilter.length} provinsi · Tahun {hasilAnalisis.tahun}</p>
           <div className="flex items-center gap-2">
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
-              {['SEMUA', 'OPTIMAL', 'CUKUP', 'KURANG', 'RENDAH'].map(s => <option key={s} value={s}>{s}</option>)}
+            <select value={kategoriTerpilih} onChange={e => setKategoriTerpilih(e.target.value)}
+              className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+              {['SEMUA','TINGGI','SEDANG','RENDAH'].map(k => <option key={k} value={k}>{k}</option>)}
             </select>
-            {eksporData && (
-              <div className="relative">
-                <Btn variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setMenuUnduh(!menuUnduh)}>
-                  <Download size={12} /> Unduh
-                </Btn>
-                {menuUnduh && (
-                  <div className="absolute top-full mt-1 right-0 w-32 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
-                    {['EXCEL', 'CSV', 'JSON', 'GEOJSON'].map(fmt => (
-                      <button key={fmt} onClick={() => { eksporData(fmt); setMenuUnduh(false); }}
-                        className="w-full text-left px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
-                        <Download size={10} className="text-blue-500" /> {fmt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="relative">
+              <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-all shadow-sm" onClick={() => setMenuUnduh(!menuUnduh)}>
+                <Download size={12}/> Unduh
+              </button>
+              {menuUnduh && (
+                <div className="absolute top-full mt-1 right-0 w-32 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
+                  {['EXCEL','CSV','JSON','GEOJSON'].map(fmt => (
+                    <button key={fmt} onClick={() => { eksporData(fmt); setMenuUnduh(false); }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+                      <Download size={10} className="text-emerald-500"/> {fmt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        {isAI && (
-          <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-xs text-purple-700 dark:text-purple-300">
-            <Bot size={12} className="shrink-0" />
-            <span>Nilai RPP, NPI, KPS, dan IPSDA merupakan <strong>hasil prediksi model AI</strong>, bukan data real BPS.</span>
-          </div>
-        )}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
           <table className="w-full text-sm">
@@ -208,53 +482,36 @@ export function TabInfoSDA({ hasilAnalisis, jumlahStatus, eksporData }) {
               <tr className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                 <th className="px-3 py-3 text-center w-8">No</th>
                 <th className="px-4 py-3 text-left">Provinsi</th>
-                <th className="px-4 py-3 text-center">IPSDA</th>
-                <th className="px-4 py-3 text-center">RPP Ikan</th>
-                <th className="px-4 py-3 text-center">RPP Kebun</th>
-                <th className="px-4 py-3 text-center">NPI (juta Rp)</th>
-                <th className="px-4 py-3 text-center">KPS (%)</th>
-                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">{labelIdx}</th>
+                {showIkan  && <th className="px-4 py-3 text-center">I.Ikan</th>}
+                {showKebun && <th className="px-4 py-3 text-center">I.Kebun</th>}
+                {showPdrb  && <th className="px-4 py-3 text-center">I.PDRB</th>}
+                <th className="px-4 py-3 text-center">Kategori</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p, i) => {
-                const noData   = !p.has_complete_data && p.status === '-';
-                const partData = !p.has_complete_data && p.status !== '-';
-                const warna    = p.warna || '#94a3b8';
+              {dataTerfilter.map((fitur, idx) => {
+                const d   = fitur.properties.sda_analysis;
+                const w   = getWarna(fitur, indikatorTerpilih);
+                const kat = getKategori(fitur, indikatorTerpilih);
                 return (
-                  <tr key={p.provinsi}
-                    className={cn(
-                      'border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors',
-                      noData ? 'opacity-40' : partData ? 'opacity-70' : ''
-                    )}>
-                    <td className="px-2 py-2.5 text-center text-xs text-slate-400">{i + 1}</td>
+                  <tr key={d.nama_provinsi} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="px-3 py-2.5 text-center text-xs text-slate-400">{idx + 1}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: warna }} />
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{p.provinsi}</span>
-                        {p.is_prediction && <Bot size={9} className="text-purple-400 shrink-0" title="Prediksi AI" />}
-                        {partData && <span className="text-[8px] px-1 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded font-medium">Parsial</span>}
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: w }}/>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{d.nama_provinsi}</span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-center">
-                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">
-                        {p.ipsda != null ? p.ipsda.toFixed(4) : '-'}
-                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">{d.indeks_utama ?? d.ipsda ?? '-'}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.rpp_ikan  != null ? p.rpp_ikan.toFixed(6)  : '-'}</td>
-                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">{p.rpp_kebun != null ? p.rpp_kebun.toFixed(6) : '-'}</td>
-                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">
-                      {p.npi != null ? (p.npi / 1_000_000).toFixed(2) : '-'}
-                    </td>
-                    <td className="px-4 py-2.5 text-center text-xs text-slate-500">
-                      {p.kps != null ? `${(p.kps * 100).toFixed(2)}%` : '-'}
-                    </td>
+                    {showIkan  && <td className="px-4 py-2.5 text-center text-xs text-blue-600   dark:text-blue-400   font-semibold">{d.indeks_ikan  ?? '-'}</td>}
+                    {showKebun && <td className="px-4 py-2.5 text-center text-xs text-green-600  dark:text-green-400  font-semibold">{d.indeks_kebun ?? '-'}</td>}
+                    {showPdrb  && <td className="px-4 py-2.5 text-center text-xs text-amber-600  dark:text-amber-400  font-semibold">{d.indeks_pdrb  ?? '-'}</td>}
                     <td className="px-4 py-2.5 text-center">
-                      {p.status !== '-'
-                        ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
-                            style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>{p.status}</span>
-                        : <span className="text-xs text-slate-400">-</span>
-                      }
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                        style={{ borderColor: w + '60', color: w, backgroundColor: w + '15' }}>{kat}</span>
                     </td>
                   </tr>
                 );
@@ -267,1187 +524,238 @@ export function TabInfoSDA({ hasilAnalisis, jumlahStatus, eksporData }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════
-// Tab: Kebijakan (accordion per provinsi)
-// ══════════════════════════════════════════════════════════
-export function TabKebijakanSDA({ hasilAnalisis, statusTerpilih, setStatusTerpilih }) {
-  const [expandedProv, setExpandedProv] = useState(null);
+// ─── TAB KEBIJAKAN ────────────────────────────────────────────────────────────
+const PILAR_COLORS = {
+  'Transformasi': '#6366f1', 'Sistem Informasi': '#3b82f6', 'Kebijakan & Regulasi': '#10b981',
+  'Intervensi Sektoral': '#f59e0b', 'Produktivitas': '#ef4444', 'Stabilitas': '#8b5cf6',
+  'Perencanaan & Data': '#06b6d4', 'Kapasitas SDA': '#ec4899', 'Infrastruktur': '#14b8a6',
+};
+const getPilarColor = (pilar) => PILAR_COLORS[pilar] || '#10b981';
+
+function TabKebijakan({ hasilAnalisis, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih, getWarna, getKategori }) {
+  const [provinsiPopup, setProvinsiPopup] = useState(null);
+  const [searchProv,    setSearchProv]    = useState('');
+  const [openPilar,     setOpenPilar]     = useState({});
+  const labelIdx = LABEL_INDEKS_UTAMA_SDA[indikatorTerpilih] ?? 'IPSDA';
+
+  const dataTerfilter = useMemo(() => {
+    if (!hasilAnalisis?.matched_features?.features) return [];
+    let f = hasilAnalisis.matched_features.features;
+    if (kategoriTerpilih !== 'SEMUA') f = f.filter(x => getKategori(x, indikatorTerpilih) === kategoriTerpilih);
+    if (searchProv.trim())            f = f.filter(x => x.properties?.sda_analysis?.nama_provinsi?.toLowerCase().includes(searchProv.toLowerCase()));
+    return f;
+  }, [hasilAnalisis, kategoriTerpilih, indikatorTerpilih, searchProv]);
 
   if (!hasilAnalisis) return (
-    <div className="py-10 text-center">
-      <ShieldCheck size={32} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm text-slate-400 dark:text-slate-500">Belum ada data. Jalankan analisis terlebih dahulu.</p>
+    <div className="py-12 text-center">
+      <ClipboardList size={32} className="text-slate-300 mx-auto mb-3"/>
+      <p className="text-sm text-slate-400">Belum ada data analisis.</p>
     </div>
   );
 
-  const isAI     = hasilAnalisis.is_ai_prediction;
-  const summary  = hasilAnalisis?.analysis_summary || [];
-  const filtered = statusTerpilih === 'SEMUA' ? summary : summary.filter(p => p.status === statusTerpilih);
-
-  const getFeatureData = (provName) =>
-    hasilAnalisis?.matched_features?.features
-      ?.find(f => f.properties?.sda_analysis?.nama_provinsi === provName)
-      ?.properties?.sda_analysis || null;
+  const popupFitur = provinsiPopup ? hasilAnalisis.matched_features.features.find(f => f.properties?.sda_analysis?.nama_provinsi === provinsiPopup) : null;
+  const popupData  = popupFitur?.properties?.sda_analysis;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          {filtered.length} provinsi · Tahun {hasilAnalisis.tahun}
-          {isAI && <span className="ml-2 text-purple-400 font-semibold">· 🤖 Prediksi AI</span>}
-          <span className="ml-2 text-indigo-400">· Klik provinsi untuk detail kebijakan</span>
-        </p>
-        <select value={statusTerpilih} onChange={e => setStatusTerpilih(e.target.value)}
-          className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
-          {['SEMUA', 'OPTIMAL', 'CUKUP', 'KURANG', 'RENDAH'].map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <ClipboardList className="text-emerald-500" size={15}/> Rekomendasi Kebijakan SDA
+          </h3>
+          <p className="text-[10px] text-slate-400 mt-0.5">{dataTerfilter.length} provinsi · {INDIKATOR_LABELS_SDA[indikatorTerpilih]} · {THRESHOLD_DESC_SDA[indikatorTerpilih]}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+            <input type="text" value={searchProv} onChange={e => setSearchProv(e.target.value)} placeholder="Cari provinsi..."
+              className="pl-7 pr-7 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-400 w-40"/>
+            {searchProv && <button onClick={() => setSearchProv('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={10}/></button>}
+          </div>
+          <select value={kategoriTerpilih} onChange={e => setKategoriTerpilih(e.target.value)}
+            className="text-xs font-semibold px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+            {['SEMUA','TINGGI','SEDANG','RENDAH'].map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="space-y-2">
-        {filtered.map(p => {
-          const warna      = p.warna || '#94a3b8';
-          const isExpanded = expandedProv === p.provinsi;
-          const featData   = isExpanded ? getFeatureData(p.provinsi) : null;
-          const hasPolicy  = featData?.insights?.length || featData?.rekomendasi?.length;
-
+      <div className="grid gap-2">
+        {dataTerfilter.map(fitur => {
+          const d   = fitur.properties.sda_analysis;
+          const w   = getWarna(fitur, indikatorTerpilih);
+          const kat = getKategori(fitur, indikatorTerpilih);
+          const rekom = d.rekomendasi || [];
           return (
-            <div key={p.provinsi}
-              className={cn('rounded-2xl border-2 overflow-hidden transition-all duration-200',
-                isExpanded ? 'border-indigo-300 dark:border-indigo-700 shadow-md' : 'border-slate-200 dark:border-slate-700'
-              )}>
-              <button
-                onClick={() => setExpandedProv(isExpanded ? null : p.provinsi)}
-                className={cn(
-                  'w-full flex items-center gap-3 px-5 py-3.5 transition-colors text-left',
-                  isExpanded ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/30'
-                )}>
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: warna }} />
-                <span className={cn('text-sm font-bold flex-1', isExpanded ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200')}>
-                  {p.provinsi}
-                </span>
-                {p.is_prediction && <Bot size={11} className="text-purple-400 shrink-0" />}
-                <span className="text-xs font-mono font-black shrink-0" style={{ color: warna }}>
-                  IPSDA {p.ipsda != null ? p.ipsda.toFixed(3) : '-'}
-                </span>
-                {p.status !== '-' && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
-                    style={{ borderColor: warna + '60', color: warna, backgroundColor: warna + '15' }}>
-                    {p.status}
-                  </span>
-                )}
-                <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-200 shrink-0', isExpanded && 'rotate-180 text-indigo-500')} />
-              </button>
-
-              {isExpanded && (
-                <div className="border-t border-slate-100 dark:border-slate-700">
-                  {hasPolicy ? (
-                    <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-700">
-                      {/* Analisis Kondisi */}
-                      <div className="p-5 bg-white dark:bg-slate-800">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-1 h-4 rounded-full bg-blue-400" />
-                          <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Analisis Kondisi SDA</h4>
-                        </div>
-                        <div className="space-y-2">
-                          {(featData.insights || []).map((insight, idx) => {
-                            const { cls, Icon: IIcon, iconCls } = insightStyle(insight);
-                            const cleanText = insight.replace(/^[\u{1F300}-\u{1FFFF}\u2600-\u26FF\u2700-\u27BF\s]+/u, '').trim();
-                            return (
-                              <div key={idx} className={cn('flex items-start gap-2.5 px-3 py-2 rounded-lg border text-xs text-slate-700 dark:text-slate-300 leading-relaxed', cls)}>
-                                <IIcon size={12} className={cn('shrink-0 mt-0.5', iconCls)} />
-                                <span>{cleanText}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      {/* Rekomendasi Kebijakan */}
-                      <div className="p-5 bg-white dark:bg-slate-800">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-1 h-4 rounded-full bg-teal-500" />
-                          <h4 className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rekomendasi Kebijakan SDA</h4>
-                        </div>
-                        <div className="space-y-3">
-                          {(featData.rekomendasi || []).map((rek, ri) => {
-                            const pStyle = PRIORITY_STYLE[rek.priority] || PRIORITY_STYLE['Sedang'];
-                            return (
-                              <div key={ri} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50">
-                                  <div className="flex items-center gap-2">
-                                    <div className={cn('w-1 h-3.5 rounded-full', pStyle.bar)} />
-                                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{rek.title}</span>
-                                  </div>
-                                  <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded border uppercase', pStyle.badge)}>{rek.priority}</span>
-                                </div>
-                                <ul className="px-3 py-2.5 space-y-1.5 bg-white dark:bg-slate-800">
-                                  {(rek.actions || []).map((action, ai) => (
-                                    <li key={ai} className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                                      <Check size={10} className="text-teal-500 shrink-0 mt-0.5" />
-                                      {action}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+            <div key={d.nama_provinsi} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 transition-all overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3" style={{ borderLeft: `3px solid ${w}` }}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{d.nama_provinsi}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
+                      style={{ borderColor: w+'60', color: w, backgroundColor: w+'15' }}>{kat}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="text-[10px] font-mono font-bold" style={{ color: w }}>{labelIdx} {d.indeks_utama ?? d.ipsda ?? '-'}</span>
+                    {indikatorTerpilih === 'ALL' && <>
+                      <span className="text-[10px] text-slate-400">I.Ikan {d.indeks_ikan ?? '-'}</span>
+                      <span className="text-[10px] text-slate-400">I.Kebun {d.indeks_kebun ?? '-'}</span>
+                      <span className="text-[10px] text-slate-400">I.PDRB {d.indeks_pdrb ?? '-'}</span>
+                    </>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {rekom.length > 0 && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg">{rekom.length} pilar</span>}
+                  <button onClick={() => setProvinsiPopup(d.nama_provinsi)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-semibold transition-colors">
+                    Detail →
+                  </button>
+                </div>
+              </div>
+              {rekom.length > 0 && rekom[0]?.aksi?.[0] && (
+                <div className="px-4 pb-3 pt-0" style={{ borderLeft: `3px solid ${w}` }}>
+                  <div className="flex items-start gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: getPilarColor(rekom[0].pilar) }}/>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: getPilarColor(rekom[0].pilar) }}>{rekom[0].pilar}</span>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-snug mt-0.5 line-clamp-1">{rekom[0].aksi[0].nama_aksi}</p>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-3 px-5 py-4 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800">
-                      <AlertCircle size={14} className="text-slate-400 shrink-0" />
-                      Rekomendasi tidak tersedia — data dimensi provinsi ini kosong.
-                    </div>
-                  )}
+                    <span className="text-[9px] font-bold bg-white dark:bg-slate-800 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex-shrink-0">P{rekom[0].prioritas}</span>
+                  </div>
                 </div>
               )}
             </div>
           );
         })}
       </div>
-    </div>
-  );
-}
 
-// ══════════════════════════════════════════════════════════
-// Tab: Metadata
-// ══════════════════════════════════════════════════════════
-function ContohPerhitungan() {
-  const [expandCalc, setExpandCalc] = useState(false);
- 
-  // Data contoh: Provinsi Maluku vs Provinsi Kalimantan (dari dokumen)
-  const examples = [
-    {
-      nama: 'Provinsi Maluku',
-      desc: 'Kaya perikanan, IPSDA optimal',
-      data: {
-        ikan: 200000,
-        perkebunan: 325000,
-        nilaiIkan: 2000000000000,
-        penduduk: 1500000,
-        pdrb_sektor: 8000000000000,
-        pdrb_total: 35000000000000,
-      },
-      hasil: {
-        rpp_ikan: 0.133,
-        rpp_kebun: 0.027,
-        npi: 1333333,
-        kps: 0.229,
-        ipsda: 0.750,
-        status: 'OPTIMAL',
-      }
-    },
-    {
-      nama: 'Provinsi Kalimantan',
-      desc: 'Kaya perkebunan, IPSDA rendah (paradoks SDA)',
-      data: {
-        ikan: 80000,
-        perkebunan: 5165000,
-        nilaiIkan: 800000000000,
-        penduduk: 4000000,
-        pdrb_sektor: 15000000000000,
-        pdrb_total: 120000000000000,
-      },
-      hasil: {
-        rpp_ikan: 0.020,
-        rpp_kebun: 0.161,
-        npi: 200000,
-        kps: 0.125,
-        ipsda: 0.250,
-        status: 'RENDAH',
-      }
-    }
-  ];
- 
-  return (
-    <Card className="p-5 border-l-4 border-l-blue-500">
-      <button 
-        className="w-full flex items-center justify-between"
-        onClick={() => setExpandCalc(!expandCalc)}>
-        <SectionBar color="bg-blue-500" 
-          title="Contoh Perhitungan Step-by-Step IPSDA" 
-          sub="Simulasi dua provinsi dengan data real dari BPS" />
-        <ChevronDown size={16} className={cn('text-slate-400 transition-transform', expandCalc && 'rotate-180')} />
-      </button>
- 
-      {expandCalc && (
-        <div className="mt-5 space-y-6">
-          {examples.map((example, exIdx) => (
-            <div key={exIdx} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-              {/* Header */}
-              <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900/40">
-                <h4 className="font-bold text-slate-900 dark:text-white">{example.nama}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{example.desc}</p>
-              </div>
- 
-              {/* Data Input */}
-              <div className="px-5 py-4 space-y-3 bg-white dark:bg-slate-800">
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide mb-2">
-                  📊 Data Input (dari BPS)
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    { icon: Fish, label: 'Produksi Ikan', value: example.data.ikan.toLocaleString('id-ID'), unit: 'ton' },
-                    { icon: Leaf, label: '8 Komoditas Kebun', value: example.data.perkebunan.toLocaleString('id-ID'), unit: 'ton' },
-                    { icon: DollarSign, label: 'Nilai Ikan', value: `Rp ${(example.data.nilaiIkan / 1e12).toFixed(1)}T`, unit: '' },
-                    { icon: Users, label: 'Jumlah Penduduk', value: (example.data.penduduk / 1e6).toFixed(1) + 'jt', unit: 'jiwa' },
-                    { icon: TrendingUp, label: 'PDRB Sektor', value: `Rp ${(example.data.pdrb_sektor / 1e12).toFixed(1)}T`, unit: '' },
-                    { icon: TrendingUp, label: 'PDRB Total', value: `Rp ${(example.data.pdrb_total / 1e12).toFixed(1)}T`, unit: '' },
-                  ].map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <item.icon size={12} className="text-blue-500" />
-                        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">{item.label}</span>
-                      </div>
-                      <div className="text-sm font-black text-slate-900 dark:text-white">{item.value}</div>
-                      {item.unit && <div className="text-[10px] text-slate-400">{item.unit}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
- 
-              {/* Perhitungan Step by Step */}
-              <div className="px-5 py-4 space-y-3 bg-blue-50/50 dark:bg-blue-900/10 border-t border-slate-200 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
-                  🧮 Langkah Perhitungan
-                </div>
- 
-                {/* Step 1 */}
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">1</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">RPP_Ikan = Produksi Ikan ÷ Jumlah Penduduk</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 ml-8">
-                    = {example.data.ikan.toLocaleString('id-ID')} ÷ {example.data.penduduk.toLocaleString('id-ID')}
-                    <br />= <span className="font-black text-slate-900 dark:text-white">{example.hasil.rpp_ikan.toFixed(6)} ton/jiwa</span>
-                  </div>
-                </div>
- 
-                {/* Step 2 */}
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">2</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">RPP_Perkebunan = (Rata-rata 8 Komoditas) ÷ Penduduk</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 ml-8">
-                    Rata-rata = {example.data.perkebunan.toLocaleString('id-ID')} ÷ 8
-                    <br />= {(example.data.perkebunan / 8).toLocaleString('id-ID')} ton
-                    <br />RPP_Perkebunan = {(example.data.perkebunan / 8).toLocaleString('id-ID')} ÷ {example.data.penduduk.toLocaleString('id-ID')}
-                    <br />= <span className="font-black text-slate-900 dark:text-white">{example.hasil.rpp_kebun.toFixed(6)} ton/jiwa</span>
-                  </div>
-                </div>
- 
-                {/* Step 3 */}
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">3</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">NPI = Nilai Produksi Ikan ÷ Jumlah Penduduk</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 ml-8">
-                    = Rp {(example.data.nilaiIkan / 1e12).toFixed(1)}T ÷ {example.data.penduduk.toLocaleString('id-ID')}
-                    <br />= <span className="font-black text-slate-900 dark:text-white">Rp {example.hasil.npi.toLocaleString('id-ID')}/jiwa</span>
-                  </div>
-                </div>
- 
-                {/* Step 4 */}
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">4</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">KPS = PDRB Sektor ÷ PDRB Total</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 ml-8">
-                    = Rp {(example.data.pdrb_sektor / 1e12).toFixed(1)}T ÷ Rp {(example.data.pdrb_total / 1e12).toFixed(1)}T
-                    <br />= <span className="font-black text-slate-900 dark:text-white">{(example.hasil.kps * 100).toFixed(1)}%</span>
-                  </div>
-                </div>
- 
-                {/* Step 5: Normalisasi */}
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mt-4">
-                  <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                    ✓ Normalisasi Min-Max (dilakukan per tahun untuk semua provinsi)
-                  </div>
-                  <div className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1 font-mono">
-                    <div>Rumus: X_norm = (X - X_min) / (X_max - X_min)</div>
-                    <div>Hasil: Setiap komponen dalam rentang 0–1</div>
-                    <div className="text-slate-400">(Lihat detail normalisasi di bagian Metodologi)</div>
-                  </div>
-                </div>
-              </div>
- 
-              {/* Hasil Akhir */}
-              <div className="px-5 py-4 space-y-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
-                  📈 Hasil IPSDA (Setelah Normalisasi & Agregasi)
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">IPSDA</div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white">{example.hasil.ipsda.toFixed(3)}</div>
-                  </div>
-                  <div className={cn(
-                    'p-3 rounded-lg border-2',
-                    example.hasil.status === 'OPTIMAL' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700' :
-                    example.hasil.status === 'CUKUP' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' :
-                    example.hasil.status === 'KURANG' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700' :
-                    'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
-                  )}>
-                    <div className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-                      style={{ color: STATUS_SDA[example.hasil.status].warna }}>
-                      Status
-                    </div>
-                    <div className="text-lg font-black"
-                      style={{ color: STATUS_SDA[example.hasil.status].warna }}>
-                      {example.hasil.status}
-                    </div>
-                  </div>
-                </div>
- 
-                {/* Interpretasi */}
-                <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-700">
-                  <p className="text-[11px] text-teal-700 dark:text-teal-300 leading-relaxed">
-                    <strong>Interpretasi:</strong> {
-                      example.hasil.ipsda >= 0.70 
-                        ? `${example.nama} memiliki IPSDA ${example.hasil.ipsda.toFixed(3)} (OPTIMAL). Sektor SDA menjadi motor penggerak ekonomi daerah dengan kontribusi signifikan.`
-                        : `${example.nama} memiliki IPSDA ${example.hasil.ipsda.toFixed(3)} (${example.hasil.status}). Menunjukkan ketimpangan antara potensi SDA dan kontribusi ekonomi aktual.`
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
- 
-// ── Komponen: Penjelasan Threshold & Validitas Ilmiah ──────────────────────────────
-function PenjelasanThreshold() {
-  const [expandThreshold, setExpandThreshold] = useState(false);
- 
-  const thresholds = [
-    {
-      range: '≥ 0.70',
-      status: 'OPTIMAL',
-      color: '#10b981',
-      desc: 'SDA memberikan kontribusi signifikan terhadap ekonomi daerah',
-      alasan: [
-        'Berdasarkan penelitian di Provinsi Sumatera Utara (Jurnal Pembangunan & Pemerataan, Universitas Tanjungpura), sektor pertanian, peternakan, kehutanan & perikanan merupakan sektor basis dengan nilai Location Quotient (LQ) rata-rata 1,74.',
-        'LQ > 1,74 menunjukkan kontribusi jauh di atas rata-rata nasional (>170% dari rata-rata). Dalam konteks indeks komposit 0-1, nilai >0.70 merepresentasikan kinerja yang sama signifikan.',
-        'Studi empiris menunjukkan bahwa ketika IPSDA ≥0.70, daerah berhasil mengkonversi potensi SDA menjadi pertumbuhan ekonomi nyata.',
-      ],
-      contoh: 'Maluku (IPSDA 0.750): Produksi ikan & nilai ekonomi tinggi dengan kontribusi PDRB sektor 22.9%'
-    },
-    {
-      range: '0.50 – 0.70',
-      status: 'CUKUP',
-      color: '#3b82f6',
-      desc: 'SDA berkontribusi sedang; masih ada potensi yang belum optimal',
-      alasan: [
-        'Penelitian di Provinsi Jawa Barat menunjukkan subsektor tanaman pangan dan hortikultura memiliki nilai LQ di atas 1,0 (masing-masing 1,11 dan 1,02), mengindikasikan kontribusi di atas rata-rata nasional.',
-        'Nilai 0.50 merepresentasikan posisi tengah antara optimal dan kurang—sektor mulai menunjukkan daya saing namun belum menjadi motor utama ekonomi.',
-        'Daerah dengan status CUKUP memiliki peluang besar untuk naik ke OPTIMAL melalui investasi infrastruktur dan inovasi teknologi.',
-      ],
-      contoh: 'Provinsi dengan perikanan berkembang namun perkebunan masih tradisional'
-    },
-    {
-      range: '0.30 – 0.50',
-      status: 'KURANG',
-      color: '#f97316',
-      desc: 'SDA belum memberikan dampak signifikan; terjadi ketimpangan potensial vs realisasi',
-      alasan: [
-        'Berdasarkan studi Location Quotient di berbagai provinsi, daerah dengan LQ antara 0,8–1,0 menunjukkan kontribusi mendekati rata-rata nasional namun tidak sebagai sektor unggulan.',
-        'Nilai 0.30–0.50 mengindikasikan bahwa meskipun SDA tersedia, daya dukung infrastruktur, teknologi, atau manajemen masih terbatas.',
-        'Analisis Shift-Share dari Jurnal Ekonomi Pembangunan UNS menunjukkan bahwa daerah dalam kategori ini memerlukan intervensi targeted untuk mengoptimalkan SDA.',
-      ],
-      contoh: 'Daerah dengan hutan luas namun tingkat pemanenan & pengolahan masih rendah'
-    },
-    {
-      range: '< 0.30',
-      status: 'RENDAH',
-      color: '#ef4444',
-      desc: 'Ketimpangan parah: daerah kaya SDA namun miskin; perlu intervensi kebijakan',
-      alasan: [
-        'Studi kasus Kabupaten Bengkayang (Jurnal Pembangunan & Pemerataan, UNTAN) menunjukkan bahwa rendahnya pertumbuhan ekonomi terjadi meskipun kekayaan SDA melimpah karena subsektor unggulan tidak berkembang optimal.',
-        'Analisis LQ menunjukkan daerah dengan nilai LQ <0.8 memiliki kontribusi ekonomi di bawah rata-rata nasional meskipun potensi SDA besar—menandakan "kaya sumber daya, miskin pertumbuhan".',
-        'Kondisi ini merefleksikan masalah struktural: keterbatasan akses modal, SDM, infrastruktur, atau mekanisme pemasaran yang mengakar dalam ekonomi lokal.',
-      ],
-      contoh: 'Kalimantan (IPSDA 0.250): Meski perkebunan sawit melimpah, kontribusi ekonomi relatif rendah akibat kendala distribusi & nilai tambah'
-    }
-  ];
- 
-  return (
-    <Card className="p-5 border-l-4 border-l-amber-500 mt-5">
-      <button 
-        className="w-full flex items-center justify-between"
-        onClick={() => setExpandThreshold(!expandThreshold)}>
-        <SectionBar color="bg-amber-500" 
-          title="Penjelasan & Validitas Threshold IPSDA" 
-          sub="Justifikasi akademik dari penelitian ekonomi regional Indonesia" />
-        <ChevronDown size={16} className={cn('text-slate-400 transition-transform', expandThreshold && 'rotate-180')} />
-      </button>
- 
-      {expandThreshold && (
-        <div className="mt-5 space-y-4">
-          {thresholds.map((t, idx) => (
-            <div key={idx} className="border-2 rounded-xl overflow-hidden" style={{ borderColor: t.color + '40' }}>
-              {/* Header */}
-              <div className="px-5 py-3.5 flex items-center justify-between" style={{ backgroundColor: t.color + '10' }}>
+      {/* Popup Detail */}
+      {provinsiPopup && popupData && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0"
+              style={{ borderLeft: `4px solid ${getWarna(popupFitur, indikatorTerpilih)}` }}>
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-xs font-black uppercase tracking-widest" style={{ color: t.color }}>
-                    IPSDA {t.range}
+                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">{popupData.nama_provinsi}</h3>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                      style={{ borderColor: getWarna(popupFitur, indikatorTerpilih)+'60', color: getWarna(popupFitur, indikatorTerpilih), backgroundColor: getWarna(popupFitur, indikatorTerpilih)+'15' }}>
+                      {getKategori(popupFitur, indikatorTerpilih)}
+                    </span>
+                    <span className="text-[10px] font-mono font-black" style={{ color: getWarna(popupFitur, indikatorTerpilih) }}>IPSDA {popupData.ipsda ?? '-'}</span>
+                    {[['indeks_ikan','I.Ikan','#3b82f6'],['indeks_kebun','I.Kebun','#84cc16'],['indeks_pdrb','I.PDRB','#f59e0b']].map(([k,lbl,clr]) => (
+                      <span key={k} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" style={{ color: clr }}>
+                        {lbl} {popupData[k] ?? '-'}
+                      </span>
+                    ))}
                   </div>
-                  <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">{t.status}: {t.desc}</div>
                 </div>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-white" style={{ backgroundColor: t.color }}>
-                  {t.range.replace(/[^0-9.]/g, '').slice(0, 2)}
-                </div>
-              </div>
- 
-              {/* Alasan Ilmiah */}
-              <div className="px-5 py-4 space-y-3 bg-white dark:bg-slate-800 border-t" style={{ borderColor: t.color + '20' }}>
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                  🔬 Justifikasi Akademik
-                </div>
-                {t.alasan.map((item, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] text-white" style={{ backgroundColor: t.color }}>
-                      {i + 1}
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed pt-0.5">
-                      {item}
-                    </p>
-                  </div>
-                ))}
-              </div>
- 
-              {/* Contoh Kasus */}
-              <div className="px-5 py-3 bg-slate-50 dark:bg-slate-900/40 border-t" style={{ borderColor: t.color + '20' }}>
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">
-                  📍 Contoh Kasus Nyata
-                </div>
-                <p className="text-[11px] text-slate-700 dark:text-slate-300 italic">{t.contoh}</p>
-              </div>
-            </div>
-          ))}
- 
-          {/* Footer: Sumber */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
-            <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-2">
-              📚 Sumber Penelitian
-            </div>
-            <ul className="space-y-1.5 text-[10px] text-blue-600 dark:text-blue-400">
-              <li>✓ Jurnal Pembangunan & Pemerataan, Universitas Tanjungpura (Kabupaten Bengkayang)</li>
-              <li>✓ Jurnal Implementasi Ekonomi & Bisnis, Universitas Katolik Santo Thomas (LQ Analysis)</li>
-              <li>✓ Jurnal Ekonomi Pembangunan, Universitas Sebelas Maret (Shift-Share Analysis)</li>
-              <li>✓ Jurnal Agrotekbis, Universitas Tadulako (Subsektor Pertanian Sulawesi Tengah)</li>
-              <li>✓ BPS Web API & SIMDASI (Data 2018–2024)</li>
-            </ul>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
- 
-// ── Komponen: Metodologi Normalisasi ──────────────────────────────────────────────
-function MetodologiNormalisasi() {
-  const [expandNorm, setExpandNorm] = useState(false);
- 
-  return (
-    <Card className="p-5 border-l-4 border-l-purple-500 mt-5">
-      <button 
-        className="w-full flex items-center justify-between"
-        onClick={() => setExpandNorm(!expandNorm)}>
-        <SectionBar color="bg-purple-500" 
-          title="Metodologi Normalisasi Min-Max" 
-          sub="Cara menggabungkan komponen dengan satuan berbeda" />
-        <ChevronDown size={16} className={cn('text-slate-400 transition-transform', expandNorm && 'rotate-180')} />
-      </button>
- 
-      {expandNorm && (
-        <div className="mt-5 space-y-4">
-          {/* Penjelasan */}
-          <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-700">
-            <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-relaxed mb-3">
-              <strong>Masalah:</strong> Keempat komponen IPSDA memiliki satuan berbeda (ton/jiwa, Rp/jiwa, rasio). Langsung menggabungkannya akan menghasilkan indeks yang bias—nilai tinggi cenderung didominasi unit terbesar.
-            </p>
-            <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-relaxed">
-              <strong>Solusi:</strong> Min-Max Normalization mengubah semua komponen ke rentang 0–1, memastikan setiap dimensi memberikan kontribusi setara terhadap IPSDA akhir.
-            </p>
-          </div>
- 
-          {/* Rumus */}
-          <div className="p-4 bg-slate-900 dark:bg-slate-800 rounded-xl">
-            <div className="text-xs font-bold text-slate-300 uppercase tracking-wide mb-2">Rumus</div>
-            <div className="font-mono text-sm text-yellow-300 whitespace-pre-wrap break-words">
-              X_normalized = (X - X_min) / (X_max - X_min)
-            </div>
-            <div className="text-[10px] text-slate-400 mt-2 space-y-1">
-              <div><strong>X</strong> = nilai komponen untuk provinsi tertentu</div>
-              <div><strong>X_min</strong> = nilai minimum komponen (antar semua provinsi dalam 1 tahun)</div>
-              <div><strong>X_max</strong> = nilai maksimum komponen (antar semua provinsi dalam 1 tahun)</div>
-              <div><strong>Hasil</strong> = selalu berada dalam rentang 0 hingga 1</div>
-            </div>
-          </div>
- 
-          {/* Contoh */}
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-              Contoh: Normalisasi RPP_Ikan 5 Provinsi
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-              <table className="w-full text-[10px]">
-                <thead className="bg-slate-100 dark:bg-slate-900">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-bold">Provinsi</th>
-                    <th className="px-3 py-2 text-right font-bold">RPP_Ikan</th>
-                    <th className="px-3 py-2 text-center font-bold">Rumus</th>
-                    <th className="px-3 py-2 text-right font-bold">Normalized</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { p: 'Maluku (MAX)', v: 0.133, n: '(0.133-0.020)/(0.133-0.020)', nv: 1.000 },
-                    { p: 'Sulawesi', v: 0.087, n: '(0.087-0.020)/(0.133-0.020)', nv: 0.591 },
-                    { p: 'Jawa Barat', v: 0.052, n: '(0.052-0.020)/(0.133-0.020)', nv: 0.282 },
-                    { p: 'DKI Jakarta', v: 0.035, n: '(0.035-0.020)/(0.133-0.020)', nv: 0.133 },
-                    { p: 'Kalimantan (MIN)', v: 0.020, n: '(0.020-0.020)/(0.133-0.020)', nv: 0.000 },
-                  ].map((row, i) => (
-                    <tr key={i} className={i === 4 ? 'bg-red-50 dark:bg-red-900/20' : i === 0 ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-white dark:bg-slate-800'}>
-                      <td className="px-3 py-2 text-left font-semibold">{row.p}</td>
-                      <td className="px-3 py-2 text-right font-mono">{row.v.toFixed(6)}</td>
-                      <td className="px-3 py-2 text-center text-[9px] font-mono text-slate-500">{row.n}</td>
-                      <td className="px-3 py-2 text-right font-black text-blue-600">{row.nv.toFixed(3)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-2">
-              ✓ Proses yang sama diterapkan untuk RPP_Perkebunan, NPI, dan KPS masing-masing dengan X_min & X_max-nya sendiri
-            </p>
-          </div>
- 
-          {/* Justifikasi */}
-          <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-200 dark:border-teal-700">
-            <div className="text-xs font-bold text-teal-700 dark:text-teal-300 uppercase tracking-wide mb-2">
-              ✓ Justifikasi Ilmiah
-            </div>
-            <ul className="space-y-1.5 text-[10px] text-teal-700 dark:text-teal-300">
-              <li>✓ <strong>Jurnal Implementasi Ekonomi & Bisnis (UNIKA Santo Thomas):</strong> Normalisasi data adalah prasyarat dalam analisis Location Quotient untuk membandingkan sektor dengan karakteristik berbeda.</li>
-              <li>✓ <strong>Standar Metodologi:</strong> Min-Max Normalization adalah teknik yang established dalam analisis ekonomi regional (ESDA, GIS-based analysis).</li>
-              <li>✓ <strong>Efek:</strong> Mencegah variabel dengan skala besar (PDRB dalam triliun) mendominasi hasil akhir.</li>
-            </ul>
-          </div>
- 
-          {/* Aggregasi */}
-          <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700">
-            <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide mb-2">
-              📊 Agregasi Equal Weighting
-            </div>
-            <div className="text-[11px] text-indigo-700 dark:text-indigo-300 mb-2">
-              Setelah normalisasi, keempat komponen diagregasi dengan bobot sama:
-            </div>
-            <div className="font-mono text-sm bg-slate-900 dark:bg-slate-800 text-yellow-300 p-3 rounded mb-2">
-              IPSDA = (RPP_Ikan_n + RPP_Kebun_n + NPI_n + KPS_n) / 4
-            </div>
-            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
-              <strong>Alasan Equal Weighting:</strong> Penelitian di Sulawesi Tengah & Jawa Barat menunjukkan bahwa setiap dimensi (produksi, nilai ekonomi, kontribusi PDRB) memiliki kepentingan setara dalam mendeskripsikan pemerataan SDA. Tidak ada prioritas a priori kepada satu dimensi.
-            </p>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
- 
-// ── Komponen Utama: TabMetadataSDA (Improved) ──────────────────────────────────────
-export function TabMetadataSDA({ hasilAnalisis, unduhFns, loadingDataset }) {
-  const [menuDataset, setMenuDataset] = useState(false);
-  const isAI = hasilAnalisis?.is_ai_prediction;
-  const scores = hasilAnalisis?.model_scores;
- 
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-            <BookOpen size={16} className="text-blue-600 dark:text-blue-400" />
-          </div>
-          <h2 className="text-base font-bold text-slate-800 dark:text-white">Metadata, Metodologi & Contoh Perhitungan IPSDA</h2>
-        </div>
-        {hasilAnalisis && !isAI && (
-          <div className="relative">
-            <Btn variant="primary" onClick={() => setMenuDataset(!menuDataset)}>
-              <Download size={14} /> Download Dataset
-            </Btn>
-            {menuDataset && (
-              <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-20 border border-slate-200 dark:border-slate-700 py-1">
-                {[
-                  { key: 'IKAN',       label: 'Dataset Ikan Tangkap',  Icon: Fish,       fn: unduhFns.ikan,       cls: 'text-blue-500'    },
-                  { key: 'PERKEBUNAN', label: 'Dataset Perkebunan',    Icon: Leaf,       fn: unduhFns.perkebunan, cls: 'text-green-500'   },
-                  { key: 'NILAI_IKAN', label: 'Dataset Nilai Ikan',    Icon: TrendingUp, fn: unduhFns.nilaiIkan,  cls: 'text-teal-500'    },
-                  { key: 'IPSDA',      label: 'Hasil IPSDA',           Icon: Activity,   fn: unduhFns.ipsda,      cls: 'text-emerald-500' },
-                ].map(d => (
-                  <button key={d.key} onClick={() => { d.fn?.(); setMenuDataset(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors">
-                    <d.Icon size={12} className={d.cls} /> {d.label}
-                    {loadingDataset?.[d.key] && <Loader2 size={10} className="animate-spin ml-auto" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
- 
-      {/* AI Badge */}
-      {isAI && (
-        <AIBadgeSDA version={hasilAnalisis.model_version} scores={hasilAnalisis.model_scores} />
-      )}
- 
-      {/* MAIN SECTIONS */}
-      <ContohPerhitungan />
-      <PenjelasanThreshold />
-      <MetodologiNormalisasi />
- 
-      {/* Sumber Data BPS (tetap) */}
-      <Card className="p-5 border-l-4 border-l-teal-500">
-        <SectionBar color="bg-teal-500" title="Sumber Data BPS" sub="Endpoint dan ketersediaan dataset" />
-        <div className="space-y-2 mt-4">
-          {[
-            { ds: 'Produksi Perikanan Tangkap',      src: 'BPS /list var=1054 (Ton)',                update: 'Tahunan (2018-2019, 2023-2024)' },
-            { ds: 'Produksi 8 Komoditas Perkebunan', src: 'BPS /list var=132 (Ribu Ton)',           update: 'Tahunan (2018-2023)' },
-            { ds: 'Nilai Produksi Perikanan',        src: 'BPS SIMDASI id_tabel perikanan',        update: 'Tahunan (2023-2024)' },
-            { ds: 'Jumlah Penduduk',                 src: 'BPS /list var=958 domain=7100',          update: 'Tahunan (34 provinsi)' },
-            { ds: 'PDRB Lapangan Usaha',             src: 'BPS /list var=2268 turvar=2005 & 2022', update: 'Tahunan' },
-          ].map(d => (
-            <div key={d.ds} className="p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
-              <div className="text-xs font-bold text-slate-700 dark:text-slate-300">{d.ds}</div>
-              <div className="text-[10px] text-slate-400">{d.src}</div>
-              <div className="text-[10px] text-teal-500 font-semibold mt-0.5">Update: {d.update}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
- 
-      {/* Klasifikasi (tetap) */}
-      <Card className="p-5 border-l-4 border-l-rose-500">
-        <SectionBar color="bg-rose-500" title="Klasifikasi Status IPSDA" sub="Interpretasi nilai index" />
-        <div className="space-y-2 mt-4">
-          {[
-            { label: 'OPTIMAL', range: 'IPSDA ≥ 0.70', color: '#10b981', desc: 'SDA menjadi motor penggerak ekonomi daerah.' },
-            { label: 'CUKUP',   range: '0.50 – 0.70',  color: '#3b82f6', desc: 'Potensi SDA mulai dirasakan, masih belum optimal.' },
-            { label: 'KURANG',  range: '0.30 – 0.50',  color: '#f97316', desc: 'Daerah kaya SDA tapi dampak ekonomi terbatas.' },
-            { label: 'RENDAH',  range: 'IPSDA < 0.30',  color: '#ef4444', desc: 'Ketimpangan parah — perlu intervensi khusus.' },
-          ].map(s => (
-            <div key={s.label} className="flex gap-3 p-2.5 rounded-lg border" style={{ borderColor: s.color + '40', backgroundColor: s.color + '08' }}>
-              <div className="shrink-0 text-center">
-                <span className="text-[10px] font-black px-2 py-0.5 rounded" style={{ backgroundColor: s.color + '20', color: s.color }}>{s.label}</span>
-                <div className="text-[9px] text-slate-400 mt-0.5 whitespace-nowrap">{s.range}</div>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
- 
-export default TabMetadataSDA;
-
-// ══════════════════════════════════════════════════════════
-// Tab: Tren
-// ══════════════════════════════════════════════════════════
-const PALETTE = [
-  '#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6',
-  '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',
-  '#a855f7','#0ea5e9','#fb923c','#e879f9','#4ade80',
-];
-
-const VIEW_BTNS = [
-  { id: 'distribusi', label: 'Distribusi Status', Icon: BarChart2   },
-  { id: 'ipsda',      label: 'Tren IPSDA Provinsi', Icon: TrendingUp },
-  { id: 'ranking',    label: 'Top & Bottom',        Icon: ShieldCheck},
-  { id: 'heatmap',    label: 'Heatmap',             Icon: Activity   },
-];
-
-const IPSDATooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 min-w-[160px]">
-      <div className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Tahun {label}</div>
-      {payload.sort((a, b) => (b.value ?? -1) - (a.value ?? -1)).map((p, i) => (
-        <div key={i} className="flex items-center justify-between gap-3 mb-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-            <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[110px]">{p.dataKey}</span>
-          </div>
-          <span className="text-[11px] font-black text-slate-900 dark:text-white">{p.value ?? '-'}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const DistribTooltipSDA = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  const total = payload.reduce((s, p) => s + (p.value || 0), 0);
-  return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 min-w-[150px]">
-      <div className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Tahun {label}</div>
-      {payload.map((p, i) => (
-        <div key={i} className="flex items-center justify-between gap-3 mb-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
-            <span className="text-[11px] text-slate-600 dark:text-slate-300">{p.dataKey}</span>
-          </div>
-          <span className="text-[11px] font-black" style={{ color: p.fill }}>{p.value}</span>
-        </div>
-      ))}
-      <div className="border-t border-slate-100 dark:border-slate-700 mt-1.5 pt-1.5 text-[10px] text-slate-400">Total: {total} provinsi</div>
-    </div>
-  );
-};
-
-export function TabTrendSDA({ trendData, trendLoading, trendError }) {
-  const [viewMode,       setViewMode]       = useState('distribusi');
-  const [selectedProvs,  setSelectedProvs]  = useState([]);
-  const [provSearch,     setProvSearch]     = useState('');
-  const [showProvPicker, setShowProvPicker] = useState(false);
-  const [metrik,         setMetrik]         = useState('ipsda');
-
-  useEffect(() => {
-    if (!trendData?.length || selectedProvs.length > 0) return;
-    const allProvs  = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))];
-    const provCount = {};
-    trendData.forEach(d => d.summary.forEach(p => { provCount[p.provinsi] = (provCount[p.provinsi] || 0) + 1; }));
-    const top5 = allProvs.sort((a, b) => (provCount[b] || 0) - (provCount[a] || 0)).slice(0, 5);
-    setSelectedProvs(top5);
-  }, [trendData]);
-
-  if (!trendData && !trendLoading) return (
-    <div className="py-14 text-center">
-      <Activity size={36} className="text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-      <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 mb-1">Belum ada analisis SDA tersimpan</p>
-      <p className="text-xs text-slate-400 dark:text-slate-500">Simpan setidaknya 2 analisis dari tahun berbeda untuk melihat tren IPSDA.</p>
-    </div>
-  );
-
-  if (trendLoading) return (
-    <div className="py-14 text-center">
-      <Loader2 size={28} className="text-blue-500 animate-spin mx-auto mb-3" />
-      <p className="text-sm text-slate-500">Memuat data analisis tersimpan...</p>
-    </div>
-  );
-
-  if (trendError) return (
-    <div className="py-10 text-center">
-      <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
-      <p className="text-sm text-red-500">{trendError}</p>
-    </div>
-  );
-
-  if (!trendData?.length) return null;
-
-  const tahunList     = [...new Set(trendData.map(d => d.tahun))].sort();
-  const allProvs      = [...new Set(trendData.flatMap(d => d.summary.map(p => p.provinsi)))].sort();
-  const filteredProvs = allProvs.filter(p => p.toLowerCase().includes(provSearch.toLowerCase()));
-
-  const distribusiData = trendData.map(d => ({
-    tahun:   String(d.tahun),
-    OPTIMAL: d.status_dist.OPTIMAL || 0,
-    CUKUP:   d.status_dist.CUKUP   || 0,
-    KURANG:  d.status_dist.KURANG  || 0,
-    RENDAH:  d.status_dist.RENDAH  || 0,
-    isAI:    d.is_ai,
-  }));
-
-  const METRIK_LABEL = {
-    ipsda:    'IPSDA',
-    rpp_ikan: 'RPP Ikan (norm)',
-    rpp_kebun:'RPP Kebun (norm)',
-    npi:      'NPI (norm)',
-    kps:      'KPS (norm)',
-  };
-
-  const ipsdaTrendData = tahunList.map(th => {
-    const snap = trendData.find(d => d.tahun === th);
-    const row  = { tahun: String(th) };
-    if (snap) {
-      selectedProvs.forEach(pn => {
-        const p = snap.summary.find(s => s.provinsi === pn);
-        row[pn] = p ? Number((p[metrik] ?? p.ipsda)?.toFixed(4)) : null;
-      });
-    }
-    return row;
-  });
-
-  const rankingData = allProvs.map(pn => {
-    const vals = trendData.flatMap(d => {
-      const p = d.summary.find(s => s.provinsi === pn);
-      return p?.ipsda != null ? [p.ipsda] : [];
-    });
-    const avg  = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-    const last = (() => { for (let i = trendData.length - 1; i >= 0; i--) { const p = trendData[i].summary.find(s => s.provinsi === pn); if (p?.ipsda != null) return p; } return null; })();
-    return { provinsi: pn, avg: avg ? +avg.toFixed(4) : null, count: vals.length, warna: last?.warna || '#94a3b8', status: last?.status || '-' };
-  }).filter(d => d.avg != null).sort((a, b) => b.avg - a.avg);
-
-  const top5         = rankingData.slice(0, 5);
-  const bottom5      = rankingData.slice(-5).reverse();
-  const heatmapProvs = rankingData.slice(0, 20);
-
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-            Tren dari <span className="text-blue-600 dark:text-blue-400">{trendData.length} analisis tersimpan</span>
-            {' '}· Tahun {tahunList[0]}–{tahunList[tahunList.length - 1]}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {trendData.filter(d => d.is_ai).length > 0 && (
-              <span className="text-purple-400 font-semibold">
-                {trendData.filter(d => d.is_ai).length} prediksi AI ·{' '}
-              </span>
-            )}
-            {trendData.filter(d => !d.is_ai).length} data BPS riil
-          </p>
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {VIEW_BTNS.map(v => (
-            <button key={v.id} onClick={() => setViewMode(v.id)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all',
-                viewMode === v.id
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'
-              )}>
-              <v.Icon size={12} />{v.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Distribusi Status ── */}
-      {viewMode === 'distribusi' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-blue-500" />
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Distribusi Status IPSDA per Tahun</h3>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={distribusiData} margin={{ top: 8, right: 16, left: -10, bottom: 0 }} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.5} vertical={false} />
-                <XAxis dataKey="tahun" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <RTooltip content={<DistribTooltipSDA />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-                <Bar dataKey="OPTIMAL" stackId="a" fill="#10b981" />
-                <Bar dataKey="CUKUP"   stackId="a" fill="#3b82f6" />
-                <Bar dataKey="KURANG"  stackId="a" fill="#f97316" />
-                <Bar dataKey="RENDAH"  stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-4 gap-3">
-            {['OPTIMAL', 'CUKUP', 'KURANG', 'RENDAH'].map(s => {
-              const latest = distribusiData[distribusiData.length - 1]?.[s] || 0;
-              const prev   = distribusiData[distribusiData.length - 2]?.[s];
-              const delta  = prev != null ? latest - prev : null;
-              const { warna } = STATUS_SDA[s];
-              return (
-                <div key={s} className="p-3 rounded-xl border" style={{ borderColor: warna + '40', backgroundColor: warna + '08' }}>
-                  <div className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: warna }}>{s}</div>
-                  <div className="text-xl font-black text-slate-800 dark:text-white">{latest}</div>
-                  <div className="text-[10px] text-slate-400">provinsi</div>
-                  {delta != null && (
-                    <div className={cn('text-[10px] font-semibold mt-1', delta > 0 ? 'text-teal-500' : delta < 0 ? 'text-red-400' : 'text-slate-400')}>
-                      {delta > 0 ? '▲' : delta < 0 ? '▼' : '–'} {Math.abs(delta)}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Tren IPSDA per Provinsi ── */}
-      {viewMode === 'ipsda' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 rounded-full bg-blue-500" />
-              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Tren Metrik SDA per Provinsi</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <select value={metrik} onChange={e => setMetrik(e.target.value)}
-                className="text-xs font-semibold px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
-                {Object.entries(METRIK_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-              <div className="relative">
-                <button onClick={() => setShowProvPicker(!showProvPicker)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-blue-300 transition-colors">
-                  <Filter size={11} /> Provinsi ({selectedProvs.length})
-                  <ChevronDown size={11} className={cn('transition-transform', showProvPicker && 'rotate-180')} />
+                <button onClick={() => setProvinsiPopup(null)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0">
+                  <X size={17} className="text-slate-500"/>
                 </button>
-                {showProvPicker && (
-                  <div className="absolute top-full mt-1 right-0 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-20 max-h-72 flex flex-col">
-                    <div className="p-2 border-b border-slate-100 dark:border-slate-700">
-                      <input type="text" value={provSearch} onChange={e => setProvSearch(e.target.value)}
-                        placeholder="Cari provinsi..." autoFocus
-                        className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-blue-500 outline-none" />
-                    </div>
-                    <div className="flex gap-1 px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
-                      <button onClick={() => setSelectedProvs(allProvs.slice(0, 8))} className="text-[10px] px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded font-semibold hover:bg-blue-100 transition-colors">Semua (maks 8)</button>
-                      <button onClick={() => setSelectedProvs([])} className="text-[10px] px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded font-semibold hover:bg-slate-200 transition-colors">Kosongkan</button>
-                    </div>
-                    <div className="overflow-y-auto flex-1 py-1">
-                      {filteredProvs.map(pn => {
-                        const sel = selectedProvs.includes(pn);
-                        return (
-                          <button key={pn} onClick={() => {
-                            if (sel) setSelectedProvs(p => p.filter(x => x !== pn));
-                            else if (selectedProvs.length < 10) setSelectedProvs(p => [...p, pn]);
-                            else toast('Maks 10 provinsi sekaligus', { icon: '⚠️' });
-                          }}
-                            className={cn('w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors',
-                              sel ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                            )}>
-                            <div className={cn('w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0', sel ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600')}>
-                              {sel && <Check size={9} className="text-white" />}
-                            </div>
-                            {pn}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
 
-          {selectedProvs.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-400">Pilih minimal 1 provinsi</div>
-          ) : (
-            <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={ipsdaTrendData} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.5} vertical={false} />
-                  <XAxis dataKey="tahun" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 1]} />
-                  <RTooltip content={<IPSDATooltip />} />
-                  <ReferenceLine y={0.70} stroke="#10b981" strokeDasharray="5 3" strokeOpacity={0.6} label={{ value: 'OPTIMAL', fontSize: 9, fill: '#10b981', position: 'right' }} />
-                  <ReferenceLine y={0.50} stroke="#3b82f6" strokeDasharray="5 3" strokeOpacity={0.6} label={{ value: 'CUKUP',   fontSize: 9, fill: '#3b82f6', position: 'right' }} />
-                  <ReferenceLine y={0.30} stroke="#f97316" strokeDasharray="5 3" strokeOpacity={0.6} label={{ value: 'KURANG',  fontSize: 9, fill: '#f97316', position: 'right' }} />
-                  {selectedProvs.map((pn, i) => (
-                    <Line key={pn} type="monotone" dataKey={pn} stroke={PALETTE[i % PALETTE.length]}
-                      strokeWidth={2.5} dot={{ r: 4, fill: PALETTE[i % PALETTE.length], strokeWidth: 2, stroke: '#fff' }}
-                      activeDot={{ r: 6 }} connectNulls={false} />
-                  ))}
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 12 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {selectedProvs.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-900/60">
-                  <tr className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                    <th className="px-4 py-2.5 text-left">Provinsi</th>
-                    {tahunList.map(th => <th key={th} className="px-4 py-2.5 text-center">{th}</th>)}
-                    <th className="px-4 py-2.5 text-center">Rata²</th>
-                    <th className="px-4 py-2.5 text-center">Tren</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedProvs.map(pn => {
-                    const vals = tahunList.map(th => {
-                      const snap = trendData.find(d => d.tahun === th);
-                      const p    = snap?.summary.find(s => s.provinsi === pn);
-                      return p?.[metrik] ?? p?.ipsda ?? null;
-                    });
-                    const nonNull  = vals.filter(v => v != null);
-                    const avg      = nonNull.length ? nonNull.reduce((a, b) => a + b, 0) / nonNull.length : null;
-                    const trendDir = nonNull.length > 1 ? nonNull[nonNull.length - 1] - nonNull[0] : null;
+            <div className="overflow-y-auto flex-1 p-5">
+              {!popupData.rekomendasi?.length ? (
+                <div className="text-center py-10 text-slate-400">
+                  <AlertCircle size={28} className="mx-auto mb-2 opacity-40"/>
+                  <p className="text-sm font-medium">Belum ada rekomendasi kebijakan.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">{popupData.rekomendasi.length} Pilar Kebijakan</div>
+                  {popupData.rekomendasi.map((kelompok, ki) => {
+                    const pc     = getPilarColor(kelompok.pilar);
+                    const isOpen = openPilar[ki] !== false;
                     return (
-                      <tr key={pn} className="border-b border-slate-100 dark:border-slate-700/50">
-                        <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">{pn}</td>
-                        {vals.map((v, i) => (
-                          <td key={i} className="px-4 py-2.5 text-center">
-                            {v != null ? (
-                              <span className="font-mono font-bold" style={{ color: v >= 0.7 ? '#10b981' : v >= 0.5 ? '#3b82f6' : v >= 0.3 ? '#f97316' : '#ef4444' }}>
-                                {v.toFixed(3)}
-                              </span>
-                            ) : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                          </td>
-                        ))}
-                        <td className="px-4 py-2.5 text-center font-black text-slate-800 dark:text-slate-100">{avg != null ? avg.toFixed(3) : '-'}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          {trendDir != null ? (
-                            <span className={cn('text-xs font-bold', trendDir > 0.01 ? 'text-teal-500' : trendDir < -0.01 ? 'text-red-400' : 'text-slate-400')}>
-                              {trendDir > 0.01 ? '▲ Naik' : trendDir < -0.01 ? '▼ Turun' : '→ Stabil'}
-                            </span>
-                          ) : '-'}
-                        </td>
-                      </tr>
+                      <div key={ki} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <button className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                          onClick={() => setOpenPilar(prev => ({ ...prev, [ki]: !isOpen }))}>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: pc }}/>
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{kelompok.pilar}</span>
+                            <span className="text-[9px] font-semibold text-white px-1.5 py-0.5 rounded" style={{ backgroundColor: pc }}>P{kelompok.prioritas}</span>
+                            <span className="text-[9px] text-slate-400">{kelompok.jumlah_aksi} aksi</span>
+                          </div>
+                          <ChevronDown size={13} className={cn('text-slate-400 transition-transform', isOpen && 'rotate-180')}/>
+                        </button>
+                        {isOpen && (
+                          <div className="border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/50">
+                            {kelompok.aksi.map((aksi, ai) => (
+                              <div key={ai} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+                                <div className="flex items-start gap-2.5">
+                                  <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-black" style={{ backgroundColor: pc }}>{aksi.no_aksi || ai+1}</span>
+                                  <div className="flex-1 min-w-0">
+                                    {aksi.isu_strategis && <div className="text-[9px] italic text-slate-400 mb-0.5">Isu: {aksi.isu_strategis}</div>}
+                                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{aksi.nama_aksi}</div>
+                                    {aksi.detail_aksi && <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{aksi.detail_aksi}</p>}
+                                    {aksi.indikator_terkait && (
+                                      <span className="inline-block mt-1 text-[9px] px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded font-semibold">{aksi.indikator_terkait}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Top & Bottom Ranking ── */}
-      {viewMode === 'ranking' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-rose-500" />
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Peringkat Rata-rata IPSDA</h3>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {[{ data: top5, title: 'Top 5 — IPSDA Tertinggi', Icon: CheckCircle2, clr: 'text-teal-500' },
-              { data: bottom5, title: 'Bottom 5 — IPSDA Terendah', Icon: AlertTriangle, clr: 'text-red-400' }]
-              .map(({ data, title, Icon, clr }) => (
-                <div key={title} className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Icon size={14} className={clr} />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">{title}</span>
-                  </div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, left: 8, bottom: 0 }} barSize={18}>
-                      <XAxis type="number" domain={[0, 1]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="provinsi" tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }} axisLine={false} tickLine={false} width={110} />
-                      <RTooltip formatter={(v) => [v.toFixed(4), 'Rata² IPSDA']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 11 }} />
-                      <Bar dataKey="avg" radius={[0, 4, 4, 0]}>
-                        {data.map((entry, i) => <Cell key={i} fill={entry.warna || '#3b82f6'} fillOpacity={0.85} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
                 </div>
-              ))}
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-900/60">
-                <tr className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                  <th className="px-3 py-2.5 text-center w-10">Rank</th>
-                  <th className="px-4 py-2.5 text-left">Provinsi</th>
-                  <th className="px-4 py-2.5 text-center">Rata² IPSDA</th>
-                  <th className="px-4 py-2.5 text-center">Periode</th>
-                  <th className="px-4 py-2.5 text-center">Status Terakhir</th>
-                  <th className="px-4 py-2.5 text-left w-40">Bar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankingData.map((d, i) => (
-                  <tr key={d.provinsi} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/20">
-                    <td className="px-3 py-2 text-center">
-                      <span className={cn('text-[10px] font-black px-1.5 py-0.5 rounded',
-                        i < 3 ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400'
-                              : i >= rankingData.length - 3 ? 'bg-red-100 dark:bg-red-900/40 text-red-500'
-                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
-                      )}>{i + 1}</span>
-                    </td>
-                    <td className="px-4 py-2 font-semibold text-slate-700 dark:text-slate-200">{d.provinsi}</td>
-                    <td className="px-4 py-2 text-center font-black" style={{ color: d.warna }}>{d.avg.toFixed(4)}</td>
-                    <td className="px-4 py-2 text-center text-slate-400">{d.count}×</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                        style={{ borderColor: d.warna + '60', color: d.warna, backgroundColor: d.warna + '15' }}>
-                        {d.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden w-full">
-                        <div className="h-full rounded-full" style={{ width: `${(d.avg * 100).toFixed(1)}%`, backgroundColor: d.warna, opacity: 0.8 }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              )}
+            </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* ── Heatmap ── */}
-      {viewMode === 'heatmap' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-amber-500" />
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Heatmap IPSDA — Top 20 Provinsi × Tahun</h3>
-          </div>
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-[11px]">
-              <thead className="bg-slate-50 dark:bg-slate-800">
-                <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-800 min-w-[130px]">Provinsi</th>
-                  {tahunList.map(th => (
-                    <th key={th} className="px-3 py-3 text-center text-[10px] font-bold text-slate-400 whitespace-nowrap min-w-[70px]">
-                      {th}{trendData.find(d => d.tahun === th)?.is_ai && <span className="ml-1 text-[8px] text-purple-400">AI</span>}
-                    </th>
-                  ))}
-                  <th className="px-3 py-3 text-center text-[10px] font-bold text-slate-400 min-w-[70px]">Rata²</th>
-                </tr>
-              </thead>
-              <tbody>
-                {heatmapProvs.map((d, ri) => {
-                  const cells   = tahunList.map(th => { const snap = trendData.find(dd => dd.tahun === th); return snap?.summary.find(s => s.provinsi === d.provinsi) || null; });
-                  const nonNull = cells.filter(Boolean);
-                  const avg     = nonNull.length ? nonNull.reduce((s, p) => s + (p.ipsda || 0), 0) / nonNull.length : null;
-                  return (
-                    <tr key={d.provinsi} className="border-b border-slate-100 dark:border-slate-700/40">
-                      <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-slate-800">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] text-slate-400 w-5 shrink-0">{ri + 1}</span>
-                          {d.provinsi}
-                        </div>
-                      </td>
-                      {cells.map((p, ci) => (
-                        <td key={ci} className="px-2 py-2 text-center">
-                          {p ? (
-                            <div className="mx-auto w-14 py-1.5 rounded-lg font-black text-[10px]"
-                              style={{ backgroundColor: (p.warna || '#94a3b8') + '25', color: p.warna || '#94a3b8', border: `1px solid ${(p.warna || '#94a3b8')}40` }}>
-                              {(p.ipsda || 0).toFixed(3)}
-                            </div>
-                          ) : (
-                            <div className="mx-auto w-14 py-1.5 rounded-lg text-[10px] text-slate-300 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-700">-</div>
-                          )}
-                        </td>
-                      ))}
-                      <td className="px-3 py-2 text-center">
-                        {avg != null ? <div className="font-black text-[11px]" style={{ color: d.warna }}>{avg.toFixed(3)}</div> : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center gap-4 px-2">
-            <span className="text-[10px] text-slate-400 font-semibold">Legenda:</span>
-            {Object.entries(STATUS_SDA).map(([s, v]) => (
-              <div key={s} className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: v.warna + '30', border: `1px solid ${v.warna}60` }} />
-                <span className="text-[10px] font-semibold" style={{ color: v.warna }}>{s}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+// ─── MAIN TABS WRAPPER ────────────────────────────────────────────────────────
+export default function TabsSDA({
+  activeTab, setActiveTab,
+  hasilAnalisis, jumlahKategori,
+  indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih,
+  tahunTerpilih, daftarTersimpan,
+  eksporData, getWarna, getKategori,
+}) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div className="flex border-b border-slate-100 dark:border-slate-700">
+        {TABS.map(({ id, label, Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button key={id} onClick={() => setActiveTab(id)}
+              className={cn('flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all relative flex-1',
+                active ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/30')}>
+              <Icon size={14}/>
+              <span className="hidden sm:inline">{label}</span>
+              {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-t-full"/>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="p-5" style={{ overflowAnchor:'none' }}>
+        {activeTab === 'info' && (
+          <TabInfo hasilAnalisis={hasilAnalisis} jumlahKategori={jumlahKategori}
+            indikatorTerpilih={indikatorTerpilih} kategoriTerpilih={kategoriTerpilih}
+            setKategoriTerpilih={setKategoriTerpilih} eksporData={eksporData}
+            getWarna={getWarna} getKategori={getKategori}/>
+        )}
+        {activeTab === 'kebijakan' && (
+          <TabKebijakan hasilAnalisis={hasilAnalisis} indikatorTerpilih={indikatorTerpilih}
+            kategoriTerpilih={kategoriTerpilih} setKategoriTerpilih={setKategoriTerpilih}
+            getWarna={getWarna} getKategori={getKategori}/>
+        )}
+        {activeTab === 'metadata' && (
+          <MetadataPanel_SDA hasilAnalisis={hasilAnalisis} indikatorTerpilih={indikatorTerpilih} tahunTerpilih={tahunTerpilih}/>
+        )}
+        {activeTab === 'tren' && (
+          <TrendPanel_SDA daftarTersimpan={daftarTersimpan}/>
+        )}
+      </div>
     </div>
   );
 }

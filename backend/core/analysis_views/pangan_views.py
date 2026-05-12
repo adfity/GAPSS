@@ -1,1085 +1,1599 @@
+"""
+pangan_views.py
+─────────────────────────────────────────────────────────────────────────────
+Backend analisis Indeks Ketahanan Pangan (IKP) — versi pangan.
+
+Rumus IKP:
+  IKv  = Produksi Padi (Ton) / Jumlah Penduduk (Ribu Jiwa)
+  IA   = 1 - (Persentase Penduduk Miskin / 100)
+  IPm  = (Konsumsi Protein / 57) + (Konsumsi Kalori / 2100)   → cap di 2.0
+  IS   = 1 / CV Produksi Padi 5 tahun terakhir                → cap di 1.0
+
+Normalisasi Min-Max ke [0-1], kemudian:
+  IKP  = (IKv_norm + IA_norm + IPm_norm + IS_norm) / 4
+
+Klasifikasi:
+  IKP > 0.70  → TINGGI
+  IKP 0.40-0.70 → SEDANG
+  IKP < 0.40  → RENDAH
+
+Sumber data BPS (live):
+  - Produksi Padi  : SIMDASI id_tabel ZjZ6MXlacGJNR0JaaHBPRSs0TzNUdz09  (tahun)
+  - Konsumsi       : static table 951
+  - Kemiskinan     : var/192 (Semester 2 / September, turvar=434=Jumlah)
+  - Penduduk       : SIMDASI id_tabel WVRlTTcySlZDa3lUcFp6czNwbHl4QT09   (tahun)
+
+Prediksi ARIMA (2026-2045):
+  Model disimpan di:  backend/core/ai_models/pangan/
+    model_padi.pkl, metadata_padi.json
+    model_kemiskinan.pkl, metadata_kemiskinan.json
+    model_kalori.pkl, metadata_kalori.json
+    model_protein.pkl, metadata_protein.json
+  Penduduk:
+    backend/core/ai_models/penduduk/
+    model_penduduk.pkl, metadata_penduduk.json
+"""
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from pymongo import MongoClient
-import uuid, requests, os, json
-import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
+import psycopg2, psycopg2.extras
+import requests, uuid, warnings, joblib, numpy as np, json, os, re
 from datetime import datetime
-import io
-from django.http import HttpResponse
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env')))
 
 MONGO_URI     = os.getenv("MONGO_URI")
 DB_MONGO_NAME = os.getenv("DB_MONGO_NAME")
 BPS_API_KEY   = os.getenv("BPS_WEB_API_KEY")
 
-client   = MongoClient(MONGO_URI)
-mongo_db = client[DB_MONGO_NAME]
-
-# ── AI Model (lazy load) ──────────────────────────────────────────────────────
-_AI_MODELS = _AI_ENCODERS = _AI_META = None
-AI_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_models", "pangan")
-
-def _load_ai_models():
-    global _AI_MODELS, _AI_ENCODERS, _AI_META
-    if _AI_MODELS is not None:
-        return True
-    try:
-        import joblib
-        meta_path = os.path.join(AI_MODEL_DIR, "metadata.json")
-        if not os.path.exists(meta_path):
-            return False
-        with open(meta_path, "r", encoding="utf-8") as f:
-            _AI_META = json.load(f)
-        _AI_MODELS = {t: joblib.load(os.path.join(AI_MODEL_DIR, f"model_{t}.pkl")) for t in _AI_META["targets"]}
-        _AI_ENCODERS = {
-            "provinsi": joblib.load(os.path.join(AI_MODEL_DIR, "encoder_provinsi.pkl")),
-            "pulau":    joblib.load(os.path.join(AI_MODEL_DIR, "encoder_pulau.pkl")),
-        }
-        return True
-    except Exception as e:
-        print(f"[AI] Gagal load model: {e}")
-        _AI_MODELS = _AI_ENCODERS = _AI_META = None
-        return False
+mongo_db = MongoClient(MONGO_URI)[DB_MONGO_NAME]
 
 
-# ── Konfigurasi BPS ───────────────────────────────────────────────────────────
-TAHUN_SUPPORTED  = list(range(2020, 2031))
-SIMDASI_PADI_TABEL     = {y: "ZjZ6MXlacGJNR0JaaHBPRSs0TzNUdz09" for y in range(2018, 2027)}
-SIMDASI_PENDUDUK_TABEL = {y: "WVRlTTcySlZDa3lUcFp6czNwbHl4QT09" for y in range(2018, 2027)}
-URL_KEMISKINAN_LIST = (
-    "https://webapi.bps.go.id/v1/api/list/model/data/lang/ind"
-    "/domain/0000/var/192/th/{th_val}/key/{key}/"
-)
-URL_KONSUMSI_STATIC = (
-    "https://webapi.bps.go.id/v1/api/view/domain/0000"
-    "/model/statictable/lang/ind/id/951/key/{key}/"
-)
-INDIKATOR_DATASET_MAP = {
-    'ALL':          ['PADI', 'KONSUMSI', 'KEMISKINAN', 'PENDUDUK'],
-    'KETERSEDIAAN': ['PADI', 'PENDUDUK'],
-    'KONSUMSI':     ['KONSUMSI'],
-    'AKSES':        ['KEMISKINAN'],
+def get_pg_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT", "5432")),
+        dbname=os.getenv("DB_NAME"), user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD"),
+    )
+
+
+# ── PATH MODELS ───────────────────────────────────────────────────────────────
+
+PANGAN_MODELS_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'ai_models', 'pangan')
+PENDUDUK_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'ai_models', 'penduduk')
+
+PANGAN_MODEL_FILES = {
+    'PADI':       'model_padi.pkl',
+    'KEMISKINAN': 'model_kemiskinan.pkl',
+    'KALORI':     'model_kalori.pkl',
+    'PROTEIN':    'model_protein.pkl',
 }
-DATASET_LABELS = {
-    'PADI':       'Produksi, Luas Panen & Produktivitas Padi',
-    'KONSUMSI':   'Konsumsi Kalori & Protein per Kapita',
-    'KEMISKINAN': 'Persentase Penduduk Miskin',
-    'PENDUDUK':   'Jumlah Penduduk',
+PANGAN_METADATA_FILES = {
+    'PADI':       'metadata_padi.json',
+    'KEMISKINAN': 'metadata_kemiskinan.json',
+    'KALORI':     'metadata_kalori.json',
+    'PROTEIN':    'metadata_protein.json',
 }
-COL_PENDUDUK_JUMLAH = "nzudy5elv7"
+PENDUDUK_MODEL_FILE    = 'model_penduduk.pkl'
+PENDUDUK_METADATA_FILE = 'metadata_penduduk.json'
+
+# ── KONSTANTA ─────────────────────────────────────────────────────────────────
+
+LAST_HIST_YEAR     = 2025          # tahun historis terakhir yang tersedia di BPS
+TAHUN_MAX_PREDIKSI = 2045
+TAHUN_BPS_AKTUAL   = list(range(2020, LAST_HIST_YEAR + 1))     # 2020-2025
+TAHUN_ARIMA_ONLY   = list(range(LAST_HIST_YEAR + 1, TAHUN_MAX_PREDIKSI + 1))  # 2026-2045
+TAHUN_SEMUA        = sorted(TAHUN_BPS_AKTUAL + TAHUN_ARIMA_ONLY)
+
+# BPS static-table tahun-code mapping (untuk Konsumsi & Kemiskinan)
+TAHUN_BPS_MAP = {
+    2020: 120, 2021: 121, 2022: 122, 2023: 123, 2024: 124, 2025: 125,
+}
+
+# IKP threshold
+THRESHOLD_TINGGI = 0.70
+THRESHOLD_SEDANG = 0.40
+
+# IPm: standar AKG (Permenkes 28/2019)
+PROTEIN_STANDAR = 57.0    # gram/kapita/hari
+KALORI_STANDAR  = 2100.0  # kkal/kapita/hari
+
+# Clip ranges untuk ARIMA
+CLIP_RANGE_PANGAN = {
+    'PADI':       (0.0, 20_000_000.0),
+    'KEMISKINAN': (0.0, 50.0),
+    'KALORI':     (1000.0, 4000.0),
+    'PROTEIN':    (20.0, 120.0),
+    'PENDUDUK':   (100.0, 60_000.0),   # ribu jiwa
+}
+
+CV_METRICS_FALLBACK = {
+    'PADI':       {'cv_mae': 50000.0,  'cv_rmse': 80000.0,  'cv_wmape': 3.50},
+    'KEMISKINAN': {'cv_mae': 0.50,     'cv_rmse': 0.75,     'cv_wmape': 2.80},
+    'KALORI':     {'cv_mae': 30.0,     'cv_rmse': 45.0,     'cv_wmape': 1.50},
+    'PROTEIN':    {'cv_mae': 1.5,      'cv_rmse': 2.2,      'cv_wmape': 2.10},
+    'PENDUDUK':   {'cv_mae': 50.0,     'cv_rmse': 80.0,     'cv_wmape': 1.20},
+}
+
+KODE_PROVINSI_MAP = {
+    '11': 'ACEH',                       '12': 'SUMATERA UTARA',
+    '13': 'SUMATERA BARAT',             '14': 'RIAU',
+    '15': 'JAMBI',                      '16': 'SUMATERA SELATAN',
+    '17': 'BENGKULU',                   '18': 'LAMPUNG',
+    '19': 'KEPULAUAN BANGKA BELITUNG',  '21': 'KEPULAUAN RIAU',
+    '31': 'JAKARTA',                    '32': 'JAWA BARAT',
+    '33': 'JAWA TENGAH',                '34': 'DAERAH ISTIMEWA YOGYAKARTA',
+    '35': 'JAWA TIMUR',                 '36': 'BANTEN',
+    '51': 'BALI',                       '52': 'NUSA TENGGARA BARAT',
+    '53': 'NUSA TENGGARA TIMUR',        '61': 'KALIMANTAN BARAT',
+    '62': 'KALIMANTAN TENGAH',          '63': 'KALIMANTAN SELATAN',
+    '64': 'KALIMANTAN TIMUR',           '65': 'KALIMANTAN UTARA',
+    '71': 'SULAWESI UTARA',             '72': 'SULAWESI TENGAH',
+    '73': 'SULAWESI SELATAN',           '74': 'SULAWESI TENGGARA',
+    '75': 'GORONTALO',                  '76': 'SULAWESI BARAT',
+    '81': 'MALUKU',                     '82': 'MALUKU UTARA',
+    '91': 'PAPUA BARAT',                '92': 'PAPUA BARAT DAYA',
+    '94': 'PAPUA',                      '95': 'PAPUA SELATAN',
+    '96': 'PAPUA TENGAH',               '97': 'PAPUA PEGUNUNGAN',
+}
+
+PROVINSI_FALLBACK = {
+    'PAPUA SELATAN':    'PAPUA',
+    'PAPUA TENGAH':     'PAPUA',
+    'PAPUA PEGUNUNGAN': 'PAPUA',
+    'PAPUA BARAT DAYA': 'PAPUA BARAT',
+}
+
+# Prioritas kebijakan per band nilai IKP (mirip SDM PRIORITAS_BAND)
+PRIORITAS_BAND_IKP = {
+    'RENDAH': [(0.00, 0.20, [1, 2]), (0.20, 0.30, [1, 2, 3]), (0.30, 0.40, [2, 3, 4])],
+    'SEDANG': [(0.00, 0.55, [3, 4]),  (0.55, 0.63, [4, 5]),    (0.63, 0.70, [5, 6])],
+    'TINGGI': [(0.00, 0.80, [4, 5]),  (0.80, 0.90, [5, 6]),    (0.90, 1.00, [6, 7])],
+}
+_PRIORITAS_FALLBACK_IKP = {'RENDAH': [1, 2, 3], 'SEDANG': [3, 4, 5], 'TINGGI': [5, 6, 7]}
 
 
-def get_pangan_config(tahun: int) -> dict:
-    def _nearest(tbl, yr):
-        v = tbl.get(yr)
-        if not v:
-            for d in [-1, -2, 1, 2]:
-                v = tbl.get(yr + d)
-                if v: break
-        return v
+# ── HELPERS UMUM ──────────────────────────────────────────────────────────────
 
-    config = {}
-    id_padi = _nearest(SIMDASI_PADI_TABEL, tahun)
-    if id_padi:
-        config["PADI"] = {
-            "url_template": (
-                f"https://webapi.bps.go.id/v1/api/interoperabilitas/datasource/simdasi"
-                f"/id/25/tahun/{tahun}/id_tabel/{id_padi}/wilayah/0000000/key/{{key}}/"
-            ),
-            "nama": "Produksi, Luas Panen & Produktivitas Padi", "jenis": "simdasi_padi",
-        }
-    config["KONSUMSI"] = {
-        "url_template": URL_KONSUMSI_STATIC,
-        "nama": "Konsumsi Kalori & Protein per Kapita", "jenis": "statictable_konsumsi",
-    }
-    th_val = tahun - 1900
-    config["KEMISKINAN"] = {
-        "url_template": URL_KEMISKINAN_LIST.replace("{th_val}", str(th_val)),
-        "nama": "Persentase Penduduk Miskin", "jenis": "list_kemiskinan", "th_val": th_val,
-    }
-    id_pddk = _nearest(SIMDASI_PENDUDUK_TABEL, tahun)
-    if id_pddk:
-        config["PENDUDUK"] = {
-            "url_template": (
-                f"https://webapi.bps.go.id/v1/api/interoperabilitas/datasource/simdasi"
-                f"/id/25/tahun/{tahun}/id_tabel/{id_pddk}/wilayah/0000000/key/{{key}}/"
-            ),
-            "nama": "Jumlah Penduduk", "jenis": "simdasi_penduduk",
-        }
-    return config
+def _clip_pangan(val, key):
+    lo, hi = CLIP_RANGE_PANGAN.get(key, (None, None))
+    val = float(val)
+    if lo is not None: val = max(lo, val)
+    if hi is not None: val = min(hi, val)
+    return round(val, 4)
 
 
-def _is_pangan_data_empty(data, dataset_key, tahun=None):
-    if data is None:
-        return True
-    if dataset_key == "KONSUMSI":
-        table_html = data.get("data", {}).get("table", "")
-        if not table_html or len(table_html) < 100:
-            return True
-        # Tabel konsumsi BPS adalah statis - data tersedia selama tabel tidak kosong.
-        # Tidak strict-check tahun karena BPS update tabel ini dengan delay 1-2 tahun.
-        return False
-    elif dataset_key == "KEMISKINAN":
-        return not data.get("datacontent", {})
-    else:
-        data_container = data.get("data", [])
-        if not data_container or len(data_container) < 2:
-            return True
-        table_data = data_container[1]
-        return not isinstance(table_data, dict) or len(table_data.get("data", [])) == 0
-
-
-# ── Endpoint: Cek Ketersediaan Data ──────────────────────────────────────────
-@api_view(['POST'])
-def check_year_data_pangan(request):
-    if not BPS_API_KEY:
-        return Response({"error": "BPS Web API Key belum dikonfigurasi"}, status=500)
-    try:
-        tahun = int(request.data.get('tahun', 2025))
-    except (ValueError, TypeError):
-        tahun = 2025
-    if tahun not in TAHUN_SUPPORTED:
-        return Response({"error": f"Tahun {tahun} tidak didukung."}, status=400)
-
-    all_config = get_pangan_config(tahun)
-    dataset_status = {}
-    for key in INDIKATOR_DATASET_MAP['ALL']:
-        config = all_config.get(key)
-        if not config:
-            dataset_status[key] = {"nama": DATASET_LABELS.get(key, key), "tersedia": False, "status": "Konfigurasi tidak ada"}
-            continue
-        try:
-            resp = requests.get(config["url_template"].format(key=BPS_API_KEY), timeout=20)
-            if resp.status_code == 200:
-                kosong = _is_pangan_data_empty(resp.json(), key, tahun=tahun)
-                dataset_status[key] = {
-                    "nama": config["nama"], "tersedia": not kosong,
-                    "status": "Tersedia" if not kosong else "Kosong / Tidak Tersedia",
-                }
-            else:
-                dataset_status[key] = {"nama": config["nama"], "tersedia": False, "status": f"HTTP {resp.status_code}"}
-        except Exception as e:
-            dataset_status[key] = {"nama": config.get("nama", key), "tersedia": False, "status": f"Gagal ({str(e)[:50]})"}
-
-    tersedia_list = [k for k, v in dataset_status.items() if v["tersedia"]]
-    kosong_list   = [k for k, v in dataset_status.items() if not v["tersedia"]]
-    semua_kosong  = len(tersedia_list) == 0
-    ada_yang_kosong = len(kosong_list) > 0 and not semua_kosong
-
-    ai_model_ready = ai_version = None
-    ai_tersedia = False
-    if semua_kosong or ada_yang_kosong:
-        ai_model_ready = _load_ai_models()
-        ai_tersedia    = ai_model_ready
-        ai_version     = _AI_META.get("version") if _AI_META else None
-
-    return Response({
-        "tahun": tahun, "is_ai_prediction": False, "indikator": 'ALL',
-        "dataset_status": dataset_status,
-        "tersedia": tersedia_list, "kosong": kosong_list,
-        "semua_kosong": semua_kosong, "ada_yang_kosong": ada_yang_kosong,
-        "bisa_dieksekusi": len(tersedia_list) >= 2,  # bisa jalan kalau >= 2 dataset tersedia
-        "bps_kosong": semua_kosong,
-        "ai_tersedia": ai_tersedia, "ai_model_ready": ai_model_ready, "ai_model_version": ai_version,
-    })
-
-
-# ── XLSX Helpers ──────────────────────────────────────────────────────────────
-_H_GREEN = "1B5E20"
-_H_SUB   = "388E3C"
-_BORDER  = Border(*[Side(style="thin", color="FFFFFF")] * 4)
-_BORDER2 = Border(*[Side(style="thin", color="CCCCCC")] * 4)
-
-def _xlsx_response(ws_title, title, subtitle, headers, col_widths, data_rows, num_cols, source_text, timestamp, filename):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = ws_title
-    ws.sheet_view.showGridLines = False
-    ws.freeze_panes = "A4"
-    n = len(headers)
-
-    # Title rows
-    for row, (text, size, color, h) in enumerate([
-        (title,    14, _H_GREEN, 30),
-        (subtitle, 10, _H_SUB,   20),
-    ], start=1):
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n)
-        c = ws.cell(row=row, column=1, value=text)
-        c.font = Font(name="Arial", bold=(row == 1), italic=(row == 2), color="FFFFFF", size=size)
-        c.fill = PatternFill("solid", fgColor=color)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[row].height = h
-
-    # Column headers
-    for ci, h in enumerate(headers, 1):
-        c = ws.cell(row=3, column=ci, value=h)
-        c.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
-        c.fill = PatternFill("solid", fgColor=_H_SUB)
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c.border = _BORDER
-    ws.row_dimensions[3].height = 35
-    for ci, w in enumerate(col_widths, 1):
-        ws.column_dimensions[get_column_letter(ci)].width = w
-
-    # Data rows
-    for ri, row_data in enumerate(data_rows):
-        rn = 4 + ri
-        fill = PatternFill("solid", fgColor="E8F5E9" if ri % 2 == 0 else "FFFFFF")
-        for ci, val in enumerate(row_data, 1):
-            c = ws.cell(row=rn, column=ci, value=val)
-            c.fill = fill; c.border = _BORDER2
-            c.font = Font(name="Arial", size=10)
-            if ci in num_cols:
-                c.alignment = Alignment(horizontal="right", vertical="center")
-                if isinstance(val, float): c.number_format = '#,##0.00'
-                elif isinstance(val, int): c.number_format = '#,##0'
-            else:
-                c.alignment = Alignment(horizontal="left", vertical="center")
-        ws.row_dimensions[rn].height = 18
-
-    # Footer
-    fr = 4 + len(data_rows) + 1
-    ws.merge_cells(start_row=fr, start_column=1, end_row=fr, end_column=n)
-    ts = timestamp[:19].replace('T', ' ') if timestamp else None
-    c = ws.cell(row=fr, column=1, value=f"Sumber: {source_text}" + (f"  |  Waktu: {ts}" if ts else ""))
-    c.font = Font(name="Arial", italic=True, color="595959", size=9)
-    c.alignment = Alignment(horizontal="left", vertical="center")
-
-    out = io.BytesIO()
-    wb.save(out); out.seek(0)
-    resp = HttpResponse(out.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return resp
-
-
-# ── Download Endpoints ────────────────────────────────────────────────────────
-@api_view(['POST'])
-def download_padi_xlsx(request):
-    try:
-        padi_data = request.data.get('padi_data')
-        if not padi_data:
-            return Response({"error": "Data tidak ditemukan"}, status=400)
-        tahun = request.data.get('tahun', 2024)
-        rows  = [
-            [i, d.get('provinsi', p), d.get('luas_panen', '-'), d.get('produktivitas', '-'),
-             d.get('produksi', '-'), d.get('rpp', '-')]
-            for i, (p, d) in enumerate(sorted(padi_data.items()), 1)
-        ]
-        return _xlsx_response(
-            "Produksi Padi",
-            "PRODUKSI, LUAS PANEN & PRODUKTIVITAS PADI MENURUT PROVINSI",
-            f"Sumber: BPS SIMDASI | Tahun {tahun} | Seluruh Provinsi Indonesia",
-            ["No.", "Provinsi", "Luas Panen (ha)", "Produktivitas (ku/ha)", "Produksi (ton)", "RPP (ton/jiwa)"],
-            [6, 35, 20, 22, 20, 18], rows, {3, 4, 5, 6},
-            f"BPS Web API - SIMDASI, Produksi Padi, Tahun {tahun}",
-            request.data.get('timestamp', datetime.now().isoformat()),
-            f"Dataset_Produksi_Padi_BPS_{tahun}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-        )
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
-
-@api_view(['POST'])
-def download_konsumsi_xlsx(request):
-    try:
-        konsumsi_data = request.data.get('konsumsi_data')
-        if not konsumsi_data:
-            return Response({"error": "Data tidak ditemukan"}, status=400)
-        tahun = request.data.get('tahun', 2024)
-        rows  = [
-            [i, d.get('provinsi', p), d.get('kalori', '-'), d.get('protein', '-'), d.get('ik', '-')]
-            for i, (p, d) in enumerate(sorted(konsumsi_data.items()), 1)
-        ]
-        return _xlsx_response(
-            "Konsumsi",
-            "RATA-RATA KONSUMSI KALORI & PROTEIN PER KAPITA PER HARI MENURUT PROVINSI",
-            f"Sumber: BPS Susenas | Tahun {tahun} | Seluruh Provinsi Indonesia",
-            ["No.", "Provinsi", "Kalori (kkal/kap/hari)", "Protein (gr/kap/hari)", "Indeks Konsumsi (IK)"],
-            [6, 35, 24, 24, 22], rows, {3, 4, 5},
-            f"BPS Web API - Susenas Static Table 951, Tahun {tahun}",
-            request.data.get('timestamp', datetime.now().isoformat()),
-            f"Dataset_Konsumsi_Pangan_BPS_{tahun}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-        )
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
-
-@api_view(['POST'])
-def download_penduduk_xlsx(request):
-    try:
-        penduduk_data = request.data.get('penduduk_data')
-        if not penduduk_data:
-            return Response({"error": "Data tidak ditemukan"}, status=400)
-        tahun = request.data.get('tahun', 2024)
-        rows  = []
-        for i, (p, d) in enumerate(sorted(penduduk_data.items()), 1):
-            pct = d.get('pct_kemiskinan')
-            ia  = round(1 - pct / 100, 4) if pct is not None else '-'
-            ket = ('Akses Baik' if isinstance(ia, float) and ia >= 0.90
-                   else 'Akses Sedang' if isinstance(ia, float) and ia >= 0.75
-                   else 'Akses Lemah' if isinstance(ia, float) else '-')
-            rows.append([i, d.get('provinsi', p), d.get('jumlah_penduduk', '-'),
-                         pct if pct is not None else '-', ia, ket])
-        return _xlsx_response(
-            "Penduduk",
-            "JUMLAH PENDUDUK DAN PERSENTASE PENDUDUK MISKIN MENURUT PROVINSI",
-            f"Sumber: BPS SIMDASI | Tahun {tahun} | Seluruh Provinsi Indonesia",
-            ["No.", "Provinsi", "Jumlah Penduduk (jiwa)", "% Penduduk Miskin", "Indeks Akses (IA)", "Keterangan"],
-            [6, 35, 26, 22, 18, 20], rows, {3, 4, 5},
-            f"BPS Web API - SIMDASI Penduduk & Kemiskinan, Tahun {tahun}",
-            request.data.get('timestamp', datetime.now().isoformat()),
-            f"Dataset_Penduduk_BPS_{tahun}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-        )
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
-
-@api_view(['POST'])
-def download_ikp_xlsx(request):
-    try:
-        ikp_data = request.data.get('ikp_data')
-        if not ikp_data:
-            return Response({"error": "Data tidak ditemukan"}, status=400)
-        tahun = request.data.get('tahun', 2024)
-        rows  = [
-            [i, d.get('provinsi', p), d.get('rpp_norm', '-'), d.get('pl_norm', '-'),
-             d.get('ik_norm', '-'), d.get('ia_norm', '-'), d.get('ikp', '-'),
-             d.get('status', '-'), d.get('warna', '-')]
-            for i, (p, d) in enumerate(sorted(ikp_data.items()), 1)
-        ]
-        return _xlsx_response(
-            "IKP",
-            "INDEKS KETAHANAN PANGAN (IKP) MENURUT PROVINSI",
-            f"Sumber: BPS Web API | Tahun {tahun} | Seluruh Provinsi Indonesia",
-            ["No.", "Provinsi", "RPP_norm", "PL_norm", "IK_norm", "IA_norm", "IKP", "Status", "Warna"],
-            [6, 35, 12, 12, 12, 12, 12, 16, 12], rows, {3, 4, 5, 6, 7},
-            f"BPS Web API - Indeks Ketahanan Pangan, Tahun {tahun}",
-            request.data.get('timestamp', datetime.now().isoformat()),
-            f"Dataset_IKP_BPS_{tahun}_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-        )
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
-
-# ── Analytics Class ───────────────────────────────────────────────────────────
-class PanganAnalytics:
-    def __init__(self, tahun=2024):
-        self.tahun = tahun
-        self.config = get_pangan_config(tahun)
-        self.timestamp_fetch = None
-
-    def fetch_selected_data(self, keys: list) -> dict:
-        all_data = {}
-        self.timestamp_fetch = datetime.now().isoformat()
-        for key in keys:
-            config = self.config.get(key)
-            if not config:
-                all_data[key] = None; continue
-            try:
-                url  = config["url_template"].format(key=BPS_API_KEY)
-                resp = requests.get(url, timeout=30)
-                all_data[key] = resp.json() if resp.status_code == 200 else None
-                print(f"{'✓' if resp.status_code == 200 else '✗'} {key}: {resp.status_code}")
-            except Exception as e:
-                print(f"✗ {key}: {e}")
-                all_data[key] = None
-        return all_data
-
-    def _parse_simdasi_table(self, raw_data):
-        """Ambil data_container dan kolom dari respons SIMDASI."""
-        if not raw_data:
-            return None, None
-        for item in raw_data.get('data', []):
-            if isinstance(item, dict) and 'data' in item and isinstance(item['data'], list):
-                return item.get('data', []), item.get('kolom', {})
-        return None, None
-
-    def _clean_float(self, raw):
-        s = str(raw).replace(' ', '').replace('.', '').replace(',', '.').strip()
-        return None if s in ['-', '...', ''] else (float(s) if s else None)
-
-    def _clean_prov(self, raw):
-        raw = raw.strip()
-        if raw.upper() in ('INDONESIA', 'TOTAL', 'NASIONAL', 'JUMLAH'):
-            return None
-        if any(x in raw.lower() for x in ['kab.', 'kota ', 'kabupaten', 'kecamatan']):
-            return None
-        return normalize_province_name(raw)
-
-    def parse_padi_data(self, raw_data):
-        padi_values, padi_raw = {}, {}
-        data_rows, kolom_info = self._parse_simdasi_table(raw_data)
-        if not data_rows:
-            return padi_values, padi_raw
-        try:
-            col_produksi = col_luas_panen = col_produktivitas = None
-            for k, v in kolom_info.items():
-                nama = v.get('nama_variabel', '').lower()
-                if 'produksi' in nama and 'padi' in nama:  col_produksi = k
-                elif 'luas panen' in nama:                  col_luas_panen = k
-                elif 'produktivitas' in nama:               col_produktivitas = k
-            if not all([col_produksi, col_luas_panen, col_produktivitas]):
-                ks = list(kolom_info.keys())
-                if len(ks) >= 3:
-                    col_luas_panen    = col_luas_panen    or ks[0]
-                    col_produktivitas = col_produktivitas or ks[1]
-                    col_produksi      = col_produksi      or ks[2]
-
-            for row in data_rows:
-                if not isinstance(row, dict): continue
-                prov_raw = (row.get('label') or row.get('nama_wilayah') or row.get('nama') or '').strip()
-                prov = self._clean_prov(prov_raw)
-                if not prov: continue
-                vars_ = row.get('variables', {})
-                def pv(col):
-                    if not col or col not in vars_: return None
-                    return self._clean_float(vars_[col].get('value', ''))
-                produksi = pv(col_produksi)
-                if produksi is None: continue
-                padi_values[prov] = {'produksi': produksi, 'luas_panen': pv(col_luas_panen), 'produktivitas': pv(col_produktivitas)}
-                padi_raw[prov]    = {'provinsi': prov, **padi_values[prov], 'rpp': None}
-        except Exception as e:
-            print(f"❌ Parse PADI: {e}")
-        return padi_values, padi_raw
-
-    def parse_konsumsi_data(self, raw_data: dict, target_year: int) -> dict:
-        import html as html_module, re
-        from bs4 import BeautifulSoup
-        result = {}
-        try:
-            table_html = html_module.unescape(raw_data.get('data', {}).get('table', ''))
-            if not table_html:
-                return result, {}
-            rows = BeautifulSoup(table_html, 'html.parser').find('table').find_all('tr')
-            if len(rows) < 4:
-                return result, {}
-
-            yr_row_idx = next((i for i, r in enumerate(rows)
-                               if sum(1 for c in r.find_all(['td','th']) if re.fullmatch(r'\d{4}', c.get_text(strip=True))) >= 10), None)
-            if yr_row_idx is None:
-                return result, {}
-
-            yrs = [c.get_text(strip=True) for c in rows[yr_row_idx].find_all(['td','th'])]
-            tys = str(target_year)
-            k_idx = p_idx = None
-            for idx, yr in enumerate(yrs):
-                if yr == tys:
-                    if k_idx is None: k_idx = idx
-                    else: p_idx = idx; break
-
-            if k_idx is None:
-                avail = sorted({int(y) for y in yrs if re.fullmatch(r'\d{4}', y)})
-                if not avail: return result, {}
-                tys = str(min(avail, key=lambda y: abs(y - target_year)))
-                for idx, yr in enumerate(yrs):
-                    if yr == tys:
-                        if k_idx is None: k_idx = idx
-                        else: p_idx = idx; break
-
-            def sf(cells, idx):
-                if idx is None or idx >= len(cells): return None
-                raw = re.sub(r'[\s\u00a0]', '', cells[idx].get_text(strip=True)).replace(',', '.')
-                return None if raw in ('', '-', 'n/a') else (float(raw) if raw else None)
-
-            SKIP = {'indonesia', 'diolah', 'sumber', 'catatan', '1)', '-'}
-            for row in rows[yr_row_idx + 1:]:
-                cells = row.find_all(['td','th'])
-                if not cells: continue
-                prov = re.sub(r'\s*\d+\)?\s*$', '', ' '.join(cells[0].get_text().split())).strip()
-                if not prov or len(prov) < 3 or prov.lower() in SKIP: continue
-                k, p = sf(cells, k_idx + 1 if k_idx else None), sf(cells, p_idx + 1 if p_idx else None)
-                if k is None and p is None: continue
-                result[normalize_province_name(prov)] = {'kalori': k, 'protein': p}
-        except Exception as e:
-            print(f"❌ Parse KONSUMSI: {e}")
-
-        konsumsi_raw = {prov: {'provinsi': prov, **d, 'ik': round(d['protein'] / 57.0, 4) if d.get('protein') else None}
-                        for prov, d in result.items()}
-        return result, konsumsi_raw
-
-    def parse_kemiskinan_data(self, raw_data):
-        miskin_values, miskin_raw = {}, {}
-        if not raw_data:
-            return miskin_values, miskin_raw
-        try:
-            vervar_list = raw_data.get('vervar', [])
-            datacontent = raw_data.get('datacontent', {})
-            th_val_list = raw_data.get('tahun', [])
-            if not vervar_list or not datacontent:
-                return miskin_values, miskin_raw
-            th_val = th_val_list[0]['val'] if th_val_list else (self.tahun - 1900)
-
-            for item in vervar_list:
-                vv, label = item.get('val'), item.get('label', '').strip()
-                if not label or label.upper() in ('INDONESIA', 'TOTAL', 'NASIONAL') or vv == 9999:
-                    continue
-                pct = (datacontent.get(f"{vv:04d}192434{th_val}{61:02d}") or
-                       datacontent.get(f"{vv:04d}192434{th_val}{62:02d}"))
-                if pct is None:
-                    for tv in [433, 432]:
-                        pct = datacontent.get(f"{vv:04d}192{tv}{th_val}{61:02d}")
-                        if pct is not None: break
-                if pct is None: continue
-                prov = normalize_province_name(label)
-                miskin_values[prov] = float(pct)
-                miskin_raw[prov]    = {'provinsi': prov, 'pct_kemiskinan': float(pct), 'ia': round(1 - float(pct)/100, 4)}
-        except Exception as e:
-            print(f"❌ Parse KEMISKINAN: {e}")
-        return miskin_values, miskin_raw
-
-    def parse_penduduk_data(self, raw_data):
-        penduduk_values, penduduk_raw = {}, {}
-        data_rows, kolom_info = self._parse_simdasi_table(raw_data)
-        if not data_rows:
-            return penduduk_values, penduduk_raw
-        try:
-            col_pddk = COL_PENDUDUK_JUMLAH
-            unit_mult = 1000
-            if col_pddk in kolom_info:
-                um = kolom_info[col_pddk].get('unit_multiplier')
-                if um is not None: unit_mult = 10 ** int(um)
-            else:
-                col_pddk = None
-                for k, v in kolom_info.items():
-                    nama = v.get('nama_variabel', '').lower()
-                    if 'jumlah penduduk' in nama or ('population' in nama and 'growth' not in nama):
-                        col_pddk = k
-                        um = v.get('unit_multiplier')
-                        unit_mult = 10 ** int(um) if um is not None else 1000
-                        break
-                if not col_pddk:
-                    col_pddk = list(kolom_info.keys())[0] if kolom_info else None
-            if not col_pddk:
-                return penduduk_values, penduduk_raw
-
-            for row in data_rows:
-                if not isinstance(row, dict): continue
-                prov_raw = (row.get('label') or row.get('nama_wilayah') or row.get('nama') or '').strip()
-                prov = self._clean_prov(prov_raw)
-                if not prov: continue
-                if str(row.get('kode_wilayah', '')).replace(' ', '') in ('0', '0000000', '00000000'):
-                    continue
-                val_entry = row.get('variables', {}).get(col_pddk, {})
-                if not val_entry: continue
-                val_raw = self._clean_float(val_entry.get('value', ''))
-                if val_raw is None or val_raw <= 0: continue
-                jiwa = val_raw * unit_mult
-                penduduk_values[prov] = jiwa
-                penduduk_raw[prov]    = {'provinsi': prov, 'jumlah_penduduk': int(jiwa), 'pct_kemiskinan': None}
-        except Exception as e:
-            print(f"❌ Parse PENDUDUK: {e}")
-        return penduduk_values, penduduk_raw
-
-
-# ── Helpers Normalisasi & IKP ─────────────────────────────────────────────────
-def normalize_province_name(name):
-    if not isinstance(name, str): name = str(name)
+def normalize_province_name_pangan(name):
+    name = str(name)
+    for tag in ['<b>', '</b>', '<B>', '</B>']:
+        name = name.replace(tag, '')
     name = name.upper().strip()
+
+    SPECIAL = {
+        'DKI JAKARTA':                     'JAKARTA',
+        'DAERAH KHUSUS IBUKOTA JAKARTA':   'JAKARTA',
+        'DKI':                             'JAKARTA',
+        'YOGYAKARTA':                      'DAERAH ISTIMEWA YOGYAKARTA',
+        'DIY':                             'DAERAH ISTIMEWA YOGYAKARTA',
+        'D.I. YOGYAKARTA':                 'DAERAH ISTIMEWA YOGYAKARTA',
+        'D I YOGYAKARTA':                  'DAERAH ISTIMEWA YOGYAKARTA',
+        'BANGKA BELITUNG':                 'KEPULAUAN BANGKA BELITUNG',
+        'KEP. BANGKA BELITUNG':            'KEPULAUAN BANGKA BELITUNG',
+        'KEP. RIAU':                       'KEPULAUAN RIAU',
+        'DI YOGYAKARTA':                   'DAERAH ISTIMEWA YOGYAKARTA',
+    }
+    for k, v in SPECIAL.items():
+        if k in name:
+            return v
+    for a, f in {
+        'KEP.':  'KEPULAUAN',
+        'KEP ':  'KEPULAUAN ',
+        'NTB':   'NUSA TENGGARA BARAT',
+        'NTT':   'NUSA TENGGARA TIMUR',
+    }.items():
+        name = name.replace(a, f)
     for prefix in ['PROVINSI ', 'PROV. ', 'PROV ', 'DAERAH KHUSUS IBUKOTA ']:
         if name.startswith(prefix):
             name = name[len(prefix):]
-    MAPPINGS = {
-        'DKI JAKARTA': 'JAKARTA', 'DAERAH KHUSUS IBUKOTA JAKARTA': 'JAKARTA', 'DKI': 'JAKARTA',
-        'YOGYAKARTA': 'DAERAH ISTIMEWA YOGYAKARTA', 'DIY': 'DAERAH ISTIMEWA YOGYAKARTA',
-        'D.I. YOGYAKARTA': 'DAERAH ISTIMEWA YOGYAKARTA', 'DI YOGYAKARTA': 'DAERAH ISTIMEWA YOGYAKARTA',
-        'BANGKA BELITUNG': 'KEPULAUAN BANGKA BELITUNG', 'KEP. BANGKA BELITUNG': 'KEPULAUAN BANGKA BELITUNG',
-        'KEP. RIAU': 'KEPULAUAN RIAU', 'NTB': 'NUSA TENGGARA BARAT', 'NTT': 'NUSA TENGGARA TIMUR',
-    }
-    for k, v in MAPPINGS.items():
-        if name == k or name.endswith(' ' + k): return v
-    if 'KEP.' in name: name = name.replace('KEP.', 'KEPULAUAN')
     return name.strip()
 
 
-def minmax_normalize(values_dict):
-    valid = {k: v for k, v in values_dict.items() if v is not None and v > 0}
-    if not valid: return {k: 0.0 for k in values_dict}
-    v_min, v_max = min(valid.values()), max(valid.values())
-    return {
-        k: (1.0 if v_max == v_min else round((v - v_min) / (v_max - v_min), 4)) if v and v > 0 else 0.0
-        for k, v in values_dict.items()
-    }
-
-def calculate_ikp(rpp_n, pl_n, ik_n, ia_n):
-    return round(0.4 * ((rpp_n + pl_n) / 2) + 0.3 * ik_n + 0.3 * ia_n, 4)
-
-def classify_ikp(ikp):
-    if ikp >= 0.70: return "TINGGI", "#10b981"
-    if ikp >= 0.50: return "SEDANG", "#f59e0b"
-    return "RENDAH", "#ef4444"
-
-
-def generate_pangan_insights(provinsi, rpp, pl, ik, ia, ikp, status):
-    out = [f"Provinsi {provinsi} memiliki status ketahanan pangan {status} dengan IKP {ikp:.3f}."]
-    if rpp is not None:
-        if rpp > 0.5:   out.append(f"✅ Produksi padi cukup tinggi ({rpp:.4f} ton/jiwa), ketersediaan pangan baik.")
-        elif rpp > 0.2: out.append(f"📊 Rasio produksi padi {rpp:.4f} ton/jiwa - masih dalam batas wajar.")
-        else:           out.append(f"⚠️ Rasio produksi padi rendah ({rpp:.4f} ton/jiwa), rentan kekurangan stok.")
-    if ik is not None:
-        if ik >= 1.0:   out.append(f"✅ Indeks konsumsi protein {ik:.2f} ≥ 1.0 - kecukupan gizi terpenuhi.")
-        elif ik >= 0.85:out.append(f"📊 Indeks konsumsi protein {ik:.2f} - mendekati standar kecukupan.")
-        else:           out.append(f"📉 Indeks konsumsi protein {ik:.2f} < 0.85 - konsumsi protein di bawah standar.")
-    if ia is not None:
-        pct = round((1 - ia) * 100, 2)
-        if ia >= 0.90:  out.append(f"✅ Akses pangan baik - tingkat kemiskinan hanya {pct}%.")
-        elif ia >= 0.75:out.append(f"📊 Akses pangan sedang - kemiskinan {pct}%, perlu peningkatan daya beli.")
-        else:           out.append(f"⚠️ Akses pangan lemah - kemiskinan {pct}%, risiko rawan pangan tinggi.")
-    return out
-
-
-def generate_pangan_recommendations(status, rpp, pl, ik, ia):
-    RECS = {
-        "RENDAH": {
-            "title": "Percepatan Ketahanan Pangan", "priority": "Tinggi",
-            "actions": ['Program GERNAS peningkatan produksi padi', 'Distribusi subsidi pupuk dan benih',
-                        'Pemberdayaan BULOG untuk stabilisasi stok', 'Bantuan sosial pangan (BPNT/PKH)',
-                        'Kampanye diversifikasi pangan lokal'],
-        },
-        "SEDANG": {
-            "title": "Penguatan Ketahanan Pangan", "priority": "Sedang",
-            "actions": ['Perluasan lahan & optimasi irigasi', 'Pelatihan petani & mekanisasi',
-                        'Pengembangan pasar tani lokal', 'Program gizi & fortifikasi pangan',
-                        'Penguatan rantai pasok pangan daerah'],
-        },
-        "TINGGI": {
-            "title": "Inovasi Ketahanan Pangan", "priority": "Rendah",
-            "actions": ['Smart farming & agrikultur presisi', 'Ekspansi pasar ekspor pertanian',
-                        'Industri pengolahan pangan lokal', 'Ketahanan pangan berbasis komunitas',
-                        'Pengembangan cadangan pangan strategis'],
-        },
-    }
-    recs = [RECS.get(status, RECS["SEDANG"])]
-    if ik is not None and ik < 0.85:
-        recs.append({'priority': 'Tinggi', 'title': 'Peningkatan Kecukupan Protein',
-            'actions': ['Diversifikasi protein (ikan, telur, kedelai)', 'Fortifikasi produk pangan',
-                        'Edukasi gizi keluarga via Posyandu', 'Subsidi protein hewani untuk keluarga rentan']})
-    if ia is not None and ia < 0.80:
-        recs.append({'priority': 'Tinggi', 'title': 'Peningkatan Akses Ekonomi Pangan',
-            'actions': ['Perluas cakupan BPNT & PKH', 'Operasi pasar murah berkala',
-                        'Pengembangan lumbung pangan desa', 'Subsidi harga beras untuk rumah tangga miskin']})
-    return recs
-
-
-# ── AI Prediction Helpers ─────────────────────────────────────────────────────
-def _build_feature_row(tahun_pred, prov_name, cache, meta):
-    tahun_rel = tahun_pred - meta["tahun_rel_base"]
-    row = {"tahun_rel": tahun_rel, "prov_enc": cache["prov_enc"], "pulau_enc": cache["pulau_enc"]}
-    for col in meta["targets"]:
-        v, vp = cache.get(col, 0.0), cache.get(f"{col}_prev", 0.0)
-        row[f"{col}_lag1"] = v; row[f"{col}_lag2"] = vp
-        row[f"{col}_delta"] = v - vp; row[f"{col}_roll2"] = (v + vp) / 2.0
-    for col in ["rpp", "pl", "ik", "ia"]:
-        row[f"{col}_std2"] = abs(cache.get(col, 0.0) - cache.get(f"{col}_prev", 0.0)) * 0.5
-    for dc in meta["pulau_dummy_cols"]:
-        row[dc] = cache.get(dc, 0.0)
-    return [row.get(f, 0.0) for f in meta["features"]]
-
-
-def _predict_one_province(prov_name, tahun_list, hist_last, hist_prev, meta, models, encoders):
+def _parse_number(val):
+    """Konversi string BPS (mis. '1.615.200,00') ke float."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    # hapus karakter spasi & tanda pemisah ribuan titik, ganti koma desimal
+    s = s.replace('\xa0', '').replace(' ', '').replace('.', '').replace(',', '.')
     try:
-        prov_enc = int(encoders["provinsi"].transform([prov_name])[0])
-    except Exception:
-        return []
-    pulau_label = meta["pulau_map"].get(prov_name, "Sumatera")
-    try: pulau_enc = int(encoders["pulau"].transform([pulau_label])[0])
-    except: pulau_enc = 0
+        return float(s)
+    except ValueError:
+        return None
 
-    cache = {"prov_enc": prov_enc, "pulau_enc": pulau_enc}
-    for col in meta["targets"]:
-        cache[col]           = float(hist_last.get(col) or 0.0)
-        cache[f"{col}_prev"] = float(hist_prev.get(col) or 0.0)
-    for dc in meta["pulau_dummy_cols"]:
-        cache[dc] = 1.0 if pulau_label == dc.replace("pulau_", "") else 0.0
 
-    results = []
-    CLIPS = {"ikp": (0.0, 1.0), "ia": (0.0, 1.0), "ik": (0.0, 3.0)}
-    for tahun_pred in tahun_list:
-        X = pd.DataFrame([_build_feature_row(tahun_pred, prov_name, cache, meta)], columns=meta["features"])
-        pred = {}
-        for col in meta["targets"]:
-            raw = float(models[col].predict(X)[0])
-            pred[col] = round(float(np.clip(raw, *CLIPS.get(col, (0.0, None)))), 6)
-        status, warna = classify_ikp(pred["ikp"])
-        results.append({
-            "provinsi": prov_name, "tahun": tahun_pred, **pred,
-            "status": status, "warna": warna,
-            "pct_miskin_est": round((1 - pred["ia"]) * 100, 2),
-            "is_prediction": True, "model_version": meta.get("version", "rf_v1.0"),
-        })
-        for col in meta["targets"]:
-            cache[f"{col}_prev"] = cache[col]; cache[col] = pred[col]
+def get_quality_label(cv_wmape):
+    if cv_wmape is None:
+        return {'grade': '?', 'label': 'Tidak Diketahui', 'color': '#94a3b8', 'desc': 'Metrik tidak tersedia'}
+    if cv_wmape < 2.0:  return {'grade': '🥇', 'label': 'Sangat Baik',   'color': '#10b981', 'desc': f'CV-WMAPE {cv_wmape:.4f}%'}
+    if cv_wmape < 5.0:  return {'grade': '✅', 'label': 'Baik',          'color': '#3b82f6', 'desc': f'CV-WMAPE {cv_wmape:.4f}%'}
+    if cv_wmape < 10.0: return {'grade': '⚠️', 'label': 'Cukup',         'color': '#f59e0b', 'desc': f'CV-WMAPE {cv_wmape:.4f}%'}
+    return              {'grade': '❌', 'label': 'Perlu Perhatian',       'color': '#ef4444', 'desc': f'CV-WMAPE {cv_wmape:.4f}%'}
+
+
+# ── ARIMA HELPERS (pola identik SDM) ─────────────────────────────────────────
+
+def _load_metadata_pangan(key, models_dir=None):
+    if models_dir is None:
+        models_dir = PANGAN_MODELS_DIR
+    meta_file = PANGAN_METADATA_FILES.get(key, f'metadata_{key.lower()}.json')
+    path = os.path.join(models_dir, meta_file)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    fb = CV_METRICS_FALLBACK.get(key, {})
+    return {
+        'cv_mae': fb.get('cv_mae'), 'cv_rmse': fb.get('cv_rmse'),
+        'cv_wmape': fb.get('cv_wmape'), 'n_wilayah': 38,
+        'tahun_historis': [2018, LAST_HIST_YEAR], 'source': 'hardcoded',
+    }
+
+
+def _load_metadata_penduduk():
+    path = os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_METADATA_FILE)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    fb = CV_METRICS_FALLBACK.get('PENDUDUK', {})
+    return {'cv_mae': fb.get('cv_mae'), 'cv_rmse': fb.get('cv_rmse'),
+            'cv_wmape': fb.get('cv_wmape'), 'n_wilayah': 38,
+            'tahun_historis': [2010, LAST_HIST_YEAR], 'source': 'hardcoded'}
+
+
+def _load_arima_model(pkl_path, key_clip):
+    """Load .pkl dan kembalikan dict {nama_prov: fitted_model}."""
+    if not os.path.exists(pkl_path):
+        raise FileNotFoundError(f"Model ARIMA tidak ditemukan: {pkl_path}")
+
+    prov_bucket = {}
+    raw = joblib.load(pkl_path)
+
+    for raw_key, entry in raw.items():
+        str_key = str(raw_key).strip()
+
+        # Cari objek fitted (sama persis pola SDM)
+        fitted = (
+            (entry.get('model') or entry.get('result') or entry.get('fitted') or
+             next((v for v in entry.values()
+                   if v is not None and not isinstance(v, (dict, list, str, int, float, bool))), None))
+            if isinstance(entry, dict) else entry
+        )
+        if fitted is None:
+            continue
+
+        if str_key.isdigit():
+            kode = str_key[:2]
+            nama = KODE_PROVINSI_MAP.get(kode)
+            if not nama:
+                continue
+            prov_bucket.setdefault(nama, {'prov': None, 'kab': None})
+            if str_key.endswith('00'):
+                prov_bucket[nama]['prov'] = fitted
+            else:
+                prov_bucket[nama].setdefault('kab', fitted)
+        else:
+            nama = normalize_province_name_pangan(str_key)
+            prov_bucket.setdefault(nama, {'prov': None, 'kab': None})
+            prov_bucket[nama]['prov'] = fitted
+
+    converted = {n: (b['prov'] or b['kab']) for n, b in prov_bucket.items() if b['prov'] or b['kab']}
+    for nama_baru, nama_induk in PROVINSI_FALLBACK.items():
+        if nama_baru not in converted and nama_induk in converted:
+            converted[nama_baru] = converted[nama_induk]
+    print(f"✓ ARIMA {key_clip}: {len(converted)} provinsi")
+    return converted
+
+
+def _do_forecast_pangan(model, n_steps):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for method in ['get_forecast', 'forecast', 'predict']:
+            try:
+                if method == 'get_forecast':
+                    fc  = model.get_forecast(steps=n_steps)
+                    ci  = fc.conf_int(alpha=0.05)
+                    return fc.predicted_mean.to_numpy(), ci.iloc[:, 0].to_numpy(), ci.iloc[:, 1].to_numpy()
+                fc = (model.forecast(steps=n_steps) if method == 'forecast'
+                      else model.predict(
+                          start=int(model.nobs) if hasattr(model, 'nobs') else 10,
+                          end=(int(model.nobs) if hasattr(model, 'nobs') else 10) + n_steps - 1))
+                mean = np.array(fc)
+                std  = float(np.std(mean)) * 0.5 if len(mean) > 1 else abs(float(mean[0])) * 0.02
+                return mean, mean - std, mean + std
+            except Exception:
+                continue
+        try:
+            fc  = model.model.apply(model.params).get_forecast(steps=n_steps)
+            ci  = fc.conf_int(alpha=0.05)
+            return fc.predicted_mean.to_numpy(), ci.iloc[:, 0].to_numpy(), ci.iloc[:, 1].to_numpy()
+        except Exception:
+            pass
+    return None, None, None
+
+
+def _build_skenario_pangan(mean, lo, hi, n_steps, key):
+    if mean is None or len(mean) == 0:
+        return None, None, None, None, None
+    mod   = float(mean[-1])
+    lo_v  = float(lo[-1]) if lo is not None and len(lo) > 0 else mod * 0.95
+    hi_v  = float(hi[-1]) if hi is not None and len(hi) > 0 else mod * 1.05
+    return (
+        _clip_pangan(mod,  key),
+        _clip_pangan(hi_v, key),
+        _clip_pangan(lo_v, key),
+        _clip_pangan(lo_v, key),
+        _clip_pangan(hi_v, key),
+    )
+
+
+def _predict_arima(models_dict, key, tahun, all_skenario=False):
+    """Prediksi satu indikator untuk semua provinsi di tahun tertentu."""
+    n_steps   = max(1, tahun - LAST_HIST_YEAR)
+    model_map = models_dict.get(key, {})
+    result    = {}
+    for prov, model in model_map.items():
+        try:
+            mean, lo, hi = _do_forecast_pangan(model, n_steps)
+            mod, opt, pes, ci_lo, ci_hi = _build_skenario_pangan(mean, lo, hi, n_steps, key)
+            if mod is None:
+                continue
+            result[prov] = (
+                {'optimis': opt, 'moderat': mod, 'pesimis': pes, 'ci_lo': ci_lo, 'ci_hi': ci_hi}
+                if all_skenario else mod
+            )
+        except Exception as e:
+            print(f"✗ predict {key}/{prov}: {e}")
+    return result
+
+
+def predict_pangan_for_year(models_dict, key, tahun, skenario='moderat'):
+    raw = _predict_arima(models_dict, key, tahun, all_skenario=False)
+    return {p: v for p, v in raw.items()}
+
+
+def predict_pangan_all_skenario(models_dict, key, tahun):
+    return _predict_arima(models_dict, key, tahun, all_skenario=True)
+
+
+def check_model_available(key, models_dir=None):
+    if models_dir is None:
+        models_dir = PANGAN_MODELS_DIR
+    model_file = PANGAN_MODEL_FILES.get(key, f'model_{key.lower()}.pkl')
+    return os.path.exists(os.path.join(models_dir, model_file))
+
+
+# ── BANK KEBIJAKAN ────────────────────────────────────────────────────────────
+
+def _get_prioritas_ikp(status, nilai):
+    if nilai is None:
+        return list(range(1, 8))
+    for lo, hi, prios in PRIORITAS_BAND_IKP.get(status, []):
+        if lo <= nilai < hi:
+            return prios
+    return _PRIORITAS_FALLBACK_IKP.get(status, list(range(1, 8)))
+
+
+def get_bank_kebijakan_pangan(kategori_list, limit_per_kategori=10, ikp_nilai=None):
+    results, conn = [], None
+    try:
+        conn = get_pg_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        for status in [k for k in kategori_list if k in ('TINGGI', 'SEDANG', 'RENDAH')]:
+            prio_list    = _get_prioritas_ikp(status, (ikp_nilai or {}).get(status))
+            placeholders = ','.join(['%s'] * len(prio_list))
+            cur.execute(f"""
+                SELECT id, indeks, status, prioritas, pilar_kebijakan,
+                       isu_strategis, kebijakan, rekomendasi_program, indikator_terkait
+                FROM bank_kebijakan
+                WHERE indeks = 'IKP' AND status = %s AND prioritas IN ({placeholders})
+                ORDER BY prioritas ASC, pilar_kebijakan ASC LIMIT %s
+            """, (status, *prio_list, limit_per_kategori))
+
+            pilar_map = {}
+            for row in [dict(r) for r in cur.fetchall()]:
+                pilar = row['pilar_kebijakan'] or 'Umum'
+                pilar_map.setdefault(pilar, {
+                    'pilar': pilar, 'prioritas': row['prioritas'], 'jumlah_aksi': 0, 'aksi': [],
+                })
+                pilar_map[pilar]['aksi'].append({
+                    'no_aksi':         len(pilar_map[pilar]['aksi']) + 1,
+                    'isu_strategis':   row['isu_strategis'],
+                    'nama_aksi':       row['kebijakan'],
+                    'detail_aksi':     row['rekomendasi_program'],
+                    'indikator_terkait': row['indikator_terkait'],
+                    'sub_sektor':      row['pilar_kebijakan'],
+                })
+                pilar_map[pilar]['jumlah_aksi'] += 1
+            results.extend(pilar_map.values())
+        cur.close()
+    except Exception as e:
+        print(f"✗ get_bank_kebijakan_pangan: {e}")
+    finally:
+        if conn: conn.close()
     return results
 
 
-def _run_ai_prediction(tahun: int, historical_data: dict) -> dict:
-    if not _load_ai_models():
-        return {"error": "Model AI tidak dapat dimuat."}
+# ── FETCHER DATA BPS ──────────────────────────────────────────────────────────
 
-    # Build hist_lookup dari historical_data atau MongoDB
-    hist_lookup = {r["provinsi"]: {k: r.get(k) for k in ["rpp","pl","ik","ia","ikp"]}
-                   for r in historical_data.get("analysis_summary", []) if r.get("provinsi")}
-    if not hist_lookup:
-        try:
-            docs = list(mongo_db["pangan_analysis"].find(
-                {"type": "pangan", "is_ai_prediction": {"$ne": True}},
-                {"_id": 0, "analysis_summary": 1}
-            ).sort("timestamp", -1).limit(1))
-            if docs:
-                hist_lookup = {r["provinsi"]: {k: r.get(k) for k in ["rpp","pl","ik","ia","ikp"]}
-                               for r in docs[0].get("analysis_summary", []) if r.get("provinsi")}
-        except Exception as e:
-            print(f"[AI] MongoDB fallback gagal: {e}")
+def _fetch_simdasi(id_tabel, tahun, key=None):
+    """Ambil data dari BPS SIMDASI (produksi padi / penduduk)."""
+    url = (
+        f"https://webapi.bps.go.id/v1/api/interoperabilitas/datasource/simdasi/id/25"
+        f"/tahun/{tahun}/id_tabel/{id_tabel}/wilayah/0000000/key/{BPS_API_KEY}/"
+    )
+    try:
+        resp = requests.get(url, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"✗ SIMDASI {id_tabel} {tahun}: {e}")
+    return None
 
-    meta, models, encoders = _AI_META, _AI_MODELS, _AI_ENCODERS
-    tahun_range = list(range(2025, tahun + 1))
-    timestamp_ai = datetime.now().isoformat()
 
-    boundary_features = list(mongo_db["batas_provinsi"].find({}, {"_id": 0}))
-    province_map = {}
-    for feat in boundary_features:
-        for field in ["NAMOBJ", "name", "WADMPR", "Provinsi"]:
-            v = feat.get("properties", {}).get(field)
-            if v:
-                n = normalize_province_name(str(v).upper().strip())
-                province_map[n] = province_map[str(v).upper().strip()] = feat
+def _fetch_konsumsi(tahun):
+    """Ambil tabel statis 951 (kalori & protein per provinsi)."""
+    url = (
+        f"https://webapi.bps.go.id/v1/api/view/domain/0000/model/statictable"
+        f"/lang/ind/id/951/key/{BPS_API_KEY}/"
+    )
+    try:
+        resp = requests.get(url, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"✗ Konsumsi {tahun}: {e}")
+    return None
 
-    # ── Kumpulkan semua prediksi mentah dulu ─────────────────────────────────
-    raw_preds = []
-    for prov_name in meta["provinsi_list"]:
-        hl = hist_lookup.get(prov_name, {})
-        hp = {c: (hl.get(c) or 0.0) * 0.98 for c in ["rpp","pl","ik","ia","ikp"]} if hl else {}
-        results = _predict_one_province(prov_name, tahun_range, hl, hp, meta, models, encoders)
-        if results:
-            raw_preds.append(results[-1])
 
-    # ── Deteksi & perbaiki kolom degenerate (variance ≈ 0 → model stuck) ─────
-    # Terjadi saat semua lag-features = 0 (tidak ada data historis) →
-    # model RF konvergen ke nilai konstan, biasanya 1.0 untuk 'pl'.
-    NEUTRAL   = {"rpp": 0.3, "pl": 0.5, "ik": 0.5, "ia": 0.5}
-    VAR_THRESHOLD = 1e-4
-    degenerate_cols = set()
-    for col in ["rpp", "pl", "ik", "ia"]:
-        vals = [r[col] for r in raw_preds if r.get(col) is not None]
-        if len(vals) >= 2:
-            mean = sum(vals) / len(vals)
-            variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-            if variance < VAR_THRESHOLD:
-                degenerate_cols.add(col)
-                print(f"[AI] ⚠ '{col}' degenerate (var={variance:.2e}, mean={mean:.4f}) "
-                      f"→ fallback netral {NEUTRAL[col]}")
+def _fetch_kemiskinan(tahun):
+    """Ambil kemiskinan var/192 — Semester 2 (September), turvar=434 (Jumlah)."""
+    th_code = TAHUN_BPS_MAP.get(tahun, 125)
+    url = (
+        f"https://webapi.bps.go.id/v1/api/list/model/data/lang/ind/domain/0000"
+        f"/var/192/th/{th_code}/key/{BPS_API_KEY}/"
+    )
+    try:
+        resp = requests.get(url, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"✗ Kemiskinan {tahun}: {e}")
+    return None
 
-    if degenerate_cols:
-        for r in raw_preds:
-            for col in degenerate_cols:
-                r[col] = NEUTRAL[col]
-            # Recalculate IKP pakai nilai yang sudah disanitasi
-            r["ikp"] = calculate_ikp(
-                r.get("rpp") or 0.0, r.get("pl") or 0.0,
-                r.get("ik") or 0.0,  r.get("ia") or 0.0,
-            )
-            r["status"], r["warna"] = classify_ikp(r["ikp"])
-            r["pct_miskin_est"] = round((1 - (r.get("ia") or 0.0)) * 100, 2)
 
-    # ── Build output ──────────────────────────────────────────────────────────
-    matched_features, analysis_summary = [], []
-    status_counts = {"TINGGI": 0, "SEDANG": 0, "RENDAH": 0}
+# ── PARSER DATA BPS ───────────────────────────────────────────────────────────
 
-    for r in raw_preds:
-        prov_name = r["provinsi"]
-        status, warna = r["status"], r["warna"]
-        status_counts[status] += 1
+def _parse_simdasi_padi(raw):
+    """
+    Kembalikan dict {nama_provinsi: produksi_ton}.
+    Kolom target: 'Rekap Produksi Padi (ton)' — cari via nama_variabel.
+    """
+    result = {}
+    if not raw:
+        return result
+    try:
+        data_list = raw.get('data', [{}])
+        if isinstance(data_list, list) and len(data_list) > 1:
+            tabel = data_list[1]
+        else:
+            tabel = data_list[0] if data_list else {}
 
-        analysis_summary.append({
-            "provinsi": prov_name, "indikator": "ALL", "status": status, "warna": warna,
-            "ikp": r["ikp"], "rpp": r["rpp"], "pl": r["pl"], "ik": r["ik"], "ia": r["ia"],
-            "has_complete_data": True, "dimensi_kosong": [],
-            "is_prediction": True, "degenerate_cols": list(degenerate_cols),
-            "model_version": meta.get("version", "rf_v1.0"),
+        kolom      = tabel.get('kolom', {})
+        data_rows  = tabel.get('data', [])
+
+        # Cari key kolom produksi ton
+        produksi_key = None
+        for k, v in kolom.items():
+            nama_var = v.get('nama_variabel', '')
+            if 'produksi' in nama_var.lower() and 'ton' in nama_var.lower():
+                produksi_key = k
+                break
+
+        if not produksi_key:
+            # fallback: ambil kolom ketiga (indeks 2)
+            keys = list(kolom.keys())
+            if len(keys) >= 3:
+                produksi_key = keys[2]
+
+        for row in data_rows:
+            label = row.get('label_raw') or row.get('label', '')
+            if not label or label.lower() in ('indonesia', ''):
+                continue
+            nama = normalize_province_name_pangan(label)
+            var  = row.get('variables', {})
+            val  = _parse_number(var.get(produksi_key, {}).get('value_raw'))
+            if val is not None:
+                result[nama] = val
+    except Exception as e:
+        print(f"✗ parse padi: {e}")
+    return result
+
+
+def _parse_simdasi_penduduk(raw):
+    """
+    Kembalikan dict {nama_provinsi: jumlah_penduduk_ribu_jiwa}.
+    Kolom target: 'Jumlah Penduduk' dengan unit_multiplier=3 (ribu).
+    """
+    result = {}
+    if not raw:
+        return result
+    try:
+        data_list = raw.get('data', [{}])
+        if isinstance(data_list, list) and len(data_list) > 1:
+            tabel = data_list[1]
+        else:
+            tabel = data_list[0] if data_list else {}
+
+        kolom     = tabel.get('kolom', {})
+        data_rows = tabel.get('data', [])
+
+        # Cari kolom Jumlah Penduduk
+        penduduk_key = None
+        for k, v in kolom.items():
+            if 'jumlah penduduk' in v.get('nama_variabel', '').lower():
+                penduduk_key = k
+                break
+        if not penduduk_key and kolom:
+            penduduk_key = list(kolom.keys())[0]
+
+        for row in data_rows:
+            label = row.get('label_raw') or row.get('label', '')
+            if not label or label.lower() in ('indonesia', ''):
+                continue
+            nama = normalize_province_name_pangan(label)
+            var  = row.get('variables', {})
+            val  = _parse_number(var.get(penduduk_key, {}).get('value_raw'))
+            if val is not None:
+                result[nama] = val   # sudah dalam ribu jiwa
+    except Exception as e:
+        print(f"✗ parse penduduk: {e}")
+    return result
+
+
+def _parse_konsumsi_html(raw, tahun):
+    """
+    Parse HTML tabel statik 951 → {nama_prov: {'kalori': float, 'protein': float}}.
+    HTML di-encode sebagai string dalam field 'table'.
+    """
+    result = {}
+    if not raw:
+        return result
+    try:
+        table_html = raw.get('data', {}).get('table', '')
+        # Decode HTML entities
+        import html as html_lib
+        table_html = html_lib.unescape(table_html)
+
+        # Cari semua baris <tr>
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+
+        # Tentukan indeks kolom untuk tahun yang diminta
+        # Header baris ke-2 berisi tahun (2007..2025) untuk kalori, lalu ulang untuk protein
+        # Kita cari posisi tahun target di header
+        header_row = None
+        for i, row in enumerate(rows):
+            cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
+            cells_text = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+            if str(tahun) in cells_text:
+                header_row = cells_text
+                break
+
+        if not header_row:
+            # fallback: coba tahun terdekat
+            for yr in range(tahun, 2006, -1):
+                for row in rows:
+                    cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
+                    cells_text = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+                    if str(yr) in cells_text:
+                        header_row = cells_text
+                        tahun = yr
+                        break
+                if header_row:
+                    break
+
+        if not header_row:
+            return result
+
+        # Posisi kolom tahun (pertama = kalori, kedua = protein)
+        col_positions = [i for i, v in enumerate(header_row) if v == str(tahun)]
+        if len(col_positions) < 2:
+            return result
+        col_kalori  = col_positions[0]
+        col_protein = col_positions[1]
+
+        # Parse baris data
+        for row in rows:
+            cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL | re.IGNORECASE)
+            cells_text = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+            if len(cells_text) < max(col_kalori, col_protein) + 1:
+                continue
+            nama_raw = cells_text[0]
+            if not nama_raw or nama_raw.startswith('Diolah') or nama_raw == 'Provinsi':
+                continue
+            nama = normalize_province_name_pangan(nama_raw)
+            if not nama or nama == 'INDONESIA':
+                continue
+            try:
+                kal = _parse_number(cells_text[col_kalori])
+                pro = _parse_number(cells_text[col_protein])
+                if kal is not None and pro is not None and kal > 0 and pro > 0:
+                    result[nama] = {'kalori': kal, 'protein': pro}
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"✗ parse konsumsi html: {e}")
+    return result
+
+
+def _parse_kemiskinan(raw):
+    """
+    Kembalikan dict {nama_prov: persen_miskin}.
+    Ambil turvar=434 (Jumlah), Semester 2 (September) → key berakhiran '62'.
+    """
+    result = {}
+    if not raw:
+        return result
+    try:
+        datacontent = raw.get('datacontent', {})
+        vervar      = {str(item['val']): item['label'] for item in raw.get('vervar', [])}
+
+        for dc_key, value in datacontent.items():
+            # Format key: {kode_prov}19243{turvar}{turtahun}
+            # turvar 434=Jumlah → '434', turtahun 62=Sep → '62'
+            # Lebih aman: ambil yang berakhiran '43462' (turvar=434, turtahun=62)
+            # kode_prov 4 digit berakhiran '00'
+            if not dc_key.endswith('43462'):
+                continue
+            prov_code = dc_key[:4]
+            if prov_code not in vervar:
+                continue
+            if value is None:
+                continue
+            try:
+                val_f = float(value)
+                nama  = normalize_province_name_pangan(vervar[prov_code])
+                result[nama] = val_f
+            except (ValueError, TypeError):
+                continue
+    except Exception as e:
+        print(f"✗ parse kemiskinan: {e}")
+    return result
+
+
+# ── KALKULATOR IKP ────────────────────────────────────────────────────────────
+
+class IKPCalculator:
+    """Hitung IKP dari komponen mentah (sebelum normalisasi) + normalisasi lintas provinsi."""
+
+    COLORS = {'TINGGI': '#10b981', 'SEDANG': '#f59e0b', 'RENDAH': '#ef4444'}
+
+    def compute_raw_indices(self, padi_ton, penduduk_ribu, persen_miskin, kalori, protein):
+        """
+        Hitung indeks mentah (SEBELUM normalisasi).
+        IKv  : ton/ribu jiwa
+        IA   : 0-1
+        IPm  : 0-2  (cap di 2.0)
+        IS   : dihitung terpisah dari time-series → di sini diberi None (akan diisi caller)
+        """
+        ikv = round(padi_ton / penduduk_ribu, 4) if (padi_ton is not None and penduduk_ribu) else None
+        ia  = round(1 - persen_miskin / 100, 4)  if persen_miskin is not None else None
+        if kalori is not None and protein is not None:
+            ipm = round(min((protein / PROTEIN_STANDAR) + (kalori / KALORI_STANDAR), 2.0), 4)
+        else:
+            ipm = None
+        return {'ikv': ikv, 'ia': ia, 'ipm': ipm}
+
+    def normalize_all(self, province_raw):
+        """
+        Min-Max normalisasi setiap komponen lintas provinsi.
+        province_raw: {nama: {'ikv': float, 'ia': float, 'ipm': float, 'is': float}}
+        Kembalikan {nama: {'ikv_norm': float, 'ia_norm': float, 'ipm_norm': float, 'is_norm': float, 'ikp': float}}
+        """
+        def minmax(vals):
+            clean = [v for v in vals if v is not None]
+            if not clean:
+                return None, None
+            return min(clean), max(clean)
+
+        ikv_min, ikv_max = minmax([v.get('ikv')  for v in province_raw.values()])
+        ia_min,  ia_max  = minmax([v.get('ia')   for v in province_raw.values()])
+        ipm_min, ipm_max = minmax([v.get('ipm')  for v in province_raw.values()])
+        is_min,  is_max  = minmax([v.get('is')   for v in province_raw.values()])
+
+        def norm(val, mn, mx):
+            if val is None or mn is None or mx is None:
+                return None
+            denom = mx - mn
+            if denom == 0:
+                return 0.5
+            return round(max(0.0, min(1.0, (val - mn) / denom)), 4)
+
+        result = {}
+        for prov, raw in province_raw.items():
+            ikv_n = norm(raw.get('ikv'), ikv_min, ikv_max)
+            ia_n  = norm(raw.get('ia'),  ia_min,  ia_max)
+            ipm_n = norm(raw.get('ipm'), ipm_min, ipm_max)
+            is_n  = norm(raw.get('is'),  is_min,  is_max)
+
+            components = [v for v in [ikv_n, ia_n, ipm_n, is_n] if v is not None]
+            ikp = round(sum(components) / len(components), 4) if components else None
+
+            result[prov] = {
+                'ikv_norm': ikv_n, 'ia_norm': ia_n, 'ipm_norm': ipm_n, 'is_norm': is_n,
+                'ikp': ikp,
+            }
+        return result
+
+    def categorize(self, ikp):
+        if ikp is None:
+            return 'TIDAK DIKETAHUI', '#6b7280'
+        if ikp > THRESHOLD_TINGGI:
+            return 'TINGGI', self.COLORS['TINGGI']
+        if ikp >= THRESHOLD_SEDANG:
+            return 'SEDANG', self.COLORS['SEDANG']
+        return 'RENDAH', self.COLORS['RENDAH']
+
+    def generate_insights(self, prov, raw, norm, ikp, kategori):
+        insights = [
+            f"Provinsi {prov} memiliki IKP {ikp} — kategori {kategori}."
+        ]
+        ikv, ia, ipm, is_ = raw.get('ikv'), raw.get('ia'), raw.get('ipm'), raw.get('is')
+        if ikv is not None:
+            insights.append(f"{'✅' if ikv >= 2.0 else '⚠️' if ikv >= 0.5 else '🚨'} "
+                            f"Ketersediaan (IKv): {ikv:.2f} ton/ribu jiwa.")
+        if ia is not None:
+            pct = round((1 - ia) * 100, 2)
+            insights.append(f"{'✅' if pct <= 5 else '⚠️' if pct <= 15 else '🚨'} "
+                            f"Akses (IA): {ia:.4f} — kemiskinan {pct}%.")
+        if ipm is not None:
+            insights.append(f"{'✅' if ipm >= 1.8 else '⚠️' if ipm >= 1.4 else '🚨'} "
+                            f"Pemanfaatan (IPm): {ipm:.4f}.")
+        if is_ is not None:
+            insights.append(f"{'✅' if is_ >= 5.0 else '⚠️' if is_ >= 2.0 else '🚨'} "
+                            f"Stabilitas (IS): {is_:.4f}.")
+        return insights
+
+
+# ── HELPER IS (Stabilitas) ────────────────────────────────────────────────────
+
+def compute_is_from_timeseries(padi_ts):
+    """
+    padi_ts: dict {tahun(int): {nama_prov: produksi_ton}}
+    Kembalikan {nama_prov: IS} menggunakan CV 5 tahun terakhir.
+    CV = std / mean; IS = 1 / CV  (di-clip [0, 20] agar tidak inf)
+    """
+    from statistics import stdev, mean as stat_mean
+    result = {}
+    if not padi_ts:
+        return result
+
+    tahun_sorted = sorted(padi_ts.keys())[-5:]   # 5 tahun terakhir
+    all_provs = set()
+    for t in tahun_sorted:
+        all_provs.update(padi_ts[t].keys())
+
+    for prov in all_provs:
+        vals = [padi_ts[t][prov] for t in tahun_sorted if prov in padi_ts[t]]
+        if len(vals) < 2:
+            continue
+        m = stat_mean(vals)
+        if m == 0:
+            continue
+        sd = stdev(vals)
+        cv = sd / m
+        result[prov] = round(min(1.0 / cv, 20.0), 4) if cv > 0 else 20.0
+    return result
+
+
+# ── API: CEK KETERSEDIAAN DATA ─────────────────────────────────────────────────
+
+@api_view(['POST'])
+def check_pangan_year_data(request):
+    """
+    Cek apakah data BPS tersedia untuk tahun yang diminta.
+    Mirip check_sdm_year_data.
+    """
+    tahun = int(request.data.get('tahun', 2025))
+    if tahun not in TAHUN_SEMUA:
+        return Response({"error": f"Tahun {tahun} tidak didukung. Pilih antara 2020–{TAHUN_MAX_PREDIKSI}."}, status=400)
+
+    is_arima_only = tahun in TAHUN_ARIMA_ONLY
+    arima_metrics = {}
+
+    def _build_arima_metric_pangan(key, models_dir=None):
+        meta     = _load_metadata_pangan(key, models_dir)
+        cv_wmape = meta.get('cv_wmape')
+        return {
+            'cv_mae': meta.get('cv_mae'), 'cv_rmse': meta.get('cv_rmse'),
+            'cv_wmape': cv_wmape, 'n_wilayah': meta.get('n_wilayah'),
+            'quality': get_quality_label(cv_wmape),
+        }
+
+    if is_arima_only:
+        dataset_status = {}
+        for key in list(PANGAN_MODEL_FILES.keys()):
+            avail = check_model_available(key)
+            dataset_status[key] = {
+                'nama': key, 'tersedia': False,
+                'status': 'Tahun Prediksi — Gunakan ARIMA', 'arima_tersedia': avail,
+            }
+            if avail:
+                arima_metrics[key] = _build_arima_metric_pangan(key)
+
+        pend_avail = os.path.exists(os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_MODEL_FILE))
+        dataset_status['PENDUDUK'] = {
+            'nama': 'PENDUDUK', 'tersedia': False,
+            'status': 'Tahun Prediksi — Gunakan ARIMA', 'arima_tersedia': pend_avail,
+        }
+        if pend_avail:
+            arima_metrics['PENDUDUK'] = _build_arima_metric_pangan('PENDUDUK', PENDUDUK_MODELS_DIR)
+
+        arima_keys = [k for k, v in dataset_status.items() if v.get('arima_tersedia')]
+        return Response({
+            'tahun': tahun, 'dataset_status': dataset_status,
+            'tersedia': [], 'kosong': list(dataset_status.keys()),
+            'semua_kosong': True, 'ada_yang_kosong': False,
+            'bisa_dieksekusi': False,
+            'is_prediction_year': True, 'is_arima_only': True,
+            'bisa_pakai_arima': len(arima_keys) == len(dataset_status),
+            'arima_keys': arima_keys, 'arima_metrics': arima_metrics,
         })
 
-        feat = province_map.get(prov_name) or next(
-            (f for n, f in province_map.items() if prov_name in n or n in prov_name), None)
-        if not feat: continue
+    if not BPS_API_KEY:
+        return Response({"error": "BPS Web API Key belum dikonfigurasi"}, status=500)
 
-        fc = feat.copy()
-        fc["properties"] = {**fc.get("properties", {}), "pangan_analysis": {
-            "nama_provinsi": prov_name, "indikator": "ALL", "status": status, "warna": warna,
-            "ikp": r["ikp"], "rpp_norm": r["rpp"], "pl_norm": r["pl"], "ik_norm": r["ik"], "ia_norm": r["ia"],
-            "has_complete_data": True, "dimensi_kosong": [],
-            "is_prediction": True, "degenerate_cols": list(degenerate_cols),
-            "model_version": meta.get("version", "rf_v1.0"),
-            "insights": generate_pangan_insights(prov_name, r["rpp"], r["pl"], r["ik"], r["ia"], r["ikp"], status),
-            "rekomendasi": generate_pangan_recommendations(status, r["rpp"], r["pl"], r["ik"], r["ia"]),
-            "data_pangan": {k: r[k] for k in ["rpp","pl","ik","ia","ikp","pct_miskin_est"]},
-        }}
-        matched_features.append(fc)
+    # Cek data BPS aktual
+    ID_PADI      = 'ZjZ6MXlacGJNR0JaaHBPRSs0TzNUdz09'
+    ID_PENDUDUK  = 'WVRlTTcySlZDa3lUcFp6czNwbHl4QT09'
 
-    return {
-        "status": "success", "tahun": tahun, "is_ai_prediction": True,
-        "source": f"AI Prediction - Random Forest {meta.get('version','rf_v1.0')}",
-        "model_version": meta.get("version", "rf_v1.0"),
-        "model_scores": meta.get("scores", {}), "indikator": "ALL",
-        "dataset_aktif": ["PADI", "KONSUMSI", "KEMISKINAN", "PENDUDUK"],
-        "total_provinsi": len(analysis_summary), "total_dipetakan": len(matched_features),
-        "total_data_kosong": 0, "total_success": len(matched_features),
-        "ada_data_kosong": False, "alert_message": None, "provinsi_data_kosong": [],
-        "status_distribusi": status_counts, "timestamp": timestamp_ai,
-        "matched_features": {"type": "FeatureCollection", "features": matched_features},
-        "analysis_summary": analysis_summary, "raw_datasets": {},
+    dataset_status = {}
+    checks = {
+        'PADI':       lambda: _fetch_simdasi(ID_PADI, tahun),
+        'KONSUMSI':   lambda: _fetch_konsumsi(tahun),
+        'KEMISKINAN': lambda: _fetch_kemiskinan(tahun),
+        'PENDUDUK':   lambda: _fetch_simdasi(ID_PENDUDUK, tahun),
     }
 
+    for key, fetcher in checks.items():
+        if key in PANGAN_MODEL_FILES:
+            avail_arima = check_model_available(key)
+        elif key == 'PENDUDUK':
+            avail_arima = os.path.exists(os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_MODEL_FILE))
+        else:
+            avail_arima = False
 
-# ── Endpoints AI & BPS ────────────────────────────────────────────────────────
-@api_view(['POST'])
-def analyze_pangan_ai(request):
-    try: tahun = int(request.data.get("tahun", 2025))
-    except: tahun = 2025
-    result = _run_ai_prediction(tahun, request.data.get("historical_data", {}))
-    return Response(result, status=500 if "error" in result else 200)
+        try:
+            raw    = fetcher()
+            kosong = raw is None
+            dataset_status[key] = {
+                'nama': key, 'tersedia': not kosong,
+                'status': 'Tersedia' if not kosong else 'Kosong / Tidak Tersedia',
+                'arima_tersedia': avail_arima,
+            }
+        except Exception as e:
+            dataset_status[key] = {
+                'nama': key, 'tersedia': False,
+                'status': f'Gagal ({str(e)[:50]})', 'arima_tersedia': avail_arima,
+            }
 
+        if avail_arima:
+            md = PANGAN_MODELS_DIR if key != 'PENDUDUK' else PENDUDUK_MODELS_DIR
+            arima_metrics[key] = _build_arima_metric_pangan(key if key in PANGAN_MODEL_FILES else 'PENDUDUK', md)
+
+    tersedia_list = [k for k, v in dataset_status.items() if v['tersedia']]
+    kosong_list   = [k for k, v in dataset_status.items() if not v['tersedia']]
+    arima_keys    = [k for k in kosong_list if dataset_status[k].get('arima_tersedia')]
+
+    return Response({
+        'tahun': tahun, 'dataset_status': dataset_status,
+        'tersedia': tersedia_list, 'kosong': kosong_list,
+        'semua_kosong': not tersedia_list, 'ada_yang_kosong': bool(kosong_list) and bool(tersedia_list),
+        'bisa_dieksekusi': not kosong_list,
+        'is_prediction_year': False,
+        'bisa_pakai_arima': bool(kosong_list) and len(arima_keys) == len(kosong_list),
+        'arima_keys': arima_keys, 'arima_metrics': arima_metrics,
+    })
+
+
+# ── API: ANALISIS UTAMA IKP ───────────────────────────────────────────────────
 
 @api_view(['POST'])
 def analyze_pangan_bps(request):
-    if not BPS_API_KEY:
-        return Response({"error": "BPS Web API Key belum dikonfigurasi"}, status=500)
-    try: tahun = int(request.data.get('tahun', 2025))
-    except: tahun = 2025
-
-    mode = request.data.get('mode', 'bps')
-    if mode == 'ai':
-        result = _run_ai_prediction(tahun, request.data.get("historical_data", {}))
-        return Response(result, status=500 if "error" in result else 200)
-
-    if tahun not in TAHUN_SUPPORTED:
-        return Response({"error": f"Tahun {tahun} tidak didukung."}, status=400)
-
+    """
+    Endpoint utama: fetch data BPS → hitung IKP → overlay peta → simpan rekomendasi.
+    Request body:
+      tahun       : int  (2020-2045)
+      use_arima   : bool (isi komponen yang kosong dengan prediksi ARIMA)
+      skenario    : 'optimis'|'moderat'|'pesimis'
+      arima_keys  : list[str] komponen yang pakai ARIMA (bila use_arima=True)
+    """
     try:
-        analytics = PanganAnalytics(tahun=tahun)
-        raw_data  = analytics.fetch_selected_data(INDIKATOR_DATASET_MAP['ALL'])
+        tahun      = int(request.data.get('tahun', 2025))
+        use_arima  = bool(request.data.get('use_arima', False))
+        skenario   = request.data.get('skenario', 'moderat').lower()
+        arima_keys_req = request.data.get('arima_keys', [])
 
-        padi_values,     padi_raw     = analytics.parse_padi_data(raw_data.get('PADI'))
-        konsumsi_values, konsumsi_raw = analytics.parse_konsumsi_data(raw_data.get('KONSUMSI'), tahun)
-        miskin_values,   miskin_raw   = analytics.parse_kemiskinan_data(raw_data.get('KEMISKINAN'))
-        penduduk_values, penduduk_raw = analytics.parse_penduduk_data(raw_data.get('PENDUDUK'))
+        if tahun not in TAHUN_SEMUA:
+            return Response({"error": f"Tahun {tahun} tidak didukung."}, status=400)
+        if skenario not in ('optimis', 'moderat', 'pesimis'):
+            return Response({"error": f"Skenario '{skenario}' tidak valid."}, status=400)
 
-        for prov in penduduk_raw:
-            penduduk_raw[prov]['pct_kemiskinan'] = miskin_values.get(prov)
+        is_prediction_year = tahun in TAHUN_ARIMA_ONLY
+        timestamp_fetch    = datetime.now().isoformat()
 
-        # Dedup DKI Jakarta
-        for alias, canon in [('DKI JAKARTA','JAKARTA'), ('DAERAH KHUSUS IBUKOTA JAKARTA','JAKARTA')]:
-            for ds in [padi_values, padi_raw, konsumsi_values, konsumsi_raw,
-                       miskin_values, miskin_raw, penduduk_values, penduduk_raw]:
-                if alias in ds and canon in ds: del ds[alias]
-                elif alias in ds: ds[canon] = ds.pop(alias)
+        ID_PADI     = 'ZjZ6MXlacGJNR0JaaHBPRSs0TzNUdz09'
+        ID_PENDUDUK = 'WVRlTTcySlZDa3lUcFp6czNwbHl4QT09'
 
-        # Hitung RPP dan PL
-        rpp_values, pl_values = {}, {}
-        for prov, padi in padi_values.items():
-            prod, lp, pddk = padi.get('produksi'), padi.get('luas_panen'), penduduk_values.get(prov)
-            if prod and pddk and pddk > 0:
-                rpp_values[prov] = prod / pddk
-                if padi_raw.get(prov): padi_raw[prov]['rpp'] = round(rpp_values[prov], 6)
-            if prod and lp and lp > 0:
-                pl_values[prov] = prod / lp
+        # ── 1. FETCH DATA BPS (historis) ──────────────────────────────────────
+        if not is_prediction_year and BPS_API_KEY:
+            raw_padi      = _fetch_simdasi(ID_PADI, tahun)
+            raw_konsumsi  = _fetch_konsumsi(tahun)
+            raw_kemiskinan = _fetch_kemiskinan(tahun)
+            raw_penduduk  = _fetch_simdasi(ID_PENDUDUK, tahun)
+        else:
+            raw_padi = raw_konsumsi = raw_kemiskinan = raw_penduduk = None
 
-        # Daftar 38 provinsi canonical
-        PROVINSI_CANONICAL_38 = [
-            'ACEH','SUMATERA UTARA','SUMATERA BARAT','RIAU','JAMBI','SUMATERA SELATAN',
-            'BENGKULU','LAMPUNG','KEPULAUAN BANGKA BELITUNG','KEPULAUAN RIAU','JAKARTA',
-            'JAWA BARAT','JAWA TENGAH','DAERAH ISTIMEWA YOGYAKARTA','JAWA TIMUR','BANTEN',
-            'BALI','NUSA TENGGARA BARAT','NUSA TENGGARA TIMUR','KALIMANTAN BARAT',
-            'KALIMANTAN TENGAH','KALIMANTAN SELATAN','KALIMANTAN TIMUR','KALIMANTAN UTARA',
-            'SULAWESI UTARA','SULAWESI TENGAH','SULAWESI SELATAN','SULAWESI TENGGARA',
-            'GORONTALO','SULAWESI BARAT','MALUKU','MALUKU UTARA','PAPUA BARAT',
-            'PAPUA BARAT DAYA','PAPUA','PAPUA SELATAN','PAPUA TENGAH','PAPUA PEGUNUNGAN',
-        ]
+        # ── 2. PARSE ──────────────────────────────────────────────────────────
+        padi_values     = _parse_simdasi_padi(raw_padi)       # {prov: ton}
+        penduduk_values = _parse_simdasi_penduduk(raw_penduduk)  # {prov: ribu jiwa}
+        konsumsi_values = _parse_konsumsi_html(raw_konsumsi, tahun)  # {prov: {kalori, protein}}
+        kemiskinan_values = _parse_kemiskinan(raw_kemiskinan)  # {prov: persen}
 
+        # ── 3. IS: ambil time-series produksi padi 5 tahun ────────────────────
+        padi_ts = {}
+        if not is_prediction_year:
+            for yr in range(max(tahun - 4, 2018), tahun + 1):
+                r = _fetch_simdasi(ID_PADI, yr)
+                if r:
+                    padi_ts[yr] = _parse_simdasi_padi(r)
+        is_values = compute_is_from_timeseries(padi_ts)   # {prov: IS_raw}
 
-        all_prov_set  = set(list(padi_values)+list(konsumsi_values)+list(miskin_values)+list(penduduk_values))
-        all_provinces = PROVINSI_CANONICAL_38 + sorted(all_prov_set - set(PROVINSI_CANONICAL_38))
+        # ── 4. ARIMA: isi komponen yang kosong ───────────────────────────────
+        models_dict   = {}
+        arima_filled  = []
+        arima_metrics_resp = {}
+        arima_detail  = {}
 
-        # Hitung IK/IA
-        ik_values = {p: d.get('protein')/57.0 for p,d in konsumsi_values.items() if d.get('protein')}
-        ia_values = {p: 1 - v/100 for p,v in miskin_values.items()}
+        if use_arima or is_prediction_year:
+            valid_arima_pangan = list(PANGAN_MODEL_FILES.keys()) if is_prediction_year else [
+                k for k in (arima_keys_req or list(PANGAN_MODEL_FILES.keys()))
+                if k in PANGAN_MODEL_FILES
+            ]
+            do_penduduk = is_prediction_year or 'PENDUDUK' in (arima_keys_req or [])
 
-        rpp_norm_map = minmax_normalize(rpp_values)
-        pl_norm_map  = minmax_normalize(pl_values)
-        ik_norm_map  = minmax_normalize(ik_values)
-        ia_norm_map  = minmax_normalize(ia_values)
+            for pk in valid_arima_pangan:
+                model_file = PANGAN_MODEL_FILES[pk]
+                pkl_path   = os.path.join(PANGAN_MODELS_DIR, model_file)
+                try:
+                    models_dict[pk] = _load_arima_model(pkl_path, pk)
+                    meta = _load_metadata_pangan(pk)
+                    cv   = meta.get('cv_wmape')
+                    arima_metrics_resp[pk] = {
+                        'cv_mae': meta.get('cv_mae'), 'cv_rmse': meta.get('cv_rmse'),
+                        'cv_wmape': cv, 'n_wilayah': meta.get('n_wilayah'),
+                        'quality': get_quality_label(cv),
+                        'arima_version': 'v1.0', 'tahun_historis': meta.get('tahun_historis'),
+                    }
+                    arima_filled.append(pk)
+                except Exception as e:
+                    print(f"✗ Load ARIMA {pk}: {e}")
 
-        # Build province_map dari MongoDB
+            if do_penduduk:
+                pend_pkl = os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_MODEL_FILE)
+                try:
+                    models_dict['PENDUDUK'] = _load_arima_model(pend_pkl, 'PENDUDUK')
+                    meta = _load_metadata_penduduk()
+                    cv   = meta.get('cv_wmape')
+                    arima_metrics_resp['PENDUDUK'] = {
+                        'cv_mae': meta.get('cv_mae'), 'cv_rmse': meta.get('cv_rmse'),
+                        'cv_wmape': cv, 'n_wilayah': meta.get('n_wilayah'),
+                        'quality': get_quality_label(cv),
+                        'arima_version': 'v1.0', 'tahun_historis': meta.get('tahun_historis'),
+                    }
+                    arima_filled.append('PENDUDUK')
+                except Exception as e:
+                    print(f"✗ Load ARIMA PENDUDUK: {e}")
+
+            # Prediksi & isi gap
+            for pk in arima_filled:
+                pred = predict_pangan_for_year(models_dict, pk, tahun, skenario)
+                arima_detail[pk] = predict_pangan_all_skenario(models_dict, pk, tahun)
+
+                if pk == 'PADI':
+                    for prov, v in pred.items():
+                        if prov not in padi_values:
+                            padi_values[prov] = v
+                elif pk == 'KEMISKINAN':
+                    for prov, v in pred.items():
+                        if prov not in kemiskinan_values:
+                            kemiskinan_values[prov] = v
+                elif pk == 'KALORI':
+                    for prov, v in pred.items():
+                        if prov not in konsumsi_values:
+                            konsumsi_values[prov] = {}
+                        if 'kalori' not in konsumsi_values[prov]:
+                            konsumsi_values[prov]['kalori'] = v
+                elif pk == 'PROTEIN':
+                    for prov, v in pred.items():
+                        if prov not in konsumsi_values:
+                            konsumsi_values[prov] = {}
+                        if 'protein' not in konsumsi_values[prov]:
+                            konsumsi_values[prov]['protein'] = v
+                elif pk == 'PENDUDUK':
+                    for prov, v in pred.items():
+                        if prov not in penduduk_values:
+                            penduduk_values[prov] = v
+
+            # IS untuk prediction year: prediksi padi 5 tahun lalu → hitung IS
+            if is_prediction_year and 'PADI' in models_dict:
+                padi_ts_pred = {}
+                for yr in range(tahun - 4, tahun + 1):
+                    pred_yr = predict_pangan_for_year(models_dict, 'PADI', yr, skenario)
+                    padi_ts_pred[yr] = pred_yr
+                is_values_pred = compute_is_from_timeseries(padi_ts_pred)
+                for prov, v in is_values_pred.items():
+                    if prov not in is_values:
+                        is_values[prov] = v
+
+        # ── 5. KUMPULKAN SEMUA PROVINSI ───────────────────────────────────────
+        all_provinces = set(padi_values.keys()) | set(penduduk_values.keys()) | \
+                        set(konsumsi_values.keys()) | set(kemiskinan_values.keys())
+
+        # ── 6. HITUNG RAW INDICES ─────────────────────────────────────────────
+        calc = IKPCalculator()
+        province_raw = {}
+        for prov in all_provinces:
+            padi_ton   = padi_values.get(prov)
+            penduduk   = penduduk_values.get(prov)
+            miskin_pct = kemiskinan_values.get(prov)
+            kons       = konsumsi_values.get(prov, {})
+            kalori     = kons.get('kalori') if kons else None
+            protein    = kons.get('protein') if kons else None
+            is_raw     = is_values.get(prov)
+
+            raw = calc.compute_raw_indices(padi_ton, penduduk, miskin_pct, kalori, protein)
+            raw['is']         = is_raw
+            raw['padi_ton']   = padi_ton
+            raw['penduduk']   = penduduk
+            raw['miskin_pct'] = miskin_pct
+            raw['kalori']     = kalori
+            raw['protein']    = protein
+            province_raw[prov] = raw
+
+        # ── 7. NORMALISASI & IKP ──────────────────────────────────────────────
+        province_norm = calc.normalize_all(province_raw)
+
+        # ── 8. OVERLAY PETA (MongoDB batas_provinsi) ─────────────────────────
+        boundary_features = list(mongo_db["batas_provinsi"].find({}, {'_id': 0}))
         province_map = {}
-        for feat in mongo_db["batas_provinsi"].find({}, {'_id': 0}):
-            for field in ['NAMOBJ','name','WADMPR','Provinsi']:
-                v = feat.get('properties', {}).get(field)
-                if v:
-                    n = normalize_province_name(str(v).upper().strip())
-                    province_map[n] = province_map[str(v).upper().strip()] = feat
+        for feat in boundary_features:
+            props = feat.get('properties', {})
+            for field in ['NAMOBJ', 'name', 'WADMPR', 'Provinsi']:
+                if field in props and props[field]:
+                    for nv in [str(props[field]).upper().strip(),
+                               normalize_province_name_pangan(str(props[field]))]:
+                        province_map[nv] = feat
 
         matched_features, analysis_summary = [], []
-        status_counts, ikp_raw_output, provinsi_data_kosong = {"TINGGI":0,"SEDANG":0,"RENDAH":0}, {}, []
+        kategori_counts = {'TINGGI': 0, 'SEDANG': 0, 'RENDAH': 0}
+        kebijakan_cache = {}
 
-        for prov_name in all_provinces:
-            has_padi = prov_name in padi_values
-            has_k    = prov_name in konsumsi_values
-            has_m    = prov_name in miskin_values
-            has_p    = prov_name in penduduk_values
-            has_any  = has_padi or has_k or has_m or has_p
+        for prov in sorted(all_provinces):
+            norm = province_norm.get(prov, {})
+            raw  = province_raw.get(prov, {})
+            ikp  = norm.get('ikp')
+            if ikp is None:
+                continue
 
-            kosong_dims = []
-            if not has_padi: kosong_dims.append('Produksi Padi')
-            if not has_k:    kosong_dims.append('Konsumsi')
-            if not has_m:    kosong_dims.append('Kemiskinan')
-            if not has_p:    kosong_dims.append('Penduduk')
-            rpp_n = rpp_norm_map.get(prov_name, 0.0)
-            pl_n  = pl_norm_map.get(prov_name, 0.0)
-            ik_n  = ik_norm_map.get(prov_name, 0.0)
-            ia_n  = ia_norm_map.get(prov_name, 0.0)
-            rpp_r = rpp_values.get(prov_name)
-            pl_r  = pl_values.get(prov_name)
-            ik_r  = ik_values.get(prov_name)
-            ia_r  = ia_values.get(prov_name)
+            kategori, warna = calc.categorize(ikp)
+            insights = calc.generate_insights(prov, raw, norm, ikp, kategori)
 
-            ikp = calculate_ikp(rpp_n, pl_n, ik_n, ia_n)
-            status, warna = classify_ikp(ikp)
-            if has_any: status_counts[status] += 1
-            if kosong_dims: provinsi_data_kosong.append({'provinsi': prov_name, 'dimensi_kosong': kosong_dims})
+            # Arima info
+            arima_keys_used = []
+            if 'PADI' in arima_filled and prov not in _parse_simdasi_padi(raw_padi or {}):
+                arima_keys_used.append('PADI')
+            if 'KEMISKINAN' in arima_filled and prov not in _parse_kemiskinan(raw_kemiskinan or {}):
+                arima_keys_used.append('KEMISKINAN')
+            if 'KALORI' in arima_filled or 'PROTEIN' in arima_filled:
+                if prov not in _parse_konsumsi_html(raw_konsumsi or {}, tahun):
+                    arima_keys_used += [k for k in ['KALORI', 'PROTEIN'] if k in arima_filled]
+            if 'PENDUDUK' in arima_filled and prov not in _parse_simdasi_penduduk(raw_penduduk or {}):
+                arima_keys_used.append('PENDUDUK')
 
-            analysis_summary.append({
-                'provinsi': prov_name, 'indikator': 'ALL',
-                'status': status if has_any else '-', 'warna': warna if has_any else '#94a3b8',
-                'ikp': ikp if has_any else None,
-                'rpp': rpp_r,
-                'pl':  pl_r,
-                'ik':  ik_r, 'ia': ia_r,
-                'has_complete_data': not kosong_dims, 'dimensi_kosong': kosong_dims,
-            })
-            ikp_raw_output[prov_name] = {
-                'provinsi': prov_name, 'rpp_norm': rpp_n if has_padi else None,
-                'pl_norm': pl_n if has_padi else None, 'ik_norm': ik_n if has_k else None,
-                'ia_norm': ia_n if has_m else None, 'ikp': ikp if has_any else None,
-                'status': status if has_any else '-', 'warna': warna if has_any else '#94a3b8',
-                'has_complete_data': not kosong_dims, 'dimensi_kosong': kosong_dims,
-            }
+            if arima_keys_used:
+                insights.insert(1, f"⚙️ [AI Prediksi ARIMA v1.0 · {skenario}] — {', '.join(arima_keys_used)}")
 
-            feat = province_map.get(prov_name) or next(
-                (f for n,f in province_map.items() if prov_name in n or n in prov_name), None)
-            if not feat or not has_any: continue
+            ck = (kategori, round(ikp, 2))
+            if ck not in kebijakan_cache:
+                kebijakan_cache[ck] = get_bank_kebijakan_pangan([kategori], 10, {kategori: ikp})
+            rekomendasi = kebijakan_cache[ck]
 
-            padi_p = padi_values.get(prov_name, {})
-            kons_p = konsumsi_values.get(prov_name, {})
-            fc = feat.copy()
-            fc['properties'] = {**fc.get('properties',{}), 'pangan_analysis': {
-                'nama_provinsi': prov_name, 'indikator': 'ALL',
-                'status': status, 'warna': warna, 'ikp': ikp,
-                'rpp_norm': rpp_n, 'pl_norm': pl_n, 'ik_norm': ik_n, 'ia_norm': ia_n,
-                'has_complete_data': not kosong_dims, 'dimensi_kosong': kosong_dims,
-                'insights':    generate_pangan_insights(prov_name, rpp_r, pl_r, ik_r, ia_r, ikp, status),
-                'rekomendasi': generate_pangan_recommendations(status, rpp_r, pl_r, ik_r, ia_r),
-                'data_pangan': {
-                    'produksi_padi': padi_p.get('produksi'), 'luas_panen': padi_p.get('luas_panen'),
-                    'produktivitas': padi_p.get('produktivitas'),
-                    'rpp': rpp_r, 'pl': pl_r,
-                    'kalori': kons_p.get('kalori'), 'protein': kons_p.get('protein'),
-                    'ik': ik_r, 'pct_kemiskinan': miskin_values.get(prov_name), 'ia': ia_r,
-                    'jumlah_penduduk': penduduk_values.get(prov_name),
+            norm_prov = normalize_province_name_pangan(prov)
+            matched_feat = (province_map.get(norm_prov) or province_map.get(prov) or
+                            next((f for mn, f in province_map.items()
+                                  if norm_prov in mn or mn in norm_prov), None))
+            if not matched_feat:
+                continue
+
+            kategori_counts[kategori] = kategori_counts.get(kategori, 0) + 1
+            feat_copy  = matched_feat.copy()
+            props_copy = feat_copy.get('properties', {}).copy()
+
+            props_copy['ikp_analysis'] = {
+                'nama_provinsi':    prov,
+                'ikp':              ikp,
+                'kategori':         kategori,
+                'warna':            warna,
+                # Komponen ternormalisasi
+                'ikv_norm':         norm.get('ikv_norm'),
+                'ia_norm':          norm.get('ia_norm'),
+                'ipm_norm':         norm.get('ipm_norm'),
+                'is_norm':          norm.get('is_norm'),
+                # Nilai mentah
+                'ikv_raw':          raw.get('ikv'),
+                'ia_raw':           raw.get('ia'),
+                'ipm_raw':          raw.get('ipm'),
+                'is_raw':           raw.get('is'),
+                # Data sumber
+                'padi_ton':         raw.get('padi_ton'),
+                'penduduk_ribu':    raw.get('penduduk'),
+                'persen_miskin':    raw.get('miskin_pct'),
+                'kalori':           raw.get('kalori'),
+                'protein':          raw.get('protein'),
+                'insights':         insights,
+                'rekomendasi':      rekomendasi,
+                'use_arima':        bool(arima_keys_used),
+                'arima_keys_used':  arima_keys_used,
+                'skenario_arima':   skenario if arima_keys_used else None,
+                'arima_detail': {
+                    pk: arima_detail.get(pk, {}).get(prov)
+                    for pk in arima_filled if pk in arima_keys_used
                 },
-            }}
-            matched_features.append(fc)
+                'arima_metrics': {
+                    pk: arima_metrics_resp.get(pk)
+                    for pk in arima_filled if pk in arima_keys_used
+                },
+            }
+            feat_copy['properties'] = props_copy
+            matched_features.append(feat_copy)
 
-        ada_kosong = len(provinsi_data_kosong) > 0
-        alert = f"⚠️ Ada {len(provinsi_data_kosong)} dataset/provinsi data tidak lengkap." if ada_kosong else None
+            summary_row = {
+                'provinsi':         prov,
+                'ikp':              ikp,
+                'kategori':         kategori,
+                'warna':            warna,
+                'ikv_norm':         norm.get('ikv_norm'),
+                'ia_norm':          norm.get('ia_norm'),
+                'ipm_norm':         norm.get('ipm_norm'),
+                'is_norm':          norm.get('is_norm'),
+                'padi_ton':         raw.get('padi_ton'),
+                'penduduk_ribu':    raw.get('penduduk'),
+                'persen_miskin':    raw.get('miskin_pct'),
+                'kalori':           raw.get('kalori'),
+                'protein':          raw.get('protein'),
+                'use_arima':        bool(arima_keys_used),
+                'arima_keys_used':  arima_keys_used,
+            }
+            analysis_summary.append(summary_row)
+
+        sorted_summary = sorted(
+            [s for s in analysis_summary if s['ikp'] is not None],
+            key=lambda x: x['ikp']
+        )
 
         return Response({
-            'status': 'success', 'tahun': tahun,
-            'source': "BPS Web API",
-            'is_ai_prediction': False,
-            'indikator': 'ALL', 'dataset_aktif': INDIKATOR_DATASET_MAP['ALL'],
-            'total_provinsi': len(analysis_summary), 'total_dipetakan': len(matched_features),
-            'total_data_kosong': len(provinsi_data_kosong), 'total_success': len(matched_features),
-            'ada_data_kosong': ada_kosong, 'alert_message': alert,
-            'provinsi_data_kosong': provinsi_data_kosong, 'status_distribusi': status_counts,
-            'timestamp': analytics.timestamp_fetch,
-            'matched_features': {'type': 'FeatureCollection', 'features': matched_features},
-            'analysis_summary': analysis_summary,
-            'raw_datasets': {
-                'timestamp': analytics.timestamp_fetch, 'tahun': tahun, 'indikator': 'ALL',
-                'PADI': padi_raw, 'KONSUMSI': konsumsi_raw, 'KEMISKINAN': miskin_raw,
-                'PENDUDUK': penduduk_raw, 'IKP': ikp_raw_output,
+            'status':                'success',
+            'source':                'ARIMA v1.0 Prediksi' if is_prediction_year else 'BPS Web API',
+            'tahun':                 tahun,
+            'is_prediction_year':    is_prediction_year,
+            'total_success':         len(matched_features),
+            'kategori_distribusi':   kategori_counts,
+            'timestamp':             timestamp_fetch,
+            'formula': {
+                'IKv':  'Produksi Padi (Ton) / Jumlah Penduduk (Ribu Jiwa)',
+                'IA':   '1 - (Persen Miskin / 100)',
+                'IPm':  '(Protein/57) + (Kalori/2100), cap 2.0',
+                'IS':   '1 / CV Produksi Padi 5 tahun, cap 20',
+                'norm': 'Min-Max ke [0,1]',
+                'IKP':  '(IKv_norm + IA_norm + IPm_norm + IS_norm) / 4',
             },
+            'threshold_klasifikasi': {
+                'TINGGI': f'IKP > {THRESHOLD_TINGGI}',
+                'SEDANG': f'IKP {THRESHOLD_SEDANG} – {THRESHOLD_TINGGI}',
+                'RENDAH': f'IKP < {THRESHOLD_SEDANG}',
+            },
+            'use_arima':             bool(arima_filled),
+            'skenario':              skenario if arima_filled else None,
+            'arima_keys':            arima_filled,
+            'arima_metrics':         arima_metrics_resp,
+            'matched_features':      {'type': 'FeatureCollection', 'features': matched_features},
+            'analysis_summary':      analysis_summary,
+            'worst_provinces':       sorted_summary[:5],
+            'best_provinces':        sorted_summary[-5:][::-1],
+            'colors':                IKPCalculator.COLORS,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return Response({'error': str(e), 'message': 'Gagal menganalisis data pangan'}, status=500)
+
+
+# ── API: SIMPAN ANALISIS (MongoDB) ────────────────────────────────────────────
+
+@api_view(['POST'])
+def save_pangan_analysis(request):
+    try:
+        name = request.data.get('name', 'Analisis Pangan Tanpa Nama')
+        data = request.data.get('analysis_data')
+        if not data:
+            return Response({"error": "Data analisis tidak ditemukan"}, status=400)
+        analysis_id = str(uuid.uuid4())
+        doc = {
+            'analysis_id': analysis_id, 'name': name, 'type': 'pangan',
+            'timestamp': datetime.now().isoformat(), **data,
+        }
+        mongo_db['pangan_analysis'].insert_one(doc)
+        return Response({
+            'status': 'success', 'message': f"Analisis '{name}' berhasil disimpan.",
+            'analysis_id': analysis_id, 'saved_at': doc['timestamp'],
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+def get_pangan_analysis_list(request):
+    try:
+        results = list(mongo_db['pangan_analysis'].find(
+            {},
+            {'_id': 0, 'analysis_id': 1, 'name': 1, 'timestamp': 1,
+             'total_success': 1, 'kategori_distribusi': 1, 'tahun': 1,
+             'use_arima': 1, 'skenario': 1, 'is_prediction_year': 1},
+        ).sort('timestamp', -1))
+        return Response({'status': 'success', 'count': len(results), 'results': results})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+def get_pangan_analysis_detail(request, analysis_id):
+    try:
+        result = mongo_db['pangan_analysis'].find_one({'analysis_id': analysis_id}, {'_id': 0})
+        if not result:
+            return Response({'error': 'Analisis tidak ditemukan'}, status=404)
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['DELETE'])
+def delete_pangan_analysis(request, analysis_id):
+    try:
+        result = mongo_db['pangan_analysis'].delete_one({'analysis_id': analysis_id})
+        if result.deleted_count == 0:
+            return Response({'error': 'Analisis tidak ditemukan'}, status=404)
+        return Response({'status': 'success', 'message': 'Analisis pangan berhasil dihapus.'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+# ── API: BANK KEBIJAKAN IKP ───────────────────────────────────────────────────
+
+def _kebijakan_ikp_row(r):
+    return {
+        'id': r['id'], 'status': r['status'], 'prioritas': r['prioritas'],
+        'pilar': r['pilar_kebijakan'], 'isu_strategis': r.get('isu_strategis'),
+        'kebijakan': r['kebijakan'], 'rekomendasi': r['rekomendasi_program'],
+        'indikator': r['indikator_terkait'],
+    }
+
+
+@api_view(['GET'])
+def get_bank_kebijakan_ikp(request):
+    conn = None
+    try:
+        conn  = get_pg_connection()
+        cur   = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        query = ("SELECT id, indeks, status, prioritas, pilar_kebijakan, isu_strategis, "
+                 "kebijakan, rekomendasi_program, indikator_terkait "
+                 "FROM bank_kebijakan WHERE indeks = 'IKP'")
+        params = []
+        sf  = request.GET.get('status', '').upper()
+        pf  = request.GET.get('pilar', '')
+        idf = request.GET.get('indikator', '')
+        if sf in ('TINGGI', 'SEDANG', 'RENDAH'):
+            query += " AND status = %s"; params.append(sf)
+        if idf:
+            query += " AND indikator_terkait = %s"; params.append(idf.upper())
+        if pf:
+            query += " AND pilar_kebijakan ILIKE %s"; params.append(f"%{pf}%")
+        query += " ORDER BY status ASC, prioritas ASC, pilar_kebijakan ASC"
+        cur.execute(query, params)
+        hasil = [_kebijakan_ikp_row(dict(r)) for r in cur.fetchall()]
+        cur.close()
+        return Response({'status': 'success', 'count': len(hasil), 'results': hasil})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    finally:
+        if conn: conn.close()
+
+
+@api_view(['POST'])
+def add_bank_kebijakan_ikp(request):
+    conn = None
+    try:
+        d        = request.data
+        required = ['status', 'prioritas', 'pilar_kebijakan', 'kebijakan', 'rekomendasi_program', 'indikator_terkait']
+        for f in required:
+            if not d.get(f):
+                return Response({'error': f"Field '{f}' wajib diisi."}, status=400)
+        status = d['status'].upper()
+        if status not in ('TINGGI', 'SEDANG', 'RENDAH'):
+            return Response({'error': 'Status harus TINGGI, SEDANG, atau RENDAH.'}, status=400)
+        conn = get_pg_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            INSERT INTO bank_kebijakan
+              (indeks, status, prioritas, pilar_kebijakan, isu_strategis, kebijakan, rekomendasi_program, indikator_terkait)
+            VALUES ('IKP', %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, (status, int(d['prioritas']), d['pilar_kebijakan'], d.get('isu_strategis', ''),
+              d['kebijakan'], d['rekomendasi_program'], d['indikator_terkait'].upper()))
+        new_id = cur.fetchone()['id']
+        conn.commit(); cur.close()
+        return Response({'status': 'success', 'message': 'Kebijakan IKP berhasil ditambahkan.', 'id': new_id})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    finally:
+        if conn: conn.close()
+
+
+@api_view(['PUT'])
+def update_bank_kebijakan_ikp(request, kebijakan_id):
+    conn = None
+    try:
+        d    = request.data
+        conn = get_pg_connection()
+        cur  = conn.cursor()
+        cur.execute("""
+            UPDATE bank_kebijakan
+            SET status=%s, prioritas=%s, pilar_kebijakan=%s, isu_strategis=%s,
+                kebijakan=%s, rekomendasi_program=%s, indikator_terkait=%s
+            WHERE id=%s AND indeks='IKP'
+        """, (d['status'].upper(), int(d['prioritas']), d['pilar_kebijakan'],
+              d.get('isu_strategis', ''), d['kebijakan'], d['rekomendasi_program'],
+              d['indikator_terkait'].upper(), kebijakan_id))
+        if cur.rowcount == 0:
+            return Response({'error': 'Kebijakan tidak ditemukan.'}, status=404)
+        conn.commit(); cur.close()
+        return Response({'status': 'success', 'message': 'Kebijakan IKP berhasil diperbarui.'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    finally:
+        if conn: conn.close()
+
+
+@api_view(['DELETE'])
+def delete_bank_kebijakan_ikp(request, kebijakan_id):
+    conn = None
+    try:
+        conn = get_pg_connection()
+        cur  = conn.cursor()
+        cur.execute("DELETE FROM bank_kebijakan WHERE id=%s AND indeks='IKP'", (kebijakan_id,))
+        if cur.rowcount == 0:
+            return Response({'error': 'Kebijakan tidak ditemukan.'}, status=404)
+        conn.commit(); cur.close()
+        return Response({'status': 'success', 'message': 'Kebijakan IKP berhasil dihapus.'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    finally:
+        if conn: conn.close()
+
+
+@api_view(['GET'])
+def get_bank_kebijakan_ikp_for_provinsi(request):
+    """Kebijakan IKP dikelompokkan per pilar, untuk edit rekomendasi provinsi."""
+    conn = None
+    try:
+        conn   = get_pg_connection()
+        cur    = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        query  = ("SELECT id, status, prioritas, pilar_kebijakan, isu_strategis, "
+                  "kebijakan, rekomendasi_program, indikator_terkait "
+                  "FROM bank_kebijakan WHERE indeks = 'IKP'")
+        params = []
+        sf     = request.GET.get('status', '').upper()
+        if sf in ('TINGGI', 'SEDANG', 'RENDAH'):
+            query += " AND status = %s"; params.append(sf)
+        query += " ORDER BY status ASC, prioritas ASC, pilar_kebijakan ASC"
+        cur.execute(query, params)
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+
+        pilar_map = {}
+        for r in rows:
+            p = r['pilar_kebijakan'] or 'Umum'
+            pilar_map.setdefault(p, []).append({
+                'id': r['id'], 'status': r['status'], 'prioritas': r['prioritas'],
+                'pilar': p, 'isu_strategis': r['isu_strategis'],
+                'kebijakan': r['kebijakan'], 'rekomendasi': r['rekomendasi_program'],
+                'indikator_terkait': r['indikator_terkait'],
+            })
+        return Response({
+            'status': 'success', 'count': len(rows),
+            'by_pilar': [{'pilar': p, 'items': items} for p, items in sorted(pilar_map.items())],
+            'flat': [{
+                'id': r['id'], 'status': r['status'], 'prioritas': r['prioritas'],
+                'pilar': r['pilar_kebijakan'] or 'Umum', 'isu_strategis': r['isu_strategis'],
+                'kebijakan': r['kebijakan'], 'rekomendasi': r['rekomendasi_program'],
+                'indikator_terkait': r['indikator_terkait'],
+            } for r in rows],
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+    finally:
+        if conn: conn.close()
+
+
+# ── API: PATCH REKOMENDASI PROVINSI ──────────────────────────────────────────
+
+@api_view(['PATCH'])
+def patch_provinsi_kebijakan_pangan(request, analysis_id):
+    try:
+        nama_provinsi = request.data.get('nama_provinsi', '').strip().upper()
+        rekomendasi   = request.data.get('rekomendasi')
+        if not nama_provinsi:
+            return Response({'error': 'nama_provinsi wajib diisi.'}, status=400)
+        if rekomendasi is None or not isinstance(rekomendasi, list):
+            return Response({'error': 'rekomendasi harus berupa array.'}, status=400)
+
+        doc = mongo_db['pangan_analysis'].find_one({'analysis_id': analysis_id})
+        if not doc:
+            return Response({'error': 'Analisis tidak ditemukan.'}, status=404)
+
+        features = doc.get('matched_features', {}).get('features', [])
+        updated  = False
+        now      = datetime.now().isoformat()
+
+        for feat in features:
+            ikp_data = feat.get('properties', {}).get('ikp_analysis', {})
+            if ikp_data.get('nama_provinsi', '').upper().strip() == nama_provinsi:
+                ikp_data.update({
+                    'rekomendasi': rekomendasi,
+                    'rekomendasi_edited': True,
+                    'rekomendasi_edited_at': now,
+                })
+                feat['properties']['ikp_analysis'] = ikp_data
+                updated = True
+                break
+
+        if not updated:
+            return Response({'error': f'Provinsi "{nama_provinsi}" tidak ditemukan dalam analisis.'}, status=404)
+
+        summary = doc.get('analysis_summary', [])
+        for s in summary:
+            if s.get('provinsi', '').upper().strip() == nama_provinsi:
+                s['rekomendasi_edited'] = True
+                break
+
+        mongo_db['pangan_analysis'].update_one(
+            {'analysis_id': analysis_id},
+            {'$set': {
+                'matched_features.features': features,
+                'analysis_summary': summary,
+                f'edits.{nama_provinsi.replace(" ", "_")}': {
+                    'updated_at': now, 'pilar_count': len(rekomendasi),
+                },
+            }}
+        )
+        return Response({
+            'status': 'success',
+            'message': f'Rekomendasi {nama_provinsi} berhasil diperbarui.',
+            'provinsi': nama_provinsi, 'pilar_count': len(rekomendasi), 'updated_at': now,
         })
     except Exception as e:
         import traceback; traceback.print_exc()
         return Response({'error': str(e)}, status=500)
 
 
-# ── Endpoint: Info Model AI ───────────────────────────────────────────────────
-@api_view(['GET'])
-def get_ai_model_info(request):
-    if not _load_ai_models():
-        return Response({"loaded": False, "error": "Model tidak ditemukan.", "ai_model_dir": AI_MODEL_DIR})
-    return Response({
-        "loaded": True, "version": _AI_META.get("version"), "created_at": _AI_META.get("created_at"),
-        "tahun_historis": _AI_META.get("tahun_historis"), "tahun_prediksi": _AI_META.get("tahun_prediksi"),
-        "provinsi_count": len(_AI_META.get("provinsi_list", [])),
-        "features_count": len(_AI_META.get("features", [])),
-        "targets": _AI_META.get("targets"), "scores": _AI_META.get("scores"),
-        "n_train_rows": _AI_META.get("n_train_rows"), "ai_model_dir": AI_MODEL_DIR,
-    })
+# ── API: PREDIKSI ARIMA MANDIRI ───────────────────────────────────────────────
 
-
-# ── CRUD Simpan / List / Detail / Hapus ──────────────────────────────────────
 @api_view(['POST'])
-def save_pangan_analysis(request):
+def predict_pangan_arima(request):
+    """
+    Prediksi mandiri (tanpa fetch BPS) untuk semua komponen IKP.
+    Body: { tahun: int, keys: list[str], skenario: str }
+    """
     try:
-        name = request.data.get('name', 'Analisis Ketahanan Pangan Tanpa Nama')
-        data = request.data.get('analysis_data')
-        if not data:
-            return Response({"error": "Data analisis tidak ditemukan"}, status=400)
-        aid = str(uuid.uuid4())
-        mongo_db["pangan_analysis"].insert_one({"analysis_id": aid, "name": name, "type": "pangan",
-                                                "timestamp": datetime.now().isoformat(), **data})
-        return Response({"status": "success", "message": f"'{name}' berhasil disimpan", "analysis_id": aid})
+        tahun    = int(request.data.get('tahun', 2026))
+        keys     = request.data.get('keys', list(PANGAN_MODEL_FILES.keys()) + ['PENDUDUK'])
+        skenario = request.data.get('skenario', 'moderat').lower()
+
+        if skenario not in ('optimis', 'moderat', 'pesimis'):
+            return Response({'error': f"Skenario '{skenario}' tidak valid."}, status=400)
+        if not (LAST_HIST_YEAR < tahun <= TAHUN_MAX_PREDIKSI):
+            return Response({'error': f"Tahun harus antara {LAST_HIST_YEAR + 1}–{TAHUN_MAX_PREDIKSI}."}, status=400)
+
+        models_dict, prediksi, prediksi_detail, model_metrics = {}, {}, {}, {}
+        model_tersedia, model_tidak_ada = [], []
+
+        for key in keys:
+            if key == 'PENDUDUK':
+                pkl_path = os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_MODEL_FILE)
+                meta     = _load_metadata_penduduk()
+            elif key in PANGAN_MODEL_FILES:
+                pkl_path = os.path.join(PANGAN_MODELS_DIR, PANGAN_MODEL_FILES[key])
+                meta     = _load_metadata_pangan(key)
+            else:
+                model_tidak_ada.append(key); continue
+
+            try:
+                models_dict[key] = _load_arima_model(pkl_path, key if key != 'PENDUDUK' else 'PENDUDUK')
+                cv = meta.get('cv_wmape')
+                model_metrics[key] = {
+                    'cv_mae': meta.get('cv_mae'), 'cv_rmse': meta.get('cv_rmse'),
+                    'cv_wmape': cv, 'n_wilayah': meta.get('n_wilayah'),
+                    'quality': get_quality_label(cv),
+                    'arima_version': 'v1.0', 'tahun_historis': meta.get('tahun_historis'),
+                }
+                model_tersedia.append(key)
+            except FileNotFoundError as e:
+                print(f"✗ {e}"); model_tidak_ada.append(key)
+
+        if not model_tersedia:
+            return Response({'error': 'Tidak ada model ARIMA pangan tersedia.', 'model_tidak_ada': model_tidak_ada}, status=404)
+
+        for key in model_tersedia:
+            prediksi[key]        = predict_pangan_for_year(models_dict, key, tahun, skenario)
+            prediksi_detail[key] = predict_pangan_all_skenario(models_dict, key, tahun)
+
+        return Response({
+            'status': 'success', 'tahun': tahun, 'skenario': skenario,
+            'prediksi': prediksi, 'prediksi_detail': prediksi_detail,
+            'model_metrics': model_metrics,
+            'model_tersedia': model_tersedia, 'model_tidak_ada': model_tidak_ada,
+            'timestamp': datetime.now().isoformat(),
+        })
     except Exception as e:
-        return Response({"error": str(e)}, status=500)
+        import traceback; traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['GET'])
-def get_pangan_analysis_list(request):
-    try:
-        results = list(mongo_db["pangan_analysis"].find({}, {
-            '_id': 0, 'analysis_id': 1, 'name': 1, 'timestamp': 1,
-            'total_success': 1, 'status_distribusi': 1, 'tahun': 1,
-            'indikator': 1, 'is_ai_prediction': 1, 'source': 1,
-        }).sort('timestamp', -1))
-        return Response({"status": "success", "count": len(results), "results": results})
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
+def get_pangan_arima_info(request):
+    """Info model ARIMA pangan (ketersediaan + metrik)."""
+    info = {}
+    all_keys = list(PANGAN_MODEL_FILES.keys()) + ['PENDUDUK']
 
+    for key in all_keys:
+        if key == 'PENDUDUK':
+            tersedia = os.path.exists(os.path.join(PENDUDUK_MODELS_DIR, PENDUDUK_MODEL_FILE))
+            meta     = _load_metadata_penduduk() if tersedia else {}
+        else:
+            tersedia = check_model_available(key)
+            meta     = _load_metadata_pangan(key) if tersedia else {}
 
-@api_view(['GET'])
-def get_pangan_analysis_detail(request, analysis_id):
-    try:
-        result = mongo_db["pangan_analysis"].find_one({"analysis_id": analysis_id}, {'_id': 0})
-        if not result:
-            return Response({"error": "Analisis tidak ditemukan"}, status=404)
-        return Response(result)
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
+        cv = meta.get('cv_wmape')
+        info[key] = {
+            'tersedia': tersedia,
+            'cv_mae': meta.get('cv_mae'), 'cv_rmse': meta.get('cv_rmse'),
+            'cv_wmape': cv, 'n_wilayah': meta.get('n_wilayah'),
+            'quality': get_quality_label(cv),
+            'tahun_historis': meta.get('tahun_historis'),
+            'tahun_prediksi_range': f"{LAST_HIST_YEAR + 1}–{TAHUN_MAX_PREDIKSI}",
+        }
 
-
-@api_view(['DELETE'])
-def delete_pangan_analysis(request, analysis_id):
-    try:
-        r = mongo_db["pangan_analysis"].delete_one({"analysis_id": analysis_id})
-        if r.deleted_count == 0:
-            return Response({"error": "Analisis tidak ditemukan"}, status=404)
-        return Response({"status": "success", "message": "Analisis berhasil dihapus"})
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
+    return Response({'status': 'success', 'model_info': info, 'timestamp': datetime.now().isoformat()})
