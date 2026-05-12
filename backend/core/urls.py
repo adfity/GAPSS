@@ -7,12 +7,13 @@ from . import waypoint_views
 from .analysis_views import sdm_views
 from .analysis_views import pangan_views
 from .analysis_views import sda_views
+from .analysis_views import economy_views
 
 
 # analisis (nanti delet)
 from .analysis_views import education_views
 from .analysis_views import health_views
-from .analysis_views import economy_views
+from .analysis_views import economy_test_views
 # ---------------------------------------
 
 
@@ -34,50 +35,64 @@ urlpatterns = [
 
     # ---------------------------------------------------------------------------------------------------------
     # SDM ANALYSIS -
-    path('check-sdm-data/',                         sdm_views.check_sdm_year_data,       name='check-sdm-data'),
-    path('analyze-sdm-bps/',                        sdm_views.analyze_sdm_bps,           name='analyze-sdm-bps'),
-    path('save-sdm-analysis/',                      sdm_views.save_sdm_analysis,         name='save-sdm-analysis'),
-    path('sdm-analysis/list/',                      sdm_views.get_sdm_analysis_list,     name='get-sdm-analysis-list'),
-    path('sdm-analysis/<str:analysis_id>/',         sdm_views.get_sdm_analysis_detail,   name='get-sdm-analysis-detail'),
-    path('sdm-analysis/<str:analysis_id>/delete/',  sdm_views.delete_sdm_analysis,       name='delete-sdm-analysis'),
+    path('check-sdm-data/',                                 sdm_views.check_sdm_year_data,              name='check-sdm-data'),
+    path('analyze-sdm-bps/',                                sdm_views.analyze_sdm_bps,                  name='analyze-sdm-bps'),
+    path('save-sdm-analysis/',                              sdm_views.save_sdm_analysis,                name='save-sdm-analysis'),
+    path('sdm-analysis/list/',                              sdm_views.get_sdm_analysis_list,            name='get-sdm-analysis-list'),
+    path('sdm-analysis/<str:analysis_id>/',                 sdm_views.get_sdm_analysis_detail,          name='get-sdm-analysis-detail'),
+    path('sdm-analysis/<str:analysis_id>/delete/',          sdm_views.delete_sdm_analysis,              name='delete-sdm-analysis'),
+    path('bank-kebijakan-sdm/',                             sdm_views.get_bank_kebijakan_sdm,           name='bank-kebijakan-sdm'),
+    path('bank-kebijakan-sdm/add/',                         sdm_views.add_bank_kebijakan_sdm,           name='add-bank-kebijakan-sdm'),
+    path('bank-kebijakan-sdm/<int:kebijakan_id>/update/',   sdm_views.update_bank_kebijakan_sdm,        name='update-bank-kebijakan-sdm'),
+    path('bank-kebijakan-sdm/<int:kebijakan_id>/delete/',   sdm_views.delete_bank_kebijakan_sdm,        name='delete-bank-kebijakan-sdm'),
+    path('bank-kebijakan-isdm-provinsi/',                   sdm_views.get_bank_kebijakan_isdm_for_provinsi, name='bank-kebijakan-isdm-provinsi'),
+    path('sdm-analysis/<str:analysis_id>/provinsi-kebijakan/', sdm_views.patch_provinsi_kebijakan,name='patch-provinsi-kebijakan'),
+    # SDM ARIMA v4.0
+    path('predict-sdm-arima/',                              sdm_views.predict_sdm_arima,                name='predict-sdm-arima'),
+    path('arima-model-info/',                               sdm_views.get_arima_model_info,             name='arima-model-info'),
+   
     # ---------------------------------------------------------------------------------------------------------
 
     # ---------------------------------------------------------------------------------------------------------
-    # PANGAN: Cek data & analisis -
-    path('check-year-data-pangan/',  pangan_views.check_year_data_pangan, name='check_year_data_pangan'),
-    path('analyze-pangan-bps/',      pangan_views.analyze_pangan_bps, name='analyze_pangan_bps'),
-    path('analyze-pangan-ai/',       pangan_views.analyze_pangan_ai, name='analyze_pangan_ai'),
-    path('pangan-ai-model-info/',    pangan_views.get_ai_model_info, name='pangan_ai_model_info'),
-    # PANGAN: CRUD
-    path('save-pangan-analysis/',    pangan_views.save_pangan_analysis, name='save_pangan_analysis'),
-    path('pangan-analysis/list/',    pangan_views.get_pangan_analysis_list,name='get_pangan_analysis_list'),
-    path('pangan-analysis/<str:analysis_id>/',        pangan_views.get_pangan_analysis_detail, name='get_pangan_analysis_detail'),
-    path('pangan-analysis/<str:analysis_id>/delete/', pangan_views.delete_pangan_analysis, name='delete_pangan_analysis'),
-    # PANGAN: Download xlsx
-    path('download-padi-xlsx/',      pangan_views.download_padi_xlsx, name='download_padi_xlsx'),
-    path('download-konsumsi-xlsx/',  pangan_views.download_konsumsi_xlsx, name='download_konsumsi_xlsx'),
-    path('download-penduduk-xlsx/',  pangan_views.download_penduduk_xlsx, name='download_penduduk_xlsx'),
-    path('download-ikp-xlsx/',       pangan_views.download_ikp_xlsx, name='download_ikp_xlsx'),
+    # PANGAN / IKP ANALYSIS
+    path('check-pangan-data/',                                  pangan_views.check_pangan_year_data,              name='check-pangan-data'),
+    path('analyze-pangan-bps/',                                 pangan_views.analyze_pangan_bps,                  name='analyze-pangan-bps'),
+    path('save-pangan-analysis/',                               pangan_views.save_pangan_analysis,                name='save-pangan-analysis'),
+    path('pangan-analysis/list/',                               pangan_views.get_pangan_analysis_list,            name='get-pangan-analysis-list'),
+    path('pangan-analysis/<str:analysis_id>/',                  pangan_views.get_pangan_analysis_detail,          name='get-pangan-analysis-detail'),
+    path('pangan-analysis/<str:analysis_id>/delete/',           pangan_views.delete_pangan_analysis,              name='delete-pangan-analysis'),
+    path('bank-kebijakan-ikp/',                                 pangan_views.get_bank_kebijakan_ikp,              name='bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/add/',                             pangan_views.add_bank_kebijakan_ikp,              name='add-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/<int:kebijakan_id>/update/',       pangan_views.update_bank_kebijakan_ikp,           name='update-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/<int:kebijakan_id>/delete/',       pangan_views.delete_bank_kebijakan_ikp,           name='delete-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp-provinsi/',                        pangan_views.get_bank_kebijakan_ikp_for_provinsi, name='bank-kebijakan-ikp-provinsi'),
+    path('pangan-analysis/<str:analysis_id>/provinsi-kebijakan/', pangan_views.patch_provinsi_kebijakan_pangan,   name='patch-provinsi-kebijakan-pangan'),
+    # PANGAN ARIMA
+    path('predict-pangan-arima/',                               pangan_views.predict_pangan_arima,                name='predict-pangan-arima'),
+    path('pangan-arima-info/',                                  pangan_views.get_pangan_arima_info,               name='pangan-arima-info'),
+    # ---------------------------------------------------------------------------------------------------------
+
+
+    # ---------------------------------------------------------------------------------------------------------
+    # SDA ANALYSIS
+    path('check-sda-data/',                         sda_views.check_sda_data,            name='check-sda-data'),
+    path('analyze-sda-bps/',                        sda_views.analyze_sda_bps,           name='analyze-sda-bps'),
+    path('save-sda-analysis/',                      sda_views.save_sda_analysis,         name='save-sda-analysis'),
+    path('sda-analysis/list/',                      sda_views.get_sda_analysis_list,     name='get-sda-analysis-list'),
+    path('sda-analysis/<str:analysis_id>/',         sda_views.get_sda_analysis_detail,   name='get-sda-analysis-detail'),
+    path('sda-analysis/<str:analysis_id>/delete/',  sda_views.delete_sda_analysis,       name='delete-sda-analysis'),
     # ---------------------------------------------------------------------------------------------------------
 
     # ---------------------------------------------------------------------------------------------------------
-    # SDA: Cek & Analisis -
-    path('check-year-data-sda/',   sda_views.check_year_data_sda,    name='check_year_data_sda'),
-    path('analyze-sda-bps/',       sda_views.analyze_sda_bps,        name='analyze_sda_bps'),
-    path('analyze-sda-ai/',        sda_views.analyze_sda_ai,         name='analyze_sda_ai'),
-    path('sda-ai-model-info/',     sda_views.get_sda_ai_model_info,  name='sda_ai_model_info'),
-    # SDA: CRUD
-    path('save-sda-analysis/',     sda_views.save_sda_analysis,      name='save_sda_analysis'),
-    path('sda-analysis/list/',     sda_views.get_sda_analysis_list,  name='get_sda_analysis_list'),
-    path('sda-analysis/<str:analysis_id>/',        sda_views.get_sda_analysis_detail, name='get_sda_analysis_detail'),
-    path('sda-analysis/<str:analysis_id>/delete/', sda_views.delete_sda_analysis,     name='delete_sda_analysis'),
-    # SDA: Download XLSX
-    path('download-ikan-xlsx/',        sda_views.download_ikan_xlsx,       name='download_ikan_xlsx'),
-    path('download-perkebunan-xlsx/',  sda_views.download_perkebunan_xlsx, name='download_perkebunan_xlsx'),
-    path('download-nilai-ikan-xlsx/',  sda_views.download_nilai_ikan_xlsx, name='download_nilai_ikan_xlsx'),
-    path('download-pdrb-sda-xlsx/',    sda_views.download_pdrb_sda_xlsx,   name='download_pdrb_sda_xlsx'),
-    path('download-ipsda-xlsx/',       sda_views.download_ipsda_xlsx,      name='download_ipsda_xlsx'),
+    # EKONOMI ANALYSIS
+    path('check-ekon-data/',                          economy_views.check_ekon_year_data,      name='check-ekon-data'),
+    path('analyze-ekon-bps/',                         economy_views.analyze_ekon_bps,          name='analyze-ekon-bps'),
+    path('save-ekon-analysis/',                       economy_views.save_ekon_analysis,        name='save-ekon-analysis'),
+    path('ekon-analysis/list/',                       economy_views.get_ekon_analysis_list,    name='get-ekon-analysis-list'),
+    path('ekon-analysis/<str:analysis_id>/',          economy_views.get_ekon_analysis_detail,  name='get-ekon-analysis-detail'),
+    path('ekon-analysis/<str:analysis_id>/delete/',   economy_views.delete_ekon_analysis,      name='delete-ekon-analysis'),
     # ---------------------------------------------------------------------------------------------------------
+
 
 
 # NANTI HAPUS ----------------------------------
@@ -104,18 +119,18 @@ urlpatterns = [
     path('download-sanitasi-xlsx/', health_views.download_sanitasi_xlsx,  name='download-sanitasi-xlsx'),
 
     # EKONOMI ANALYSIS (BPS API)
-    path('check-ekonomi-data/',          economy_views.check_ekonomi_year_data,    name='check-ekonomi-data'),
-    path('analyze-ekonomi-bps/',         economy_views.analyze_ekonomi_bps,        name='analyze-ekonomi-bps'),
-    path('save-ekonomi-analysis/',       economy_views.save_ekonomi_analysis,      name='save-ekonomi-analysis'),
-    path('ekonomi-analysis/list/',       economy_views.get_ekonomi_analysis_list,  name='get-ekonomi-analysis-list'),
-    path('ekonomi-analysis/<str:analysis_id>/',        economy_views.get_ekonomi_analysis_detail, name='get-ekonomi-analysis-detail'),
-    path('ekonomi-analysis/<str:analysis_id>/delete/', economy_views.delete_ekonomi_analysis,     name='delete-ekonomi-analysis'),
-    path('historis-ekonomi/',            economy_views.get_historis_ekonomi,       name='historis-ekonomi'),
-    path('bank-kebijakan/',              economy_views.get_bank_kebijakan2,         name='get-bank-kebijakan'),
+    path('check-ekonomi-data/',          economy_test_views.check_ekonomi_year_data,    name='check-ekonomi-data'),
+    path('analyze-ekonomi-bps/',         economy_test_views.analyze_ekonomi_bps,        name='analyze-ekonomi-bps'),
+    path('save-ekonomi-analysis/',       economy_test_views.save_ekonomi_analysis,      name='save-ekonomi-analysis'),
+    path('ekonomi-analysis/list/',       economy_test_views.get_ekonomi_analysis_list,  name='get-ekonomi-analysis-list'),
+    path('ekonomi-analysis/<str:analysis_id>/',        economy_test_views.get_ekonomi_analysis_detail, name='get-ekonomi-analysis-detail'),
+    path('ekonomi-analysis/<str:analysis_id>/delete/', economy_test_views.delete_ekonomi_analysis,     name='delete-ekonomi-analysis'),
+    path('historis-ekonomi/',            economy_test_views.get_historis_ekonomi,       name='historis-ekonomi'),
+    path('bank-kebijakan/',              economy_test_views.get_bank_kebijakan2,         name='get-bank-kebijakan'),
     # Download XLSX per indikator ekonomi
-    path('download-pdrb-xlsx/',          economy_views.download_pdrb_xlsx,         name='download-pdrb-xlsx'),
-    path('download-kemiskinan-xlsx/',    economy_views.download_kemiskinan_xlsx,   name='download-kemiskinan-xlsx'),
-    path('download-investasi-xlsx/',     economy_views.download_investasi_xlsx,    name='download-investasi-xlsx'),
+    path('download-pdrb-xlsx/',          economy_test_views.download_pdrb_xlsx,         name='download-pdrb-xlsx'),
+    path('download-kemiskinan-xlsx/',    economy_test_views.download_kemiskinan_xlsx,   name='download-kemiskinan-xlsx'),
+    path('download-investasi-xlsx/',     economy_test_views.download_investasi_xlsx,    name='download-investasi-xlsx'),
 # NANTI HAPUS ----------------------------------
 
 

@@ -1,0 +1,55 @@
+{
+  "versi": "arima_v4.0",
+  "variabel": "Jumlah Penduduk",
+  "satuan": "Ribu Jiwa",
+  "var_kolom_api": "nzudy5elv7",
+  "simdasi_id": 25,
+  "id_tabel": "WVRlTTcySlZDa3lUcFp6czNwbHl4QT09",
+  "tahun_historis": [
+    2010,
+    2026
+  ],
+  "tahun_prediksi": [
+    2027,
+    2045
+  ],
+  "n_provinsi": 38,
+  "cv_test_years": [
+    2024,
+    2025,
+    2026
+  ],
+  "validation_years": [
+    2021,
+    2022,
+    2023
+  ],
+  "cv_mae": 69.37,
+  "cv_rmse": 247.82,
+  "cv_wmape_pct": 0.93,
+  "generated_at": "2026-05-09T08:29:22.126731",
+  "catatan": "Model pkl: 1 file arima_penduduk.pkl berisi semua provinsi.",
+  "per_fold": [
+    {
+      "tahun": 2024,
+      "mae": 134.33322361642428,
+      "rmse": 582.8402474088317,
+      "wmape": 1.8127101568636381,
+      "n": 38
+    },
+    {
+      "tahun": 2025,
+      "mae": 44.324667414242924,
+      "rmse": 105.93671592644903,
+      "wmape": 0.5921620208161731,
+      "n": 38
+    },
+    {
+      "tahun": 2026,
+      "mae": 29.44525088642994,
+      "rmse": 54.68678558389335,
+      "wmape": 0.389598108375373,
+      "n": 38
+    }
+  ]
+}
