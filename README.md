@@ -1,89 +1,152 @@
-# TerraSeg - Project Magang
-TerraSeg berasal dari penggabungan dua kata: Terra (Bumi) dan Seg (Segmentation). Secara filosofis, TerraSeg berarti "Segmentasi Bumi", sebuah platform yang dirancang untuk memetakan dan membagi data geografis menjadi segmen-segmen wilayah yang bermakna untuk analisis mendalam.
+# GAPSS (GeoAI Spasial) - Project Magang
 
-TerraSeg adalah platform Sistem Informasi Geografis (GIS) terintegrasi yang menggunakan Django (Backend), Next.js (Frontend), serta dukungan database PostgreSQL dan NoSQL.
+GAPSS (GeoAI Spasial) adalah platform Sistem Informasi Geografis (GIS) terintegrasi yang menggabungkan teknologi Artificial Intelligence (AI), analisis spasial, dan visualisasi geospasial dalam satu ekosistem aplikasi modern.
 
----
+Platform ini dikembangkan menggunakan:
 
-## Persyaratan Sistem (Prerequisites)
+- **Django** sebagai Backend API
+- **Next.js** sebagai Frontend Interface
+- **PostgreSQL** sebagai database relasional
+- **MongoDB (NoSQL)** untuk penyimpanan data fleksibel dan analisis spasial
 
-Sebelum memulai, pastikan mesin lokal kamu sudah terinstall software dengan versi berikut:
-
-* **Python**: `3.12.x` (Minimal `3.10`+)
-* **Node.js**: `18.x` atau lebih baru (Rekomendasi versi LTS)
-* **Docker & Docker Compose**: Versi terbaru (Untuk menjalankan database)
-* **Package Manager**: `pip` (Python) dan `npm` (Node.js)
+GAPSS dirancang untuk mendukung pengolahan, visualisasi, analisis, dan pengelolaan data geospasial secara efisien dan interaktif.
 
 ---
 
-## Panduan Instalasi (Getting Started)
+# Persyaratan Sistem (Prerequisites)
 
-Ikuti langkah-langkah di bawah ini secara berurutan untuk menjalankan proyek:
+Sebelum memulai, pastikan perangkat lokal sudah terinstall software berikut:
 
-### 1. Setup Database (Docker)
-Jalankan perintah ini di dalam folder utama (root) `TerraSeg/` untuk menyalakan PostgreSQL dan MongoDB:
+- **Python** `3.12.x` (Minimal `3.10+`)
+- **Node.js** `18.x` atau lebih baru (Disarankan versi LTS)
+- **Docker & Docker Compose** versi terbaru
+- **pip** untuk Python Package Manager
+- **npm** untuk Node.js Package Manager
+
+---
+
+# Panduan Instalasi (Getting Started)
+
+Ikuti langkah-langkah berikut untuk menjalankan project GAPSS secara lokal.
+
+---
+
+## 1. Setup Database (Docker)
+
+Jalankan PostgreSQL dan MongoDB menggunakan Docker Compose.
+
+Buka terminal pada folder root project `GAPSS/` lalu jalankan:
+
 ```bash
-# Menjalankan database di latar belakang
+# Menjalankan database di background
 docker-compose up -d
-
 ```
 
-### 2. Setup Backend (Django)
+---
 
-Buka terminal baru, masuk ke folder utama (root) `TerraSeg/`, dan siapkan environment:
+## 2. Setup Backend (Django)
+
+Buka terminal baru lalu masuk ke folder root project `GAPSS/`.
+
+### Membuat Virtual Environment
 
 ```bash
-# Membuat Virtual Environment
 python -m venv venv
+```
 
-# Aktivasi Virtual Environment (Windows)
+### Aktivasi Virtual Environment
+
+#### Windows
+```bash
 .\venv\Scripts\activate
+```
 
-# Install semua library yang dibutuhkan
+#### Linux / MacOS
+```bash
+source venv/bin/activate
+```
+
+### Install Dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
-# mengunggah batas Provinsi dan Kabupaten ke MongoDB.
-python backend/core/scripts/migrate_boundary.py
+### Menjalankan Backend
 
+```bash
 # Masuk ke folder backend
 cd backend
 
-# Migrasi database dan jalankan server
+# Migrasi database
 python manage.py migrate
-python manage.py runserver
 
+# Menjalankan script migrasi tambahan
+python core/scripts/migrate_all.py
+
+# Menjalankan server backend
+python manage.py runserver
 ```
 
-### 3. Setup Frontend (Next.js)
+---
 
-Buka terminal satu lagi, masuk ke folder frontend, dan jalankan interface web:
+## 3. Setup Frontend (Next.js)
+
+Buka terminal baru lalu jalankan frontend aplikasi.
 
 ```bash
 # Masuk ke folder frontend
 cd frontend
 
-# Install dependensi Node.js
+# Install dependencies
 npm install
 
-# Jalankan server development
+# Menjalankan frontend development server
 npm run dev
-
 ```
 
 ---
 
-## Catatan Penting
+# Struktur Teknologi
 
-* **Environment**: Pastikan sudah menyalin `.env.example` menjadi `.env` di dalam folder `backend/` dan sesuaikan kredensial database sebelum menjalankan server.
-* **Akses Layanan**:
-* **Frontend**: `http://localhost:3000`
-* **Backend (API)**: `http://127.0.0.1:8000`
+| Layer | Teknologi |
+|---|---|
+| Frontend | Next.js |
+| Backend | Django |
+| Database Relasional | PostgreSQL |
+| Database NoSQL | MongoDB |
+| Containerization | Docker |
 
+---
 
-* **Default Ports**:
-* **PostgreSQL**: `5432`
-* **MongoDB**: `27017`
+# Catatan Penting
 
+- Pastikan file `.env` sudah dibuat dari `.env.example`
+- Sesuaikan konfigurasi database pada folder `backend/`
+- Jalankan Docker terlebih dahulu sebelum backend dijalankan
 
+---
+
+# Akses Layanan
+
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| Backend API | `http://127.0.0.1:8000` |
+
+---
+
+# Default Port
+
+| Service | Port |
+|---|---|
+| PostgreSQL | `5432` |
+| MongoDB | `27017` |
+
+---
+
+# Deskripsi Singkat
+
+GAPSS (GeoAI Spasial) merupakan platform berbasis WebGIS yang berfokus pada integrasi teknologi geospasial dan kecerdasan buatan untuk mendukung analisis data wilayah, visualisasi peta interaktif, serta pengolahan data spasial secara modern dan scalable.
 
 ---
