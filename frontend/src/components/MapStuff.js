@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import L from 'leaflet';
 import { GeoJSON, Polygon, Popup, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import {
   Home, Map as MapIcon, Layers, LocateFixed,
-  Eye, EyeOff, Plus, Minus, Grid
+  Eye, EyeOff, Plus, Minus, Grid, Maximize, Minimize, PenLine
 } from 'lucide-react';
 import { useBoundaryData, BoundaryLayer } from './panel/layers';
 import { toast } from 'react-hot-toast';
@@ -17,10 +17,11 @@ const glass = [
   "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
 ].join(" ");
 
-const NAVBAR_H  = 56;
-const LEFT_PX   = 12;
-const TOP_ZOOM  = NAVBAR_H + 12;
-const TOP_CLEAN = TOP_ZOOM + 90 + 8;
+const NAVBAR_H = 60;
+const LEFT_PX = 12;
+const TOP_ZOOM = NAVBAR_H + 10;
+const TOP_CLEAN = TOP_ZOOM + 90;
+const TOP_FULLSCREEN = TOP_CLEAN + 36 + 8 + 36 + 8;
 
 // ─── Detection Preview Box ────────────────────────────────────────────────────
 
@@ -33,10 +34,10 @@ export function DetectionPreviewBox({ show, size }) {
 
     const updateBounds = () => {
       const center = map.getCenter();
-      const zoom   = map.getZoom();
-      const mpp    = (40075016.686 * Math.abs(Math.cos(center.lat * Math.PI / 180)))
-                     / (256 * Math.pow(2, zoom));
-      const half   = (size / 2) * mpp;
+      const zoom = map.getZoom();
+      const mpp = (40075016.686 * Math.abs(Math.cos(center.lat * Math.PI / 180)))
+        / (256 * Math.pow(2, zoom));
+      const half = (size / 2) * mpp;
       const latOff = half / 111320;
       const lngOff = half / (111320 * Math.cos(center.lat * Math.PI / 180));
       setBounds([
@@ -56,11 +57,11 @@ export function DetectionPreviewBox({ show, size }) {
     <Rectangle
       bounds={bounds}
       pathOptions={{
-        color:       '#06b6d4',
-        weight:      3,
-        fillColor:   '#06b6d4',
+        color: '#06b6d4',
+        weight: 3,
+        fillColor: '#06b6d4',
         fillOpacity: 0.1,
-        dashArray:   '10, 10',
+        dashArray: '10, 10',
       }}
     />
   );
@@ -102,10 +103,10 @@ export function ZoomButtons({ modeBersih }) {
   );
 }
 
-// ─── Mouse Coordinate ─────────────────────────────────────────────────────────
+// ─── Mouse Coordinate + Zoom Level ────────────────────────────────────────────
 // Tanpa background — menyatu dengan style map lain
 
-export function MouseCoordinate({ modeBersih }) {
+export function MouseCoordinate({ modeBersih, zoomLevel }) {
   const [coords, setCoords] = useState({ lat: 0, lng: 0 });
   useMapEvents({
     mousemove: (e) => setCoords({ lat: e.latlng.lat.toFixed(5), lng: e.latlng.lng.toFixed(5) }),
@@ -121,6 +122,9 @@ export function MouseCoordinate({ modeBersih }) {
           <span className="mx-1 text-slate-400">|</span>
           <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">Lng</span>
           <span className="text-sky-300 font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">{coords.lng}</span>
+          <span className="mx-1 text-slate-400">|</span>
+          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">Z</span>
+          <span className="text-amber-300 font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">{zoomLevel}</span>
         </span>
       </div>
     </div>
@@ -138,12 +142,193 @@ export function CleanModeButton({ modeBersih, setModeBersih }) {
         className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 active:scale-90
           ${modeBersih
             ? 'bg-sky-500 shadow-[0_0_14px_rgba(14,165,233,0.5)] text-white'
-: `${glass} text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40`
+            : `${glass} text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40`
           }`}
       >
         {modeBersih ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
     </div>
+  );
+}
+
+// ─── Fullscreen Button ────────────────────────────────────────────────────────
+
+export function FullscreenButton({ modeBersih }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => { });
+    } else {
+      document.exitFullscreen().catch(() => { });
+    }
+  };
+
+  if (modeBersih) return null;
+  return (
+    <div className="fixed z-[1300]" style={{ top: TOP_FULLSCREEN, left: LEFT_PX }}>
+      <button
+        onClick={toggleFullscreen}
+        title={isFullscreen ? 'Keluar Fullscreen (F)' : 'Fullscreen (F)'}
+        className={`${glass} w-9 h-9 flex items-center justify-center rounded-full
+          text-white hover:!bg-white/10 dark:hover:!bg-slate-700/40 transition-all active:scale-90`}
+      >
+        {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+      </button>
+    </div>
+  );
+}
+
+// ─── Keyboard Shortcuts ───────────────────────────────────────────────────────
+
+export function KeyboardShortcuts({ activePanel, setActivePanel, modeBersih, setModeBersih, setGoHome }) {
+  useEffect(() => {
+    const handler = (e) => {
+      // Jangan aktifkan shortcut saat user mengetik di input/textarea
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case 'b':
+          e.preventDefault();
+          setActivePanel(prev => prev === 'basemap' ? null : 'basemap');
+          break;
+        case 'l':
+          e.preventDefault();
+          setActivePanel(prev => prev === 'layers' ? null : 'layers');
+          break;
+        case 'c':
+          e.preventDefault();
+          setModeBersih(prev => !prev);
+          break;
+        case 'f':
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => { });
+          } else {
+            document.exitFullscreen().catch(() => { });
+          }
+          break;
+        case 'h':
+          e.preventDefault();
+          setGoHome(true);
+          setActivePanel(null);
+          break;
+        case 'escape':
+          setActivePanel(null);
+          break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [setActivePanel, setModeBersih, setGoHome]);
+
+  return null;
+}
+
+// ─── MiniMap ──────────────────────────────────────────────────────────────────
+
+export function MiniMap({ modeBersih }) {
+  const parentMap = useMap();
+  const miniMapRef = useRef(null);
+  const containerRef = useRef(null);
+  const rectRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    if (modeBersih || isMobile || !containerRef.current) {
+      if (miniMapRef.current) {
+        miniMapRef.current.remove();
+        miniMapRef.current = null;
+      }
+      return;
+    }
+
+    if (miniMapRef.current) return; // already created
+
+    const miniMap = L.map(containerRef.current, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false,
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+    }).addTo(miniMap);
+
+    miniMapRef.current = miniMap;
+
+    // Initial sync
+    const center = parentMap.getCenter();
+    const zoom = Math.max(parentMap.getZoom() - 5, 1);
+    miniMap.setView(center, zoom);
+
+    // Rectangle showing main viewport
+    const bounds = parentMap.getBounds();
+    rectRef.current = L.rectangle(bounds, {
+      color: '#06b6d4',
+      weight: 2,
+      fillColor: '#06b6d4',
+      fillOpacity: 0.15,
+    }).addTo(miniMap);
+
+    // Sync on move/zoom
+    const syncMiniMap = () => {
+      if (!miniMapRef.current) return;
+      const c = parentMap.getCenter();
+      const z = Math.max(parentMap.getZoom() - 5, 1);
+      miniMapRef.current.setView(c, z, { animate: false });
+      if (rectRef.current) {
+        rectRef.current.setBounds(parentMap.getBounds());
+      }
+    };
+
+    parentMap.on('move', syncMiniMap);
+    parentMap.on('zoom', syncMiniMap);
+
+    return () => {
+      parentMap.off('move', syncMiniMap);
+      parentMap.off('zoom', syncMiniMap);
+      if (miniMapRef.current) {
+        miniMapRef.current.remove();
+        miniMapRef.current = null;
+      }
+    };
+  }, [parentMap, modeBersih, isMobile]);
+
+  if (modeBersih || isMobile) return null;
+
+  return (
+    <div
+      ref={containerRef}
+      className="absolute z-[900] rounded-xl overflow-hidden border-2 border-white/20 dark:border-slate-700/40 shadow-lg"
+      style={{
+        top: 100,
+        right: 20,
+        width: 160,
+        height: 110,
+        opacity: 0.85,
+      }}
+    />
   );
 }
 
@@ -164,11 +349,11 @@ export function MapReset({ trigger, onDone }) {
 export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBersih }) {
   const map = useMap();
   const [isMobile, setIsMobile] = useState(false);
-  const [isDark,   setIsDark]   = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    const checkTheme  = () => setIsDark(document.documentElement.getAttribute('data-theme') === 'dark');
+    const checkTheme = () => setIsDark(document.documentElement.getAttribute('data-theme') === 'dark');
     checkMobile();
     checkTheme();
     window.addEventListener('resize', checkMobile);
@@ -178,64 +363,65 @@ export function SidebarButtons({ activePanel, setActivePanel, setGoHome, modeBer
   }, []);
 
   const buttons = [
-    { id: 'home',    icon: <Home size={17} />,    label: 'Beranda' },
-    { id: 'basemap', icon: <MapIcon size={17} />,  label: 'Basemap' },
-    { id: 'layers',  icon: <Layers size={17} />,   label: 'Layer'   },
-//     {
-//   id: 'radius',
-//   icon: <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />,
-//   label: 'Radius',
-// },
-{
-  id: 'areascan',
-  icon: <img src="/icons/wgeo.png" className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
-  label: 'GeoAI',
-},
+    { id: 'home', icon: <Home size={17} />, label: 'Beranda' },
+    { id: 'basemap', icon: <MapIcon size={17} />, label: 'Basemap' },
+    { id: 'layers', icon: <Layers size={17} />, label: 'Layer' },
+    //     {
+    //   id: 'radius',
+    //   icon: <img src="/icons/Wradius.png" className="w-[18px] h-[18px] object-contain" alt="Radius" />,
+    //   label: 'Radius',
+    // },
+    {
+      id: 'areascan',
+      icon: <img src="/icons/wgeo.png" className="w-[18px] h-[18px] object-contain" alt="GeoAI" />,
+      label: 'GeoAI',
+    },
+    { id: 'draw', icon: <PenLine size={17} />, label: 'Draw' },
     { id: 'share', icon: <LocateFixed size={17} />, label: 'Lokasi' },
   ];
 
 
   const handleLocateMe = () => {
-  if (!navigator.geolocation) {
-    toast.error('Browser tidak mendukung geolokasi');
-    return;
-  }
-  const id = toast.loading('Mencari lokasi...');
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      // setActivePanel(null) dulu supaya panel tidak terbuka
-      setActivePanel(null);
-      // Akses map via ref — kita butuh prop mapRef
-      map.flyTo([latitude, longitude], 16, { animate: true, duration: 1.2 });
-      toast.success(
-        `📍 Lokasi ditemukan · akurasi ±${Math.round(accuracy)}m`,
-        { id, duration: 3000 }
-      );
-    },
-    (err) => {
-      const msg = {
-        1: 'Izin lokasi ditolak',
-        2: 'Lokasi tidak tersedia',
-        3: 'Waktu habis',
-      }[err.code] || 'Gagal mendapatkan lokasi';
-      toast.error(msg, { id });
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
-};
+    if (!navigator.geolocation) {
+      toast.error('Browser tidak mendukung geolokasi');
+      return;
+    }
+    const id = toast.loading('Mencari lokasi...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        // setActivePanel(null) dulu supaya panel tidak terbuka
+        setActivePanel(null);
+        // Akses map via ref — kita butuh prop mapRef
+        map.flyTo([latitude, longitude], 16, { animate: true, duration: 1.2 });
+        toast.success(
+          `📍 Lokasi ditemukan · akurasi ±${Math.round(accuracy)}m`,
+          { id, duration: 3000 }
+        );
+      },
+      (err) => {
+        const msg = {
+          1: 'Izin lokasi ditolak',
+          2: 'Lokasi tidak tersedia',
+          3: 'Waktu habis',
+        }[err.code] || 'Gagal mendapatkan lokasi';
+        toast.error(msg, { id });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   const handleButtonClick = (btnId) => {
-  if (btnId === 'home') {
-    setGoHome(true);
-    setActivePanel(null);
-    toast.success('Kembali ke tampilan default');
-  } else if (btnId === 'share') {
-    handleLocateMe();
-  } else {
-    setActivePanel(activePanel === btnId ? null : btnId);
-  }
-};
+    if (btnId === 'home') {
+      setGoHome(true);
+      setActivePanel(null);
+      toast.success('Kembali ke tampilan default');
+    } else if (btnId === 'share') {
+      handleLocateMe();
+    } else {
+      setActivePanel(activePanel === btnId ? null : btnId);
+    }
+  };
 
   if (modeBersih) return null;
 
@@ -336,11 +522,11 @@ export function PreviewLayer({ previewData, setPreviewData, getCategoryColor }) 
             key={`preview-${idx}`}
             positions={polygonCoords}
             pathOptions={{
-              color:       getCategoryColor(obj.kategori),
-              fillColor:   getCategoryColor(obj.kategori),
+              color: getCategoryColor(obj.kategori),
+              fillColor: getCategoryColor(obj.kategori),
               fillOpacity: 0.35,
-              weight:      2,
-              dashArray:   '6, 8',
+              weight: 2,
+              dashArray: '6, 8',
             }}
           >
             <Popup>
@@ -405,10 +591,10 @@ export function SavedDataLayer({ data, onRefreshData, getCategoryColor }) {
           key={item.feature_id || idx}
           data={item.location}
           style={() => ({
-            color:       getCategoryColor(item.kategori),
-            fillColor:   getCategoryColor(item.kategori),
+            color: getCategoryColor(item.kategori),
+            fillColor: getCategoryColor(item.kategori),
             fillOpacity: 0.35,
-            weight:      2,
+            weight: 2,
           })}
         >
           <Popup>
@@ -480,7 +666,7 @@ export function AnalysisLayer({ activeAnalysisData }) {
       }}
       onEachFeature={(feature, layer) => {
         const analysis = feature.properties?.analysis || {};
-        const dataAps  = analysis.aps_data || {};
+        const dataAps = analysis.aps_data || {};
         layer.bindTooltip(`
           <div style="font-family:inherit;padding:6px;">
             <div style="font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.1em;">${analysis.nama_provinsi}</div>
@@ -524,16 +710,16 @@ export function AnalysisLayer({ activeAnalysisData }) {
 
 export default function MapStuff(props) {
   const { boundaryData, getBoundaryStyle, onEachBoundary } = useBoundaryData(props.activeLayers);
-  const modeBersih    = props.modeBersih;
+  const modeBersih = props.modeBersih;
   const setModeBersih = props.setModeBersih;
 
   useEffect(() => {
     document.documentElement.setAttribute('data-clean', modeBersih ? 'true' : 'false');
     const header = document.querySelector('header');
     if (header) {
-      header.style.transition    = 'opacity 0.2s, transform 0.2s';
-      header.style.opacity       = modeBersih ? '0' : '';
-      header.style.transform     = modeBersih ? 'translateY(-100%)' : '';
+      header.style.transition = 'opacity 0.2s, transform 0.2s';
+      header.style.opacity = modeBersih ? '0' : '';
+      header.style.transform = modeBersih ? 'translateY(-100%)' : '';
       header.style.pointerEvents = modeBersih ? 'none' : '';
     }
     return () => {
@@ -564,10 +750,19 @@ export default function MapStuff(props) {
       />
 
       <DetectionPreviewBox show={props.showPreviewBox} size={props.detectionSize || 640} />
-      <ZoomWatcher     onZoomChange={props.onZoomChange || (() => {})} />
-      <ZoomButtons     modeBersih={modeBersih} />
+      <ZoomWatcher onZoomChange={props.onZoomChange || (() => { })} />
+      <ZoomButtons modeBersih={modeBersih} />
       <CleanModeButton modeBersih={modeBersih} setModeBersih={setModeBersih} />
-      <MouseCoordinate modeBersih={modeBersih} />
+      <FullscreenButton modeBersih={modeBersih} />
+      <MouseCoordinate modeBersih={modeBersih} zoomLevel={props.zoomLevel} />
+
+      <KeyboardShortcuts
+        activePanel={props.activePanel}
+        setActivePanel={props.setActivePanel}
+        modeBersih={modeBersih}
+        setModeBersih={setModeBersih}
+        setGoHome={props.setGoHome}
+      />
 
       <MapReset trigger={props.goHome} onDone={() => props.setGoHome(false)} />
       <SidebarButtons

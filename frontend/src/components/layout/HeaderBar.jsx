@@ -23,7 +23,7 @@ export default function HeaderBar() {
 
     useEffect(() => {
         const token = localStorage.getItem("access_token");
-        const name  = localStorage.getItem("user_name");
+        const name = localStorage.getItem("user_name");
         const email = localStorage.getItem("user_email");
         setIsLoggedIn(!!token);
         setUserName(name || "User");
@@ -113,7 +113,7 @@ export default function HeaderBar() {
             {!isLandingPage && (
                 <button
                     onClick={() => window.dispatchEvent(new CustomEvent("toggle-sidebar"))}
-                    onMouseEnter={() => window.dispatchEvent(new CustomEvent("toggle-sidebar-open"))}
+
                     aria-label={sidebarOpen ? "Tutup Menu" : "Buka Menu"}
                     className="ml-5 flex items-center justify-center w-9 h-9 rounded-lg shrink-0
                                text-slate-600 dark:text-slate-300
@@ -129,20 +129,19 @@ export default function HeaderBar() {
                 <nav className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                     <div className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border border-white/30 dark:border-slate-700/30 shadow-md">
                         {[
-                            { href: "#home",         label: "Home"       },
-                            { href: "#features",     label: "Fitur"      },
+                            { href: "#home", label: "Home" },
+                            { href: "#features", label: "Fitur" },
                             { href: "#how-it-works", label: "Cara Kerja" },
-                            { href: "#cta",          label: "Daftar"     },
+                            { href: "#cta", label: "Daftar" },
                         ].map(item => (
                             <a
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setActiveHash(item.href)}
-                                className={`px-5 py-2 rounded-xl text-[14px] font-bold transition-all duration-300 whitespace-nowrap ${
-                                    activeHash === item.href
+                                className={`px-5 py-2 rounded-xl text-[14px] font-bold transition-all duration-300 whitespace-nowrap ${activeHash === item.href
                                     ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/40 scale-105"
                                     : "text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white hover:shadow-md"
-                                }`}
+                                    }`}
                             >
                                 {item.label}
                             </a>

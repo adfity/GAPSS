@@ -38,18 +38,11 @@ export default function SideBar() {
         return next;
       });
     };
-    const onOpen = () => {
-      setIsOpen((prev) => {
-        if (!prev) notifyHeaderbar(true);
-        return true;
-      });
-    };
+    
     window.addEventListener("toggle-sidebar", onToggle);
-    window.addEventListener("toggle-sidebar-open", onOpen);
     return () => {
-      window.removeEventListener("toggle-sidebar", onToggle);
-      window.removeEventListener("toggle-sidebar-open", onOpen);
-    };
+  window.removeEventListener("toggle-sidebar", onToggle);
+};
   }, []);
 
   useEffect(() => {

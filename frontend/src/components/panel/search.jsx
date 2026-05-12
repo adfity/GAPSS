@@ -14,10 +14,10 @@ const glass = [
   "shadow-[0_4px_20px_rgba(0,0,0,0.12)]",
 ].join(" ");
 
-const NAVBAR_H   = 56;
+const NAVBAR_H   = 60;
 const LEFT_PX    = 12;
-const TOP_ZOOM   = NAVBAR_H + 12;
-const TOP_CLEAN  = TOP_ZOOM + 90 + 8;
+const TOP_ZOOM   = NAVBAR_H + 10;
+const TOP_CLEAN  = TOP_ZOOM + 90;
 const TOP_SEARCH = TOP_CLEAN + 36 + 8;
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────

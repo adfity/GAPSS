@@ -11,6 +11,7 @@ import LayersPanel, { useLocalLayers, LocalGeoLayer, RenameModal } from './panel
 import RadiusPanel from './panel/radius';
 import AnalysisPanel from './panel/analysis';
 import SearchLocation from './panel/search';
+import DrawPanel, { GeomanController } from './panel/draw';
 import GeoAreaScanPanel, { AreaScanOverlay, KabupatenMapOverlay } from './panel/GeoAreaScanPanel';
 import {
   useWaypointData,
@@ -29,9 +30,9 @@ function PanelWrapper({ isMobile, onClose, children, isDark, hidden = false }) {
     ? 'fixed top-[60px] bottom-20 left-0 right-0 w-full rounded-none'
     : 'fixed top-[68px] bottom-6 right-20 w-80 rounded-2xl';
 
-  const bgColor     = isDark ? 'bg-slate-900' : 'bg-white';
+  const bgColor = isDark ? 'bg-slate-900' : 'bg-white';
   const borderColor = isDark ? 'border-slate-700/50' : 'border-slate-200/50';
-  const textColor   = isDark ? 'text-slate-100' : 'text-slate-900';
+  const textColor = isDark ? 'text-slate-100' : 'text-slate-900';
 
   return (
     <>
@@ -40,6 +41,7 @@ function PanelWrapper({ isMobile, onClose, children, isDark, hidden = false }) {
           ${base}
           z-[1050] overflow-hidden flex flex-col
           ${bgColor} border ${borderColor} ${textColor}
+          panel-slide-in
         `}
         style={{
           display: hidden ? 'none' : undefined,
@@ -59,11 +61,10 @@ function PanelWrapper({ isMobile, onClose, children, isDark, hidden = false }) {
           tabIndex={0}
           onClick={onClose}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClose()}
-          className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${
-            isDark
-              ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-          }`}
+          className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${isDark
+            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
           title="Tutup panel"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,6 +82,7 @@ function PanelWrapper({ isMobile, onClose, children, isDark, hidden = false }) {
 
 export default function MainMap({ activePanel, setActivePanel }) {
   const mapRef = useRef(null);
+  const drawnLayersRef = useRef([]);
 
   // ── Dark mode ─────────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(false);
@@ -95,39 +97,41 @@ export default function MainMap({ activePanel, setActivePanel }) {
   }, []);
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [currentBasemap,     setCurrentBasemap]     = useState(BASEMAP_OPTIONS[0]);
-  const [activeLayers,       setActiveLayers]       = useState([]);
-  const [data,               setData]               = useState(null);
-  const [previewData,        setPreviewData]        = useState([]);
-  const [goHome,             setGoHome]             = useState(false);
-  const [activeRadius,       setActiveRadius]       = useState(null);
-  const [modeBersih,         setModeBersih]         = useState(false);
-  const [zoomLevel,          setZoomLevel]          = useState(5);
-  const [showPreviewBox,     setShowPreviewBox]     = useState(true);
-  const [detectionSize,      setDetectionSize]      = useState(640);
-  const [activeAnalysisId,   setActiveAnalysisId]   = useState(null);
+  const [currentBasemap, setCurrentBasemap] = useState(BASEMAP_OPTIONS[0]);
+  const [activeLayers, setActiveLayers] = useState([]);
+  const [data, setData] = useState(null);
+  const [previewData, setPreviewData] = useState([]);
+  const [goHome, setGoHome] = useState(false);
+  const [activeRadius, setActiveRadius] = useState(null);
+  const [modeBersih, setModeBersih] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(5);
+  const [showPreviewBox, setShowPreviewBox] = useState(true);
+  const [detectionSize, setDetectionSize] = useState(640);
+  const [activeAnalysisId, setActiveAnalysisId] = useState(null);
   const [activeAnalysisData, setActiveAnalysisData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   // Area Scan
-  const [isDrawingArea,   setIsDrawingArea]   = useState(false);
-  const [drawnBounds,     setDrawnBounds]     = useState(null);
-  const [tileGrid,        setTileGrid]        = useState([]);
+  const [isDrawingArea, setIsDrawingArea] = useState(false);
+  const [drawnBounds, setDrawnBounds] = useState(null);
+  const [tileGrid, setTileGrid] = useState([]);
   const [scanningTileIdx, setScanningTileIdx] = useState(-1);
-  const [previewResults,  setPreviewResults]  = useState([]);
-  const [tileStats,       setTileStats]       = useState({ total: 0, done: 0, objects: 0 });
-  const [isScanning,      setIsScanning]      = useState(false);
+  const [previewResults, setPreviewResults] = useState([]);
+  const [tileStats, setTileStats] = useState({ total: 0, done: 0, objects: 0 });
+  const [isScanning, setIsScanning] = useState(false);
 
   // Kabupaten overlay
   const [kabState, setKabState] = useState({
-  scanMode: 'manual', kabupatenList: [], selectedKabupaten: null,
-  isKabupatenClickMode: false, handleSelect: null,
-});
+    scanMode: 'manual', kabupatenList: [], selectedKabupaten: null,
+    isKabupatenClickMode: false, handleSelect: null,
+  });
 
-//  state untuk radius dari GeoAreaScanPanel
-const [radiusMapState, setRadiusMapState] = useState({
-  radiusLayers: [], activeRadius: null, radiusCenter: null,
-  waypointsInRadius: [], allRadiusPolygons: [], isRadiusMode: false,
-});
+  //  state untuk radius dari GeoAreaScanPanel
+  const [radiusMapState, setRadiusMapState] = useState({
+    radiusLayers: [], activeRadius: null, radiusCenter: null,
+    waypointsInRadius: [], allRadiusPolygons: [], isRadiusMode: false,
+  });
 
   // ── Responsive ────────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
@@ -142,7 +146,7 @@ const [radiusMapState, setRadiusMapState] = useState({
   const prevPanelRef = useRef(activePanel);
   useEffect(() => {
     const wasAreaScan = prevPanelRef.current === 'areascan';
-    const isAreaScan  = activePanel === 'areascan';
+    const isAreaScan = activePanel === 'areascan';
     prevPanelRef.current = activePanel;
     if (wasAreaScan && !isAreaScan && !isScanning) {
       setIsDrawingArea(false); setDrawnBounds(null); setTileGrid([]);
@@ -168,11 +172,21 @@ const [radiusMapState, setRadiusMapState] = useState({
   };
 
   // ── Data fetching ──────────────────────────────────────────────────────────
-  useEffect(() => {
+  const fetchMapData = () => {
+    setIsLoading(true);
+    setFetchError(null);
     fetch('http://127.0.0.1:8000/api/features/')
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(json => setData(json))
-      .catch(() => toast.error('Gagal memuat data peta', toastStyle));
+      .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
+      .then(json => { setData(json); setFetchError(null); })
+      .catch((err) => {
+        setFetchError('Gagal terhubung ke server. Pastikan backend aktif.');
+        toast.error('Gagal memuat data peta', toastStyle);
+      })
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchMapData();
   }, []);
 
   useEffect(() => {
@@ -184,7 +198,7 @@ const [radiusMapState, setRadiusMapState] = useState({
 
   // ── BMKG Hooks ────────────────────────────────────────────────────────────
   const { bmkgData, bmkgStatus, refetchBmkg } = useBmkgData(activeLayers);
-  const { autoGempa, dismissed, dismiss }      = useAutoGempa();
+  const { autoGempa, dismissed, dismiss } = useAutoGempa();
 
   // Toast saat ada gempa baru yang cukup besar
   const prevAutoGempaRef = useRef(null);
@@ -198,9 +212,9 @@ const [radiusMapState, setRadiusMapState] = useState({
       toast(
         `Gempa M${autoGempa.Magnitude} — ${autoGempa.Wilayah || 'Indonesia'}`,
         {
-          icon:     mag >= 6 ? '🔴' : '🟠',
+          icon: mag >= 6 ? '🔴' : '🟠',
           duration: 6000,
-          style:    isDark
+          style: isDark
             ? { background: '#1e293b', color: '#f1f5f9', border: '1px solid #ef4444' }
             : { border: '1px solid #ef4444' },
         }
@@ -210,10 +224,10 @@ const [radiusMapState, setRadiusMapState] = useState({
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const getCategoryColor = (cat) => ({
-    bangunan:  '#f59e0b',
+    bangunan: '#f59e0b',
     pepohonan: '#16a34a',
-    perairan:  '#2563eb',
-    jalan:     '#64748b',
+    perairan: '#2563eb',
+    jalan: '#64748b',
   }[cat?.toLowerCase()] ?? '#ef4444');
 
   // FIX #2: waypointData sudah di-declare di sini (sebelumnya sudah ada tapi
@@ -222,35 +236,35 @@ const [radiusMapState, setRadiusMapState] = useState({
   const { localLayers, addLayer, updateLayer, removeLayer, toggleVisible } = useLocalLayers();
 
   const handleEditFeature = (layerId, featureIndex, key, newValue) => {
-  const layer = localLayers.find(l => l.id === layerId);
-  if (!layer) return;
+    const layer = localLayers.find(l => l.id === layerId);
+    if (!layer) return;
 
-  updateLayer(layerId, {
-    geojson: {
-      ...layer.geojson,
-      features: layer.geojson.features.map((f, i) =>
-        i === featureIndex
-          ? { ...f, properties: { ...f.properties, [key]: newValue } }
-          : f
-      ),
-    },
-  });
+    updateLayer(layerId, {
+      geojson: {
+        ...layer.geojson,
+        features: layer.geojson.features.map((f, i) =>
+          i === featureIndex
+            ? { ...f, properties: { ...f.properties, [key]: newValue } }
+            : f
+        ),
+      },
+    });
 
-  const input = document.querySelector(
-    `input[data-layer="${layerId}"][data-fidx="${featureIndex}"][data-key="${key}"]`
-  );
-  if (input) {
-    input.style.borderColor = '#10b981';
-    input.style.background  = 'rgba(16,185,129,0.15)';
-    setTimeout(() => {
-      input.style.borderColor = 'transparent';
-      input.style.background  = 'rgba(255,255,255,0.05)';
-    }, 1000);
-  }
-};
+    const input = document.querySelector(
+      `input[data-layer="${layerId}"][data-fidx="${featureIndex}"][data-key="${key}"]`
+    );
+    if (input) {
+      input.style.borderColor = '#10b981';
+      input.style.background = 'rgba(16,185,129,0.15)';
+      setTimeout(() => {
+        input.style.borderColor = 'transparent';
+        input.style.background = 'rgba(255,255,255,0.05)';
+      }, 1000);
+    }
+  };
 
   const [renamingLayerId, setRenamingLayerId] = useState(null);
-const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
+  const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
 
   const toggleLayer = (id) =>
     setActiveLayers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -265,15 +279,49 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
   const closePanel = () => setActivePanel(null);
 
   // Radius panel style helpers
-  const radiusPanelCls    = isMobile
+  const radiusPanelCls = isMobile
     ? 'fixed top-[60px] bottom-20 left-0 right-0 w-full rounded-none'
     : 'fixed top-[68px] bottom-6 right-20 w-80 rounded-2xl';
-  const radiusBgColor     = isDark ? 'bg-slate-900' : 'bg-white';
+  const radiusBgColor = isDark ? 'bg-slate-900' : 'bg-white';
   const radiusBorderColor = isDark ? 'border-slate-700/50' : 'border-slate-200/50';
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className={`h-screen w-full relative overflow-hidden ${isDark ? 'dark' : ''} bg-slate-950`}>
+
+      {/* ─── Loading Overlay ──────────────────────────────────────────────── */}
+      {isLoading && !data && (
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-3 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-semibold text-white/80 tracking-wide">Memuat data peta...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Error Banner ─────────────────────────────────────────────────── */}
+      {fetchError && !isLoading && (
+        <div className="absolute top-[68px] left-1/2 -translate-x-1/2 z-[2000] max-w-md w-full px-4">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${isDark
+            ? 'bg-red-950/80 border-red-800/50 text-red-200'
+            : 'bg-red-50 border-red-200 text-red-700'
+            } backdrop-blur-md shadow-lg`}>
+            <svg className="w-5 h-5 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm font-medium flex-1">{fetchError}</span>
+            <button
+              onClick={fetchMapData}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${isDark
+                ? 'bg-red-800/50 hover:bg-red-800/80 text-red-200'
+                : 'bg-red-100 hover:bg-red-200 text-red-700'
+                }`}
+            >
+              Coba Lagi
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── Panels ──────────────────────────────────────────────────────── */}
 
@@ -295,17 +343,17 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
       )}
 
       {activePanel === 'basemap' && (
-  <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
-    <BasemapPanel
-      currentBasemap={currentBasemap}
-      onSelect={(bm) => {
-        setCurrentBasemap(bm);
-        closePanel();
-      }}
-      isDark={isDark}
-    />
-  </PanelWrapper>
-)}
+        <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
+          <BasemapPanel
+            currentBasemap={currentBasemap}
+            onSelect={(bm) => {
+              setCurrentBasemap(bm);
+              closePanel();
+            }}
+            isDark={isDark}
+          />
+        </PanelWrapper>
+      )}
 
       {activePanel === 'analysis' && (
         <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
@@ -334,30 +382,36 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
       )}
 
       {activePanel === 'areascan' && (
-  <PanelWrapper
-    isMobile={isMobile}
-    onClose={closePanel}
-    isDark={isDark}
-    hidden={isScanning && kabState.scanMode === 'kabupaten'}
-  >
-    <GeoAreaScanPanel
-      mapRef={mapRef} zoomLevel={zoomLevel} onNewData={refreshData}
-      isDrawingArea={isDrawingArea}     setIsDrawingArea={setIsDrawingArea}
-      drawnBounds={drawnBounds}         setDrawnBounds={setDrawnBounds}
-      tileGrid={tileGrid}               setTileGrid={setTileGrid}
-      previewResults={previewResults}   setPreviewResults={setPreviewResults}
-      scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
-      tileStats={tileStats}             setTileStats={setTileStats}
-      isScanning={isScanning}           setIsScanning={setIsScanning}
-      onKabupatenStateChange={setKabState}
-      isDark={isDark}
-      waypointData={waypointData}
-      waypointLayers={WAYPOINT_LAYERS}
-      activeLayers={activeLayers}
-      onRadiusStateChange={setRadiusMapState}
-    />
-  </PanelWrapper>
-)}
+        <PanelWrapper
+          isMobile={isMobile}
+          onClose={closePanel}
+          isDark={isDark}
+          hidden={isScanning && kabState.scanMode === 'kabupaten'}
+        >
+          <GeoAreaScanPanel
+            mapRef={mapRef} zoomLevel={zoomLevel} onNewData={refreshData}
+            isDrawingArea={isDrawingArea} setIsDrawingArea={setIsDrawingArea}
+            drawnBounds={drawnBounds} setDrawnBounds={setDrawnBounds}
+            tileGrid={tileGrid} setTileGrid={setTileGrid}
+            previewResults={previewResults} setPreviewResults={setPreviewResults}
+            scanningTileIdx={scanningTileIdx} setScanningTileIdx={setScanningTileIdx}
+            tileStats={tileStats} setTileStats={setTileStats}
+            isScanning={isScanning} setIsScanning={setIsScanning}
+            onKabupatenStateChange={setKabState}
+            isDark={isDark}
+            waypointData={waypointData}
+            waypointLayers={WAYPOINT_LAYERS}
+            activeLayers={activeLayers}
+            onRadiusStateChange={setRadiusMapState}
+          />
+        </PanelWrapper>
+      )}
+
+      {activePanel === 'draw' && (
+        <PanelWrapper isMobile={isMobile} onClose={closePanel} isDark={isDark}>
+          <DrawPanel isDark={isDark} mapRef={mapRef} />
+        </PanelWrapper>
+      )}
 
       {/* Search */}
       <SearchLocation
@@ -393,31 +447,32 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
         />
 
         <MapStuff
-          activePanel={activePanel}   activeLayers={activeLayers}
-          data={data}                 previewData={previewData}
-          goHome={goHome}             activeAnalysisData={activeAnalysisData}
-          modeBersih={modeBersih}     setModeBersih={setModeBersih}
+          activePanel={activePanel} activeLayers={activeLayers}
+          data={data} previewData={previewData}
+          goHome={goHome} activeAnalysisData={activeAnalysisData}
+          modeBersih={modeBersih} setModeBersih={setModeBersih}
           showPreviewBox={showPreviewBox} detectionSize={detectionSize}
           onZoomChange={setZoomLevel} setGoHome={setGoHome}
           setPreviewData={setPreviewData} setActivePanel={setActivePanel}
           getCategoryColor={getCategoryColor} onRefreshData={refreshData}
           isDark={isDark}
+          zoomLevel={zoomLevel}
         />
 
         <AreaScanOverlay
-  isActive={activePanel === 'areascan'}
-  isDrawing={isDrawingArea}   onBoundsSet={setDrawnBounds}
-  drawnBounds={drawnBounds}   tileGrid={tileGrid}
-  scanningTileIdx={scanningTileIdx} previewResults={previewResults}
-  onTileClick={handleTileClick}     isScanning={isScanning}
-  isDark={isDark}
-  isRadiusMode={radiusMapState.isRadiusMode}
-  radiusLayers={radiusMapState.radiusLayers}
-  activeRadius={radiusMapState.activeRadius}
-  radiusCenter={radiusMapState.radiusCenter}
-  waypointsInRadius={radiusMapState.waypointsInRadius}
-  allRadiusPolygons={radiusMapState.allRadiusPolygons}
-/>
+          isActive={activePanel === 'areascan'}
+          isDrawing={isDrawingArea} onBoundsSet={setDrawnBounds}
+          drawnBounds={drawnBounds} tileGrid={tileGrid}
+          scanningTileIdx={scanningTileIdx} previewResults={previewResults}
+          onTileClick={handleTileClick} isScanning={isScanning}
+          isDark={isDark}
+          isRadiusMode={radiusMapState.isRadiusMode}
+          radiusLayers={radiusMapState.radiusLayers}
+          activeRadius={radiusMapState.activeRadius}
+          radiusCenter={radiusMapState.radiusCenter}
+          waypointsInRadius={radiusMapState.waypointsInRadius}
+          allRadiusPolygons={radiusMapState.allRadiusPolygons}
+        />
 
         {activePanel === 'areascan' && kabState.scanMode === 'kabupaten' && (
           <KabupatenMapOverlay
@@ -438,13 +493,21 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
 
         {/* Local layers (upload lokal) */}
         <LocalGeoLayer
-  localLayers={localLayers}
-  onRenameLayer={(id) => setRenamingLayerId(id)}
-  onEditFeature={handleEditFeature}
-/>
+          localLayers={localLayers}
+          onRenameLayer={(id) => setRenamingLayerId(id)}
+          onEditFeature={handleEditFeature}
+        />
 
         {/* ScaleControl */}
         {!modeBersih && <ScaleControl position="bottomright" imperial={true} metric={true} />}
+
+        {/* Geoman Draw Controller */}
+
+        <GeomanController
+          isActive={activePanel === 'draw'}
+          drawnLayersRef={drawnLayersRef}
+          onLayerChange={() => { }}
+        />
 
         {activePanel === 'radius' && (
           <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
@@ -471,11 +534,10 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
                 tabIndex={0}
                 onClick={closePanel}
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && closePanel()}
-                className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
+                className={`absolute top-3 right-3 z-20 p-2 rounded-lg transition-colors cursor-pointer ${isDark
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
                 title="Tutup panel"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -503,24 +565,24 @@ const renamingLayer = localLayers.find(l => l.id === renamingLayerId) || null;
         )}
       </MapContainer>
 
-          {renamingLayer && (
-  <RenameModal
-    layer={renamingLayer}
-    onClose={() => setRenamingLayerId(null)}
-    onApply={(newGeojson) => {
-      updateLayer(renamingLayer.id, { geojson: newGeojson });
-      setRenamingLayerId(null);
+      {renamingLayer && (
+        <RenameModal
+          layer={renamingLayer}
+          onClose={() => setRenamingLayerId(null)}
+          onApply={(newGeojson) => {
+            updateLayer(renamingLayer.id, { geojson: newGeojson });
+            setRenamingLayerId(null);
 
-      // Force close semua popup Leaflet yang terbuka
-      // agar saat diklik lagi, popup re-render dengan data terbaru
-      setTimeout(() => {
-        const map = mapRef.current;
-        if (map) map.closePopup();
-      }, 50);
-    }}
-    isDark={isDark}
-  />
-)}
+            // Force close semua popup Leaflet yang terbuka
+            // agar saat diklik lagi, popup re-render dengan data terbaru
+            setTimeout(() => {
+              const map = mapRef.current;
+              if (map) map.closePopup();
+            }, 50);
+          }}
+          isDark={isDark}
+        />
+      )}
 
     </div>
   );

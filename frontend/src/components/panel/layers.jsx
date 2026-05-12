@@ -1453,6 +1453,163 @@ function ColorPicker({ value, onChange, isDark }) {
 function LocalLayerRow({ layer, onUpdate, onRemove, onToggleVisible, isDark }) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(layer.name);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadRef = useRef(null);
+
+  // Tutup menu saat klik di luar
+  useEffect(() => {
+    const handler = (e) => {
+      if (downloadRef.current && !downloadRef.current.contains(e.target)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleDownload = (format) => {
+    const features = layer.geojson?.features || [];
+    let content = '';
+    let mimeType = 'application/json';
+    let filename = layer.name;
+
+    if (format === 'geojson') {
+      content = JSON.stringify(layer.geojson, null, 2);
+      mimeType = 'application/geo+json';
+      filename += '.geojson';
+
+    } else if (format === 'json') {
+      content = JSON.stringify(layer.geojson, null, 2);
+      mimeType = 'application/json';
+      filename += '.json';
+
+    } else if (format === 'csv') {
+      // Kumpulkan semua key unik dari properties
+      const allKeys = Array.from(new Set(features.flatMap(f => Object.keys(f.properties || {}))));
+      const header = ['longitude', 'latitude', 'geometry_type', ...allKeys].join(',');
+      const rows = features.map(f => {
+        const coords = f.geometry?.coordinates;
+        let lon = '', lat = '';
+        if (f.geometry?.type === 'Point' && coords) {
+          lon = coords[0]; lat = coords[1];
+        } else if (coords) {
+          // Gunakan centroid sederhana dari bbox
+          const flat = coords.flat(Infinity);
+          const lons = flat.filter((_, i) => i % 2 === 0);
+          const lats = flat.filter((_, i) => i % 2 === 1);
+          lon = (Math.min(...lons) + Math.max(...lons)) / 2;
+          lat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        }
+        const props = allKeys.map(k => {
+          const val = f.properties?.[k] ?? '';
+          const str = String(val).replace(/"/g, '""');
+          return str.includes(',') || str.includes('\n') ? `"${str}"` : str;
+        });
+        return [lon, lat, f.geometry?.type || '', ...props].join(',');
+      });
+      content = [header, ...rows].join('\n');
+      mimeType = 'text/csv';
+      filename += '.csv';
+
+    } else if (format === 'wkt') {
+      // WKT dengan kolom properties sebagai TSV
+      const allKeys = Array.from(new Set(features.flatMap(f => Object.keys(f.properties || {}))));
+      const header = ['wkt', ...allKeys].join('\t');
+      const toWKT = (geom) => {
+        if (!geom) return 'GEOMETRYCOLLECTION EMPTY';
+        const coordStr = (c) => `${c[0]} ${c[1]}`;
+        if (geom.type === 'Point') return `POINT (${coordStr(geom.coordinates)})`;
+        if (geom.type === 'MultiPoint') return `MULTIPOINT (${geom.coordinates.map(coordStr).join(', ')})`;
+        if (geom.type === 'LineString') return `LINESTRING (${geom.coordinates.map(coordStr).join(', ')})`;
+        if (geom.type === 'Polygon') return `POLYGON ((${geom.coordinates[0].map(coordStr).join(', ')}))`;
+        if (geom.type === 'MultiPolygon') return `MULTIPOLYGON (${geom.coordinates.map(r => `((${r[0].map(coordStr).join(', ')}))`).join(', ')})`;
+        return 'GEOMETRYCOLLECTION EMPTY';
+      };
+      const rows = features.map(f => {
+        const props = allKeys.map(k => String(f.properties?.[k] ?? '').replace(/\t/g, ' '));
+        return [toWKT(f.geometry), ...props].join('\t');
+      });
+      content = [header, ...rows].join('\n');
+      mimeType = 'text/tab-separated-values';
+      filename += '.tsv';
+
+    } else if (format === 'kml') {
+      const toKMLCoords = (geom) => {
+        if (!geom) return '';
+        const flat = (coords) => coords.map(c => `${c[0]},${c[1]},0`).join(' ');
+        if (geom.type === 'Point') return `<Point><coordinates>${geom.coordinates[0]},${geom.coordinates[1]},0</coordinates></Point>`;
+        if (geom.type === 'LineString') return `<LineString><coordinates>${flat(geom.coordinates)}</coordinates></LineString>`;
+        if (geom.type === 'Polygon') return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${flat(geom.coordinates[0])}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+        if (geom.type === 'MultiPolygon') return geom.coordinates.map(r =>
+          `<Polygon><outerBoundaryIs><LinearRing><coordinates>${flat(r[0])}</coordinates></LinearRing></outerBoundaryIs></Polygon>`
+        ).join('');
+        return '';
+      };
+      const placemarks = features.map(f => {
+        const name = f.properties?.name || f.properties?.nama || f.properties?.NAMOBJ || 'Feature';
+        const desc = Object.entries(f.properties || {})
+          .map(([k, v]) => `${k}: ${v}`).join('&#10;');
+        return `  <Placemark>
+    <name><![CDATA[${name}]]></name>
+    <description><![CDATA[${desc}]]></description>
+    ${toKMLCoords(f.geometry)}
+  </Placemark>`;
+      }).join('\n');
+      content = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>${layer.name}</name>
+${placemarks}
+</Document>
+</kml>`;
+      mimeType = 'application/vnd.google-earth.kml+xml';
+      filename += '.kml';
+
+    } else if (format === 'shp') {
+      // Shapefile ZIP: simpan GeoJSON saja + note (butuh library berat di browser)
+      // Fallback: ekspor sebagai GeoJSON tapi dengan nama .zip berisi readme
+      const readmeContent = `Shapefile export dari TerraGIS\nLayer: ${layer.name}\nFitur: ${features.length}\n\nUntuk konversi ke .shp gunakan:\n- QGIS (buka GeoJSON lalu ekspor)\n- ogr2ogr: ogr2ogr -f "ESRI Shapefile" output.shp input.geojson\n- mapshaper.org (online)`;
+      // Buat zip sederhana dengan JSZip bila tersedia, fallback ke GeoJSON
+      if (window.JSZip) {
+        const zip = new window.JSZip();
+        zip.file(`${layer.name}.geojson`, JSON.stringify(layer.geojson, null, 2));
+        zip.file('README.txt', readmeContent);
+        zip.generateAsync({ type: 'blob' }).then(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `${layer.name}_shp.zip`; a.click();
+          URL.revokeObjectURL(url);
+        });
+        return;
+      } else {
+        // Muat JSZip dinamis
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+        script.onload = () => {
+          const zip = new window.JSZip();
+          zip.file(`${layer.name}.geojson`, JSON.stringify(layer.geojson, null, 2));
+          zip.file('README.txt', readmeContent);
+          zip.generateAsync({ type: 'blob' }).then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${layer.name}_shp.zip`; a.click();
+            URL.revokeObjectURL(url);
+          });
+        };
+        document.head.appendChild(script);
+        return;
+      }
+    }
+
+    // Trigger download untuk format non-async
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const commitName = () => {
     if (nameInput.trim()) onUpdate(layer.id, { name: nameInput.trim() });
@@ -1518,26 +1675,64 @@ function LocalLayerRow({ layer, onUpdate, onRemove, onToggleVisible, isDark }) {
           {layer.count.toLocaleString('id-ID')}
         </span>
 
-        {/* Download */}
+        {/* Download dengan format pilihan */}
+<div style={{ position: 'relative' }} ref={downloadRef}>
+  <button
+    onClick={() => setShowDownloadMenu(v => !v)}
+    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', padding: 2, flexShrink: 0 }}
+    title="Download layer"
+  >
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  </button>
+
+  {showDownloadMenu && (
+    <div style={{
+      position: 'absolute', bottom: 24, right: 0, zIndex: 9999,
+      background: isDark ? '#1e293b' : '#fff',
+      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+      borderRadius: 10, padding: '6px 4px',
+      boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+      minWidth: 148,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '.1em', padding: '2px 10px 6px' }}>
+        Format Download
+      </div>
+      {[
+        { fmt: 'geojson', label: 'GeoJSON',   color: '#10b981', ext: 'geojson' },
+        { fmt: 'json',    label: 'JSON',       color: '#3b82f6', ext: 'json'    },
+        { fmt: 'csv',     label: 'CSV',        color: '#f59e0b', ext: 'csv'     },
+        { fmt: 'wkt',     label: 'WKT / TSV',  color: '#8b5cf6', ext: 'tsv'     },
+        { fmt: 'kml',     label: 'KML',        color: '#ef4444', ext: 'kml'     },
+        { fmt: 'shp',     label: 'Shapefile (ZIP)', color: '#06b6d4', ext: 'zip' },
+      ].map(({ fmt, label, color, ext }) => (
         <button
-          onClick={() => {
-            const blob = new Blob([JSON.stringify(layer.geojson, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${layer.name}.geojson`;
-            a.click();
-            URL.revokeObjectURL(url);
+          key={fmt}
+          onClick={() => { handleDownload(fmt); setShowDownloadMenu(false); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            width: '100%', padding: '6px 10px', border: 'none',
+            background: 'transparent', cursor: 'pointer', borderRadius: 7,
+            fontFamily: 'inherit',
+            transition: 'background 0.1s',
           }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', padding: 2, flexShrink: 0 }}
-          title="Download GeoJSON"
+          onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
+          <span style={{
+            fontSize: 8, fontWeight: 800, padding: '2px 5px',
+            borderRadius: 4, background: `${color}25`, color,
+            border: `1px solid ${color}40`, minWidth: 42, textAlign: 'center',
+          }}>{ext.toUpperCase()}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: isDark ? '#cbd5e1' : '#374151' }}>{label}</span>
         </button>
+      ))}
+    </div>
+  )}
+</div>
 
         {/* Edit / Delete */}
         <button
@@ -1643,10 +1838,10 @@ export function LocalLayerPanel({ localLayers, addLayer, updateLayer, removeLaye
         >
           <Upload size={16} style={{ color: dragging ? '#10b981' : (isDark ? '#475569' : '#94a3b8') }} />
           <span style={{ fontSize: 11, fontWeight: 600, color: dragging ? '#10b981' : (isDark ? '#64748b' : '#9ca3af') }}>
-            {uploading ? 'Memproses...' : 'Klik atau drop file di sini'}
-          </span>
+  {uploading ? 'Membaca file...' : 'Klik atau drop file di sini'}
+</span>
           <span style={{ fontSize: 9, color: isDark ? '#334155' : '#d1d5db' }}>
-            .geojson · .zip · atau pilih .shp + .dbf bersamaan
+            .geojson atau pilih .shp
           </span>
         </div>
 
@@ -1660,18 +1855,35 @@ export function LocalLayerPanel({ localLayers, addLayer, updateLayer, removeLaye
         />
 
         {/* Status messages */}
-        {uploadError && (
-          <div style={{ fontSize: 10, color: '#ef4444', background: 'rgba(239,68,68,0.1)', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <AlertTriangle size={10} />
-            {uploadError}
-          </div>
-        )}
-        {uploadSuccess && (
-          <div style={{ fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Check size={10} />
-            {uploadSuccess}
-          </div>
-        )}
+        {uploading && (
+  <div style={{ fontSize: 10, color: '#60a5fa', background: 'rgba(59,130,246,0.1)', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(59,130,246,0.2)' }}>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
+    <div>
+      <div style={{ fontWeight: 700 }}>Memproses file...</div>
+      <div style={{ fontSize: 9, color: '#3b82f6', marginTop: 1 }}>Mengurai geometri & atribut</div>
+    </div>
+  </div>
+)}
+{uploadError && (
+  <div style={{ fontSize: 10, color: '#ef4444', background: 'rgba(239,68,68,0.1)', borderRadius: 8, padding: '7px 10px', display: 'flex', alignItems: 'flex-start', gap: 6, border: '1px solid rgba(239,68,68,0.2)' }}>
+    <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+    <div>
+      <div style={{ fontWeight: 700 }}>Gagal memuat file</div>
+      <div style={{ marginTop: 2, color: '#fca5a5' }}>{uploadError}</div>
+    </div>
+  </div>
+)}
+{uploadSuccess && (
+  <div style={{ fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', borderRadius: 8, padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid rgba(16,185,129,0.2)' }}>
+    <Check size={11} style={{ flexShrink: 0 }} />
+    <div>
+      <div style={{ fontWeight: 700 }}>Berhasil dimuat!</div>
+      <div style={{ marginTop: 1, color: '#6ee7b7' }}>{uploadSuccess}</div>
+    </div>
+  </div>
+)}
 
         {/* Layer list */}
         {localLayers.map(layer => (
