@@ -47,7 +47,7 @@ export default function LoginPage() {
         if (data.role === "admin") {
           router.push("/admin/dashboard");
         } else {
-          router.push("/map");
+          router.push("/");
         }
       } else {
         toast.error(data.detail || "Email atau password salah!");

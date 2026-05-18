@@ -36,7 +36,7 @@ function CallbackContent() {
       if (role === 'admin') {
         window.location.href = '/admin/dashboard';
       } else {
-        window.location.href = '/map';
+        window.location.href = '/';
       }
     } else {
       toast.error('Token tidak ditemukan.');

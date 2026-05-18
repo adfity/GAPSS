@@ -47,7 +47,7 @@ export default function NotFound() {
           
           {/* Tombol opsional: ke beranda (jika diperlukan) */}
           <button
-            onClick={() => router.push("/map")}
+            onClick={() => router.push("/")}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg
                        border border-gray-300 dark:border-gray-600
                        text-gray-700 dark:text-gray-300

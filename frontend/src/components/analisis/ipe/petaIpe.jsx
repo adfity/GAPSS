@@ -3,72 +3,67 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play, Save, RotateCcw, Map, Loader2, Check,
   Filter, ChevronDown, Maximize, Minimize, Calendar,
-  BarChart2, Heart, BookOpen, Wallet, Search, TrendingUp,
+  BarChart2, TrendingUp, Activity, Search,
 } from 'lucide-react';
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-export const KATEGORI_SDM = {
-  SANGAT_TINGGI:    { warna: '#008cd6', label: 'SANGAT TINGGI' },
-  TINGGI:           { warna: '#abcd05', label: 'TINGGI' },
-  SEDANG:           { warna: '#fff67f', label: 'SEDANG' },
-  RENDAH:           { warna: '#af4284', label: 'RENDAH' },
-  TIDAK_TERANALISIS:{ warna: '#a6a6a6', label: 'TIDAK TERANALISIS' },
+export const KATEGORI_IPE = {
+  SANGAT_TINGGI:     { warna: '#008cd6', label: 'SANGAT TINGGI' },
+  TINGGI:            { warna: '#abcd05', label: 'TINGGI' },
+  SEDANG:            { warna: '#fff67f', label: 'SEDANG' },
+  RENDAH:            { warna: '#af4284', label: 'RENDAH' },
+  TIDAK_TERANALISIS: { warna: '#a6a6a6', label: 'TIDAK TERANALISIS' },
 };
 
-// Semua tahun 2020–2045 diperlakukan sama — sistem selalu cek aktual dulu
-export const TAHUN_BPS_AKTUAL   = Array.from({ length: 7 }, (_, i) => 2020 + i); // 2020–2026
-export const TAHUN_OLS          = Array.from({ length: 19 }, (_, i) => 2027 + i); // 2027–2045
-export const TAHUN_TERSEDIA_SDM = [...TAHUN_BPS_AKTUAL, ...TAHUN_OLS];
+// Tahun aktual BPS yang tersedia (sesuaikan dengan DB Anda)
+export const TAHUN_BPS_AKTUAL_IPE = Array.from({ length: 7 }, (_, i) => 2018 + i); // 2018–2024
+export const TAHUN_OLS_IPE        = Array.from({ length: 21 }, (_, i) => 2025 + i); // 2025–2045
+export const TAHUN_TERSEDIA_IPE   = [...TAHUN_BPS_AKTUAL_IPE, ...TAHUN_OLS_IPE];
 
-export const DATASET_LABELS_SDM = {
-  UHH:          'Angka Harapan Hidup (AHH)',   // kolom DB: ahh
-  HLS:          'Harapan Lama Sekolah (HLS)',
-  RLS:          'Rata-rata Lama Sekolah (RLS)',
-  PENGELUARAN:  'Pengeluaran per Kapita',
+export const DATASET_LABELS_IPE = {
+  LAJU_PE:    'Laju Pertumbuhan PDRB ADHK (%)',
+  PDRB_KAPITA:'PDRB per Kapita ADHK (Ribu Rp)',
 };
 
-export const INDIKATOR_LABELS_SDM = {
-  ALL:          'Indeks SDM (Gabungan)',
-  KESEHATAN:    'Indeks Kesehatan',
-  PENDIDIKAN:   'Indeks Pendidikan',
-  PENGELUARAN:  'Indeks Pengeluaran',
+export const INDIKATOR_LABELS_IPE = {
+  ALL:         'IPE Gabungan (S1 + S2)',
+  LAJU_PE:     'Skor Laju PE (S1)',
+  PDRB_KAPITA: 'Skor PDRB/Kapita (S2)',
 };
 
-export const INDIKATOR_ICON_SDM = {
-  ALL:          <BarChart2 size={13} />,
-  KESEHATAN:    <Heart size={13} />,
-  PENDIDIKAN:   <BookOpen size={13} />,
-  PENGELUARAN:  <Wallet size={13} />,
+export const INDIKATOR_ICON_IPE = {
+  ALL:         <BarChart2 size={13} />,
+  LAJU_PE:     <TrendingUp size={13} />,
+  PDRB_KAPITA: <Activity size={13} />,
 };
 
-export const INDIKATOR_COLORS_SDM = {
+export const INDIKATOR_COLORS_IPE = {
   ALL:         '#6366f1',
-  KESEHATAN:   '#10b981',
-  PENDIDIKAN:  '#3b82f6',
-  PENGELUARAN: '#f59e0b',
+  LAJU_PE:     '#10b981',
+  PDRB_KAPITA: '#f59e0b',
 };
 
-export const BASEMAPS_SDM = {
-  OSM:            { label: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap' },
-  CARTO_LIGHT:    { label: 'Carto Light',   url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', attribution: '&copy; CARTO' },
-  CARTO_DARK:     { label: 'Carto Dark',    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: '&copy; CARTO' },
-  ESRI_SATELLITE: { label: 'Satelit',       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Tiles &copy; Esri' },
-  CARTO_VOYAGER:  { label: 'Voyager',       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', attribution: '&copy; CARTO' },
+export const BASEMAPS_IPE = {
+  OSM:            { label: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                                                                 attribution: '&copy; OpenStreetMap' },
+  CARTO_LIGHT:    { label: 'Carto Light',   url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                                     attribution: '&copy; CARTO' },
+  CARTO_DARK:     { label: 'Carto Dark',    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                                      attribution: '&copy; CARTO' },
+  ESRI_SATELLITE: { label: 'Satelit',       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',                      attribution: 'Tiles &copy; Esri' },
+  CARTO_VOYAGER:  { label: 'Voyager',       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                                           attribution: '&copy; CARTO' },
 };
 
-export const PUSAT_DEFAULT_SDM = [-2.5, 118];
-export const ZOOM_DEFAULT_SDM  = 5;
-export const isPrediksiYear    = (tahun) => tahun > 2026;
+export const PUSAT_DEFAULT_IPE = [-2.5, 118];
+export const ZOOM_DEFAULT_IPE  = 5;
+export const isPrediksiYearIPE = (tahun) => tahun > 2024;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-export const getWarna_SDM = (fitur, indikatorTerpilih = 'ALL') => {
-  const a = fitur?.properties?.sdm_analysis || {};
+export const getWarna_IPE = (fitur, indikatorTerpilih = 'ALL') => {
+  const a = fitur?.properties?.ipe_analysis || {};
   if (a.warna_per_indikator?.[indikatorTerpilih]) return a.warna_per_indikator[indikatorTerpilih];
   return a.warna || '#a6a6a6';
 };
 
-export const getKategori_SDM = (fitur, indikatorTerpilih = 'ALL') => {
-  const a = fitur?.properties?.sdm_analysis || {};
+export const getKategori_IPE = (fitur, indikatorTerpilih = 'ALL') => {
+  const a = fitur?.properties?.ipe_analysis || {};
   if (a.kategori_per_indikator?.[indikatorTerpilih]) return a.kategori_per_indikator[indikatorTerpilih];
   return a.kategori || 'TIDAK_TERANALISIS';
 };
@@ -76,7 +71,7 @@ export const getKategori_SDM = (fitur, indikatorTerpilih = 'ALL') => {
 const cn = (...cls) => cls.filter(Boolean).join(' ');
 
 // ─── SELECTOR ─────────────────────────────────────────────────────────────────
-export function SelectorAnalisis_SDM({
+export function SelectorAnalisis_IPE({
   hasilAnalisis, kombinasiTersedia, tahunTerpilih, onPilih, sedangMuatAwal,
   allProvinces, onPilihProvinsi, provinsiTerpilih,
 }) {
@@ -174,20 +169,20 @@ export function SelectorAnalisis_SDM({
           onClick={() => { setOpenIndikator(v=>!v); setOpenProvinsi(false); setOpenTahun(false); }}
           className={cn(btnBase, "min-w-[150px] border-r-0")}
         >
-          <span style={{ color: INDIKATOR_COLORS_SDM[activeInd] }}>{INDIKATOR_ICON_SDM[activeInd]}</span>
-          <span className="flex-1 text-left truncate">{INDIKATOR_LABELS_SDM[activeInd]}</span>
+          <span style={{ color: INDIKATOR_COLORS_IPE[activeInd] }}>{INDIKATOR_ICON_IPE[activeInd]}</span>
+          <span className="flex-1 text-left truncate">{INDIKATOR_LABELS_IPE[activeInd]}</span>
           <ChevronDown size={11} className={cn('text-slate-400 flex-shrink-0 transition-transform', openIndikator && 'rotate-180')}/>
         </button>
         {openIndikator && (
           <div className={cn(dropdownBase, "left-0 min-w-[190px]")}>
-            {['ALL', 'KESEHATAN', 'PENDIDIKAN', 'PENGELUARAN'].map(ind => (
+            {['ALL', 'LAJU_PE', 'PDRB_KAPITA'].map(ind => (
               <button
                 key={ind}
                 onClick={() => { setOpenIndikator(false); onPilih(activeThn, ind); }}
                 className={cn(itemBase, activeInd === ind && itemActive)}
               >
-                <span style={{ color: INDIKATOR_COLORS_SDM[ind] }}>{INDIKATOR_ICON_SDM[ind]}</span>
-                <span className="flex-1">{INDIKATOR_LABELS_SDM[ind]}</span>
+                <span style={{ color: INDIKATOR_COLORS_IPE[ind] }}>{INDIKATOR_ICON_IPE[ind]}</span>
+                <span className="flex-1">{INDIKATOR_LABELS_IPE[ind]}</span>
                 {activeInd === ind && <Check size={11} className="text-indigo-500"/>}
               </button>
             ))}
@@ -215,9 +210,9 @@ export function SelectorAnalisis_SDM({
         {openTahun && (
           <div className={cn(dropdownBase, "right-0 min-w-[160px] max-h-72 overflow-y-auto")}>
             <div className="px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 dark:bg-slate-700/60 sticky top-0">
-              Pilih Tahun
+              Aktual BPS
             </div>
-            {[...TAHUN_BPS_AKTUAL].reverse().map(th => (
+            {[...TAHUN_BPS_AKTUAL_IPE].reverse().map(th => (
               <button
                 key={th}
                 onClick={() => { setOpenTahun(false); onPilih(th, activeInd); }}
@@ -230,7 +225,7 @@ export function SelectorAnalisis_SDM({
             <div className="px-3 py-1.5 text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 dark:bg-amber-900/30 sticky top-0 flex items-center gap-1">
               <TrendingUp size={9}/> Prediksi OLS
             </div>
-            {TAHUN_OLS.map(th => (
+            {TAHUN_OLS_IPE.map(th => (
               <button
                 key={th}
                 onClick={() => { setOpenTahun(false); onPilih(th, activeInd); }}
@@ -248,11 +243,11 @@ export function SelectorAnalisis_SDM({
 }
 
 // ─── TOOLTIP ──────────────────────────────────────────────────────────────────
-function buildTooltipHTML(a, w, kat, indikatorTerpilih) {
+function buildTooltipHTML_IPE(a, w, kat, indikatorTerpilih) {
   const dc        = a.data_komponen || {};
   const sumber    = a.sumber || 'aktual';
   const kolomPred = a.kolom_prediksi || [];
-  const katLabel  = KATEGORI_SDM[kat]?.label || kat;
+  const katLabel  = KATEGORI_IPE[kat]?.label || kat;
   const isDark    = ['#fff67f', '#abcd05'].includes(w);
   const textColor = isDark ? '#1a2e00' : (w === '#a6a6a6' ? '#475569' : '#ffffff');
 
@@ -262,55 +257,49 @@ function buildTooltipHTML(a, w, kat, indikatorTerpilih) {
     ? `<div style="margin-top:5px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;">📈 Prediksi Regresi Linear OLS</div>`
     : '';
 
-  let kompHTML = '';
-  if (indikatorTerpilih === 'ALL') {
-    const mkPred = (k) => kolomPred.includes(k)
-      ? ' <span style="font-size:8px;color:#d97706;">📈</span>'
-      : '';
-    kompHTML = `
-      <div style="margin-top:7px;display:grid;gap:3px;">
-        <div style="display:flex;justify-content:space-between;">
-          <span style="font-size:10px;color:#64748b;">AHH${mkPred('UHH')}</span>
-          <span style="font-size:11px;font-weight:700;color:#047857;">${dc.UHH ?? '—'} th</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;">
-          <span style="font-size:10px;color:#64748b;">RLS${mkPred('RLS')} / HLS${mkPred('HLS')}</span>
-          <span style="font-size:11px;font-weight:700;color:#1e40af;">${dc.RLS ?? '—'} / ${dc.HLS ?? '—'} th</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;">
-          <span style="font-size:10px;color:#64748b;">Pengeluaran${mkPred('PENGELUARAN')}</span>
-          <span style="font-size:11px;font-weight:700;color:#b45309;">Rp${dc.PENGELUARAN ? ((dc.PENGELUARAN * 1000).toLocaleString('id-ID')) : '—'}</span>
-        </div>
-      </div>`;
-  }
+  const mkPred = (k) => kolomPred.includes(k)
+    ? ' <span style="font-size:8px;color:#d97706;">📈</span>'
+    : '';
+
+  const kompHTML = `
+    <div style="margin-top:7px;display:grid;gap:3px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#64748b;">Laju PE${mkPred('LAJU_PE')}</span>
+        <span style="font-size:11px;font-weight:700;color:#10b981;">${dc.LAJU_PE != null ? dc.LAJU_PE + '%' : '—'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#64748b;">PDRB/Kapita${mkPred('PDRB_KAPITA')}</span>
+        <span style="font-size:11px;font-weight:700;color:#f59e0b;">${dc.PDRB_KAPITA != null ? 'Rp' + Number(dc.PDRB_KAPITA * 1000).toLocaleString('id-ID') : '—'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:2px;">
+        <span style="font-size:10px;color:#64748b;">S1 (Laju PE)</span>
+        <span style="font-size:10px;font-weight:600;color:#10b981;">${a.s1 != null ? a.s1.toFixed(1) : '—'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#64748b;">S2 (PDRB/Kap)</span>
+        <span style="font-size:10px;font-weight:600;color:#f59e0b;">${a.s2 != null ? a.s2.toFixed(1) : '—'}</span>
+      </div>
+    </div>`;
 
   return `
-    <div style="font-family:system-ui,sans-serif;padding:10px 12px;min-width:160px;max-width:220px;">
+    <div style="font-family:system-ui,sans-serif;padding:10px 12px;min-width:175px;max-width:230px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <div style="width:10px;height:10px;border-radius:50%;background:${w};flex-shrink:0;border:1px solid rgba(0,0,0,0.15);"></div>
         <span style="font-weight:800;font-size:12px;color:#0f172a;">${a.nama_provinsi || ''}</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:6px;background:${w};border:1px solid rgba(0,0,0,0.1);">
         <span style="font-size:9px;font-weight:700;color:${textColor};text-transform:uppercase;">${katLabel}</span>
-        <span style="font-size:12px;font-weight:900;color:${textColor};">${a.indeks_sdm ?? '—'}</span>
-      </div>
-      <div style="margin-top:5px;display:flex;gap:5px;">
-        ${[['IK', a.ik, '#10b981'], ['IP', a.ip, '#3b82f6'], ['IPeng', a.ipeng, '#f59e0b']].map(([l, v, c]) => `
-          <div style="text-align:center;flex:1;padding:3px;background:#f8fafc;border-radius:4px;">
-            <div style="font-size:8px;color:#94a3b8;font-weight:600;">${l}</div>
-            <div style="font-size:10px;font-weight:700;color:${c};">${v != null ? (v * 100).toFixed(1) : '—'}</div>
-          </div>
-        `).join('')}
+        <span style="font-size:12px;font-weight:900;color:${textColor};">IPE ${a.indeks_ipe ?? '—'}</span>
       </div>
       ${kompHTML}${srcBadge}
     </div>`;
 }
 
-function buildGeoProps(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih, getWarna, getKategori) {
+function buildGeoProps_IPE(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih, getWarna, getKategori) {
   return {
     data: { type: 'FeatureCollection', features: hasilAnalisis.matched_features.features },
     style: (fitur) => {
-      const a   = fitur?.properties?.sdm_analysis || {};
+      const a   = fitur?.properties?.ipe_analysis || {};
       const kat = getKategori(fitur, indikatorTerpilih);
       const w   = getWarna(fitur, indikatorTerpilih);
       const vis = kategoriTerpilih === 'SEMUA' || kat === kategoriTerpilih;
@@ -325,12 +314,12 @@ function buildGeoProps(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provi
       };
     },
     onEachFeature: (fitur, lapisan) => {
-      const a   = fitur.properties?.sdm_analysis || {};
+      const a   = fitur.properties?.ipe_analysis || {};
       const w   = getWarna(fitur, indikatorTerpilih);
       const kat = getKategori(fitur, indikatorTerpilih);
       lapisan.bindTooltip(
-        buildTooltipHTML(a, w, kat, indikatorTerpilih),
-        { sticky: true, opacity: 1, className: 'leaflet-tooltip-sdm' }
+        buildTooltipHTML_IPE(a, w, kat, indikatorTerpilih),
+        { sticky: true, opacity: 1, className: 'leaflet-tooltip-ipe' }
       );
       lapisan.on('mouseover', function () {
         this.setStyle({ weight: 2.5, fillOpacity: 0.95, color: '#ffffff' });
@@ -386,8 +375,8 @@ const ActionBtn = ({ children, variant = 'primary', disabled, onClick }) => {
   );
 };
 
-// ─── PETA SDM ─────────────────────────────────────────────────────────────────
-export default function PetaSDM({
+// ─── PETA IPE ─────────────────────────────────────────────────────────────────
+export default function PetaIPE({
   hasilAnalisis, tahunTerpilih, indikatorTerpilih, kategoriTerpilih, setKategoriTerpilih,
   sedangMenganalisis, sedangCekData, dataBaruDariBPS, pernahAnalisis,
   onAnalisis, onSimpan, onReset,
@@ -405,14 +394,14 @@ export default function PetaSDM({
   const adaPrediksi = hasilAnalisis?.ada_prediksi;
 
   const allProvinces = hasilAnalisis?.matched_features?.features
-    ?.map(f => f.properties?.sdm_analysis?.nama_provinsi)
+    ?.map(f => f.properties?.ipe_analysis?.nama_provinsi)
     .filter(Boolean).sort() || [];
 
   const handlePilihProvinsi = useCallback((prov) => {
     setProvinsiDipilih(prov);
     if (prov && petaRef.current) {
       const f = hasilAnalisis?.matched_features?.features?.find(
-        feat => feat.properties?.sdm_analysis?.nama_provinsi === prov
+        feat => feat.properties?.ipe_analysis?.nama_provinsi === prov
       );
       if (f) {
         const coords = f.geometry.coordinates;
@@ -433,18 +422,17 @@ export default function PetaSDM({
 
   const geoKey   = `${hasilAnalisis?.tahun}-${indikatorTerpilih}-${kategoriTerpilih}-${provinsiDipilih}`;
   const geoProps = hasilAnalisis?.matched_features?.features
-    ? buildGeoProps(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih, getWarna, getKategori)
+    ? buildGeoProps_IPE(hasilAnalisis, indikatorTerpilih, kategoriTerpilih, provinsiDipilih, getWarna, getKategori)
     : null;
 
   const getButtonText = () => {
     if (sedangMenganalisis) return 'Memproses...';
     if (sedangCekData)      return 'Memeriksa Data...';
-    if (!pernahAnalisis)    return 'Analisis ISDM';
+    if (!pernahAnalisis)    return 'Analisis IPE';
     return ({
-      ALL:         'ISDM Gabungan',
-      KESEHATAN:   'Kesehatan',
-      PENDIDIKAN:  'Pendidikan',
-      PENGELUARAN: 'Pengeluaran',
+      ALL:         'IPE Gabungan',
+      LAJU_PE:     'Laju PE',
+      PDRB_KAPITA: 'PDRB/Kapita',
     })[indikatorTerpilih] || 'Analisis';
   };
 
@@ -454,19 +442,19 @@ export default function PetaSDM({
     <>
       {leafletReady && MapCont && (
         <MapCont
-          center={PUSAT_DEFAULT_SDM} zoom={ZOOM_DEFAULT_SDM}
+          center={PUSAT_DEFAULT_IPE} zoom={ZOOM_DEFAULT_IPE}
           style={{ height: '100%', width: '100%' }}
           zoomControl={false} ref={petaRef} className="z-0"
         >
-          <TileLay key={basemap} url={BASEMAPS_SDM[basemap].url} attribution={BASEMAPS_SDM[basemap].attribution}/>
+          <TileLay key={basemap} url={BASEMAPS_IPE[basemap].url} attribution={BASEMAPS_IPE[basemap].attribution}/>
           <MapEventHandler setKoordinatCursor={setKoordinatCursor} setCurrentZoom={setCurrentZoom}/>
           {geoProps && <GeoComp key={`${keyPrefix}-${geoKey}`} {...geoProps}/>}
         </MapCont>
       )}
 
       <style>{`
-        .leaflet-tooltip-sdm { background:white !important; border:1px solid #e2e8f0 !important; border-radius:12px !important; box-shadow:0 8px 24px rgba(0,0,0,0.12) !important; padding:0 !important; }
-        .leaflet-tooltip-sdm::before { display:none !important; }
+        .leaflet-tooltip-ipe { background:white !important; border:1px solid #e2e8f0 !important; border-radius:12px !important; box-shadow:0 8px 24px rgba(0,0,0,0.12) !important; padding:0 !important; }
+        .leaflet-tooltip-ipe::before { display:none !important; }
       `}</style>
 
       {/* Kontrol kiri */}
@@ -477,29 +465,25 @@ export default function PetaSDM({
           <MapBtn onClick={() => setShowBasemap(v => !v)} title="Basemap"><Map size={13}/></MapBtn>
           {showBasemap && (
             <div className="absolute left-full ml-2 top-0 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-2xl z-[500] border border-slate-200 dark:border-slate-600 py-1">
-              <div className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">
-                Basemap
-              </div>
-              {Object.entries(BASEMAPS_SDM).map(([k, bm]) => (
+              <div className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">Basemap</div>
+              {Object.entries(BASEMAPS_IPE).map(([k, bm]) => (
                 <button key={k} onClick={() => { setBasemap(k); setShowBasemap(false); }}
-                  className={cn(
-                    'w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700',
-                    basemap === k ? 'text-indigo-600 font-semibold' : 'text-slate-700 dark:text-slate-200'
-                  )}>
+                  className={cn('w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700',
+                    basemap === k ? 'text-indigo-600 font-semibold' : 'text-slate-700 dark:text-slate-200')}>
                   {bm.label} {basemap === k && <Check size={11}/>}
                 </button>
               ))}
             </div>
           )}
         </div>
-        <MapBtn onClick={() => petaRef.current?.setView(PUSAT_DEFAULT_SDM, ZOOM_DEFAULT_SDM)} title="Reset View">
+        <MapBtn onClick={() => petaRef.current?.setView(PUSAT_DEFAULT_IPE, ZOOM_DEFAULT_IPE)} title="Reset View">
           <RotateCcw size={12}/>
         </MapBtn>
       </div>
 
       {/* Selector tengah */}
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400] w-max max-w-[calc(100%-120px)]">
-        <SelectorAnalisis_SDM
+        <SelectorAnalisis_IPE
           hasilAnalisis={hasilAnalisis} kombinasiTersedia={kombinasiTersedia}
           tahunTerpilih={tahunTerpilih} onPilih={onPilihKombo} sedangMuatAwal={sedangMuatAwal}
           allProvinces={allProvinces} onPilihProvinsi={handlePilihProvinsi} provinsiTerpilih={provinsiDipilih}
@@ -519,40 +503,37 @@ export default function PetaSDM({
 
         {/* Badge prediksi OLS */}
         {adaPrediksi && (
-          <div
-            className="bg-white/97 dark:bg-slate-800/97 p-2.5 rounded-xl shadow-lg border backdrop-blur-sm max-w-[175px]"
-            style={{ borderColor: '#fcd34d' }}
-          >
+          <div className="bg-white/97 dark:bg-slate-800/97 p-2.5 rounded-xl shadow-lg border backdrop-blur-sm max-w-[175px]" style={{ borderColor: '#fcd34d' }}>
             <div className="flex items-center gap-1.5 mb-1">
               <TrendingUp size={11} className="text-amber-500 flex-shrink-0"/>
               <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300">Ada Prediksi OLS</span>
             </div>
             <p className="text-[9px] text-amber-600 dark:text-amber-400 leading-relaxed">
-              Sebagian kolom menggunakan data prediksi Regresi Linear (OLS) karena tidak ada di aktual BPS
+              Sebagian data menggunakan prediksi Regresi Linear OLS karena tidak ada di aktual BPS
             </p>
           </div>
         )}
 
         {/* Legenda */}
         <div className="bg-white/95 dark:bg-slate-800/95 p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-600 backdrop-blur-sm min-w-[135px]">
-          <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-2">Klasifikasi ISDM</div>
+          <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-2">Klasifikasi IPE</div>
 
           {/* Skala warna */}
           <div className="flex h-2 rounded-full overflow-hidden mb-1">
-            {[['#af4284', 'RENDAH'], ['#fff67f', 'SEDANG'], ['#abcd05', 'TINGGI'], ['#008cd6', 'SANGAT TINGGI']].map(([c, l]) => (
+            {[['#af4284','RENDAH'],['#fff67f','SEDANG'],['#abcd05','TINGGI'],['#008cd6','SANGAT TINGGI']].map(([c,l]) => (
               <div key={l} className="flex-1" style={{ backgroundColor: c }} title={l}/>
             ))}
           </div>
           <div className="flex justify-between text-[8px] text-slate-400 mb-2 px-0.5">
-            <span>0</span><span>60</span><span>70</span><span>80</span><span>100</span>
+            <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
           </div>
 
-          {Object.entries(KATEGORI_SDM).filter(([k]) => k !== 'TIDAK_TERANALISIS').map(([k, v]) => (
+          {Object.entries(KATEGORI_IPE).filter(([k]) => k !== 'TIDAK_TERANALISIS').map(([k, v]) => (
             <div key={k} className="flex items-center justify-between gap-2 mb-1 last:mb-0">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{
                   backgroundColor: v.warna,
-                  border: ['#fff67f', '#abcd05'].includes(v.warna) ? '1px solid rgba(0,0,0,0.2)' : '',
+                  border: ['#fff67f','#abcd05'].includes(v.warna) ? '1px solid rgba(0,0,0,0.2)' : '',
                 }}/>
                 <span className="text-[9px] font-semibold text-slate-800 dark:text-slate-100">{v.label}</span>
               </div>
@@ -586,7 +567,7 @@ export default function PetaSDM({
               >
                 <Filter size={9}/>
                 <span className="truncate flex-1 text-left">
-                  {kategoriTerpilih === 'SEMUA' ? 'SEMUA' : (KATEGORI_SDM[kategoriTerpilih]?.label || kategoriTerpilih)}
+                  {kategoriTerpilih === 'SEMUA' ? 'SEMUA' : (KATEGORI_IPE[kategoriTerpilih]?.label || kategoriTerpilih)}
                 </span>
                 <ChevronDown size={9}/>
               </button>
@@ -603,11 +584,11 @@ export default function PetaSDM({
                     >
                       {k !== 'SEMUA' && (
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{
-                          backgroundColor: KATEGORI_SDM[k]?.warna || '#a6a6a6',
-                          border: ['#fff67f', '#abcd05'].includes(KATEGORI_SDM[k]?.warna) ? '1px solid rgba(0,0,0,0.2)' : '',
+                          backgroundColor: KATEGORI_IPE[k]?.warna || '#a6a6a6',
+                          border: ['#fff67f','#abcd05'].includes(KATEGORI_IPE[k]?.warna) ? '1px solid rgba(0,0,0,0.2)' : '',
                         }}/>
                       )}
-                      {k === 'SEMUA' ? 'SEMUA' : (KATEGORI_SDM[k]?.label || k)}
+                      {k === 'SEMUA' ? 'SEMUA' : (KATEGORI_IPE[k]?.label || k)}
                     </button>
                   ))}
                 </div>

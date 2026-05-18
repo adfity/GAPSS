@@ -6,17 +6,31 @@ export function middleware(request) {
   const role = request.cookies.get('user_role')?.value;
   const { pathname } = request.nextUrl;
 
-  // Belum login → redirect ke login
+  // =========================
+  // BELUM LOGIN
+  // =========================
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Route /beranda dan /analisis → hanya role 'user'
+  // =========================
+  // USER ONLY
+  // =========================
   if (
-    // (pathname.startsWith('/beranda') || pathname.startsWith('/analisis')) &&
+    pathname.startsWith('/control_center') &&
     role !== 'user'
   ) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // =========================
+  // ADMIN ONLY
+  // =========================
+  if (
+    pathname.startsWith('/admin') &&
+    role !== 'admin'
+  ) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();
@@ -24,7 +38,7 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    // '/beranda/:path*',
-    // '/analisis/:path*',
+    '/control_center/:path*',
+    '/admin/:path*',
   ],
 };
