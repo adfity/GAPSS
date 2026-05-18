@@ -6,9 +6,9 @@ from . import waypoint_views
 # analisis
 from .analysis_views import sdm_views
 from .analysis_views import pangan_views
-from .analysis_views import sda_views
-from .analysis_views import economy_views
-
+from .analysis_views import iska_views
+from .analysis_views import ipe_views
+from core.analysis_views import usulan_views
 
 # analisis (nanti delet)
 from .analysis_views import education_views
@@ -46,54 +46,71 @@ urlpatterns = [
     path('bank-kebijakan-sdm/<int:kebijakan_id>/update/',   sdm_views.update_bank_kebijakan_sdm,        name='update-bank-kebijakan-sdm'),
     path('bank-kebijakan-sdm/<int:kebijakan_id>/delete/',   sdm_views.delete_bank_kebijakan_sdm,        name='delete-bank-kebijakan-sdm'),
     path('bank-kebijakan-isdm-provinsi/',                   sdm_views.get_bank_kebijakan_isdm_for_provinsi, name='bank-kebijakan-isdm-provinsi'),
-    path('sdm-analysis/<str:analysis_id>/provinsi-kebijakan/', sdm_views.patch_provinsi_kebijakan,name='patch-provinsi-kebijakan'),
-    # SDM ARIMA v4.0
-    path('predict-sdm-arima/',                              sdm_views.predict_sdm_arima,                name='predict-sdm-arima'),
-    path('arima-model-info/',                               sdm_views.get_arima_model_info,             name='arima-model-info'),
-   
+    path('sdm-analysis/<str:analysis_id>/provinsi-kebijakan/', sdm_views.patch_provinsi_kebijakan,      name='patch-provinsi-kebijakan'),
+    path('ols-model-info/',                                 sdm_views.get_ols_model_info,               name='ols-model-info'),
     # ---------------------------------------------------------------------------------------------------------
 
     # ---------------------------------------------------------------------------------------------------------
-    # PANGAN / IKP ANALYSIS
-    path('check-pangan-data/',                                  pangan_views.check_pangan_year_data,              name='check-pangan-data'),
-    path('analyze-pangan-bps/',                                 pangan_views.analyze_pangan_bps,                  name='analyze-pangan-bps'),
-    path('save-pangan-analysis/',                               pangan_views.save_pangan_analysis,                name='save-pangan-analysis'),
-    path('pangan-analysis/list/',                               pangan_views.get_pangan_analysis_list,            name='get-pangan-analysis-list'),
-    path('pangan-analysis/<str:analysis_id>/',                  pangan_views.get_pangan_analysis_detail,          name='get-pangan-analysis-detail'),
-    path('pangan-analysis/<str:analysis_id>/delete/',           pangan_views.delete_pangan_analysis,              name='delete-pangan-analysis'),
-    path('bank-kebijakan-ikp/',                                 pangan_views.get_bank_kebijakan_ikp,              name='bank-kebijakan-ikp'),
-    path('bank-kebijakan-ikp/add/',                             pangan_views.add_bank_kebijakan_ikp,              name='add-bank-kebijakan-ikp'),
-    path('bank-kebijakan-ikp/<int:kebijakan_id>/update/',       pangan_views.update_bank_kebijakan_ikp,           name='update-bank-kebijakan-ikp'),
-    path('bank-kebijakan-ikp/<int:kebijakan_id>/delete/',       pangan_views.delete_bank_kebijakan_ikp,           name='delete-bank-kebijakan-ikp'),
-    path('bank-kebijakan-ikp-provinsi/',                        pangan_views.get_bank_kebijakan_ikp_for_provinsi, name='bank-kebijakan-ikp-provinsi'),
-    path('pangan-analysis/<str:analysis_id>/provinsi-kebijakan/', pangan_views.patch_provinsi_kebijakan_pangan,   name='patch-provinsi-kebijakan-pangan'),
-    # PANGAN ARIMA
-    path('predict-pangan-arima/',                               pangan_views.predict_pangan_arima,                name='predict-pangan-arima'),
-    path('pangan-arima-info/',                                  pangan_views.get_pangan_arima_info,               name='pangan-arima-info'),
+    # IKP ANALYSIS
+    path('check-ikp-data/',                                   pangan_views.check_ikp_year_data,             name='check-ikp-data'),
+    path('analyze-ikp/',                                      pangan_views.analyze_ikp,                     name='analyze-ikp'),
+    path('save-ikp-analysis/',                                pangan_views.save_ikp_analysis,               name='save-ikp-analysis'),
+    path('ikp-analysis/list/',                                pangan_views.get_ikp_analysis_list,           name='get-ikp-analysis-list'),
+    path('ikp-analysis/<str:analysis_id>/',                   pangan_views.get_ikp_analysis_detail,         name='get-ikp-analysis-detail'),
+    path('ikp-analysis/<str:analysis_id>/delete/',            pangan_views.delete_ikp_analysis,             name='delete-ikp-analysis'),
+    path('bank-kebijakan-ikp/',                               pangan_views.get_bank_kebijakan_ikp,          name='bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/add/',                           pangan_views.add_bank_kebijakan_ikp,          name='add-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/<int:kebijakan_id>/update/',     pangan_views.update_bank_kebijakan_ikp,       name='update-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp/<int:kebijakan_id>/delete/',     pangan_views.delete_bank_kebijakan_ikp,       name='delete-bank-kebijakan-ikp'),
+    path('bank-kebijakan-ikp-provinsi/',                      pangan_views.get_bank_kebijakan_ikp_for_provinsi, name='bank-kebijakan-ikp-provinsi'),
+    path('ikp-analysis/<str:analysis_id>/provinsi-kebijakan/', pangan_views.patch_provinsi_kebijakan_ikp,   name='patch-provinsi-kebijakan-ikp'),
+    path('ols-model-info-ikp/',                               pangan_views.get_ols_model_info_ikp,          name='holt-model-info-ikp'),
     # ---------------------------------------------------------------------------------------------------------
 
 
     # ---------------------------------------------------------------------------------------------------------
-    # SDA ANALYSIS
-    path('check-sda-data/',                         sda_views.check_sda_data,            name='check-sda-data'),
-    path('analyze-sda-bps/',                        sda_views.analyze_sda_bps,           name='analyze-sda-bps'),
-    path('save-sda-analysis/',                      sda_views.save_sda_analysis,         name='save-sda-analysis'),
-    path('sda-analysis/list/',                      sda_views.get_sda_analysis_list,     name='get-sda-analysis-list'),
-    path('sda-analysis/<str:analysis_id>/',         sda_views.get_sda_analysis_detail,   name='get-sda-analysis-detail'),
-    path('sda-analysis/<str:analysis_id>/delete/',  sda_views.delete_sda_analysis,       name='delete-sda-analysis'),
+    # ── ISKA ANALYSIS ──────────────────────────────────────────────────────────
+    path('check-iska-data/',                                    iska_views.check_iska_year_data,               name='check-iska-data'),
+    path('analyze-iska/',                                       iska_views.analyze_iska,                       name='analyze-iska'),
+    path('save-iska-analysis/',                                 iska_views.save_iska_analysis,                 name='save-iska-analysis'),
+    path('iska-analysis/list/',                                 iska_views.get_iska_analysis_list,             name='get-iska-analysis-list'),
+    path('iska-analysis/<str:analysis_id>/',                    iska_views.get_iska_analysis_detail,           name='get-iska-analysis-detail'),
+    path('iska-analysis/<str:analysis_id>/delete/',             iska_views.delete_iska_analysis,               name='delete-iska-analysis'),
+    path('bank-kebijakan-iska/',                                iska_views.get_bank_kebijakan_iska,            name='bank-kebijakan-iska'),
+    path('bank-kebijakan-iska/add/',                            iska_views.add_bank_kebijakan_iska,            name='add-bank-kebijakan-iska'),
+    path('bank-kebijakan-iska/<int:kebijakan_id>/update/',      iska_views.update_bank_kebijakan_iska,         name='update-bank-kebijakan-iska'),
+    path('bank-kebijakan-iska/<int:kebijakan_id>/delete/',      iska_views.delete_bank_kebijakan_iska,         name='delete-bank-kebijakan-iska'),
+    path('bank-kebijakan-iska-provinsi/',                       iska_views.get_bank_kebijakan_iska_for_provinsi, name='bank-kebijakan-iska-provinsi'),
+    path('iska-analysis/<str:analysis_id>/provinsi-kebijakan/', iska_views.patch_provinsi_kebijakan_iska,      name='patch-provinsi-kebijakan-iska'),
+    path('ols-model-info-iska/',                                iska_views.get_ols_model_info_iska,            name='ols-model-info-iska'),
+
     # ---------------------------------------------------------------------------------------------------------
 
     # ---------------------------------------------------------------------------------------------------------
-    # EKONOMI ANALYSIS
-    path('check-ekon-data/',                          economy_views.check_ekon_year_data,      name='check-ekon-data'),
-    path('analyze-ekon-bps/',                         economy_views.analyze_ekon_bps,          name='analyze-ekon-bps'),
-    path('save-ekon-analysis/',                       economy_views.save_ekon_analysis,        name='save-ekon-analysis'),
-    path('ekon-analysis/list/',                       economy_views.get_ekon_analysis_list,    name='get-ekon-analysis-list'),
-    path('ekon-analysis/<str:analysis_id>/',          economy_views.get_ekon_analysis_detail,  name='get-ekon-analysis-detail'),
-    path('ekon-analysis/<str:analysis_id>/delete/',   economy_views.delete_ekon_analysis,      name='delete-ekon-analysis'),
-    # ---------------------------------------------------------------------------------------------------------
+    # IPE ANALYSIS -
+    path('check-ipe-data/',                                 ipe_views.check_ipe_year_data,                  name='check-ipe-data'),
+    path('analyze-ipe/',                                    ipe_views.analyze_ipe,                          name='analyze-ipe'),
+    path('save-ipe-analysis/',                              ipe_views.save_ipe_analysis,                    name='save-ipe-analysis'),
+    path('ipe-analysis/list/',                              ipe_views.get_ipe_analysis_list,                name='get-ipe-analysis-list'),
+    path('ipe-analysis/<str:analysis_id>/',                 ipe_views.get_ipe_analysis_detail,              name='get-ipe-analysis-detail'),
+    path('ipe-analysis/<str:analysis_id>/delete/',          ipe_views.delete_ipe_analysis,                  name='delete-ipe-analysis'),
+    path('bank-kebijakan-ipe/',                             ipe_views.get_bank_kebijakan_ipe,               name='bank-kebijakan-ipe'),
+    path('bank-kebijakan-ipe/add/',                         ipe_views.add_bank_kebijakan_ipe,               name='add-bank-kebijakan-ipe'),
+    path('bank-kebijakan-ipe/<int:kebijakan_id>/update/',   ipe_views.update_bank_kebijakan_ipe,            name='update-bank-kebijakan-ipe'),
+    path('bank-kebijakan-ipe/<int:kebijakan_id>/delete/',   ipe_views.delete_bank_kebijakan_ipe,            name='delete-bank-kebijakan-ipe'),
+    path('bank-kebijakan-iipe-provinsi/',                   ipe_views.get_bank_kebijakan_ipe_for_provinsi,  name='bank-kebijakan-iipe-provinsi'),
+    path('ipe-analysis/<str:analysis_id>/provinsi-kebijakan/', ipe_views.patch_provinsi_kebijakan_ipe,      name='patch-provinsi-kebijakan'),
+    path('ols-model-info/',                                 ipe_views.get_ols_model_info_ipe,               name='ols-model-info'),
 
-
+    # ── USER: kirim & lihat usulan ──────────────────────────────────────────
+    path('usulan/kirim/',                     usulan_views.kirim_usulan_kebijakan,    name='kirim-usulan-kebijakan'),
+    path('usulan/saya/',                      usulan_views.list_usulan_saya,          name='list-usulan-saya'),
+    # ── ADMIN: kelola usulan ────────────────────────────────────────────────
+    path('usulan/admin/list/',                usulan_views.list_usulan_admin,         name='list-usulan-admin'),
+    path('usulan/admin/pending-count/',       usulan_views.count_pending_usulan,      name='count-pending-usulan'),
+    path('usulan/<int:usulan_id>/',           usulan_views.detail_usulan,             name='detail-usulan'),
+    path('usulan/<int:usulan_id>/approve/',   usulan_views.approve_usulan,            name='approve-usulan'),
+    path('usulan/<int:usulan_id>/reject/',    usulan_views.reject_usulan,             name='reject-usulan'),
 
 # NANTI HAPUS ----------------------------------
     # EDUCATION ANALYSIS -
